@@ -1,15 +1,15 @@
 {
   "name": "asthen-discord-bot",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "private": false,
   "type": "module",
-  "description": "Bot Discord personalizável de suporte e loja de kits com tickets privados.",
+  "description": "Bot de Discord com tickets privados e loja de kits por botões.",
   "engines": {
-    "node": ">=24.17.0 <27"
+    "node": ">=20"
   },
   "scripts": {
     "start": "node src/index.js",
-    "check": "node --check src/index.js && node --check src/commands.js && node --check src/store.js && node --check src/ui.js && node --check src/tickets.js && node --check src/interactions.js",
+    "check": "node --check src/index.js && node --check src/config.js && node --check src/commands.js && node --check src/store.js && node --check src/ui.js && node --check src/tickets.js && node --check src/interactions.js",
     "check:commands": "node --input-type=module -e \"import('./src/commands.js').then(({commandDefinitions}) => { commandDefinitions.forEach(command => command.toJSON()); console.log('Slash commands: valid'); })\""
   },
   "dependencies": {
