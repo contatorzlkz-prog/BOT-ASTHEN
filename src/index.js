@@ -27,12 +27,18 @@ async function main() {
   loadStore();
   const rest = new REST({ version: '10' }).setToken(token);
   const body = commandDefinitions.map(command => command.toJSON());
-  const route = guildId
-    ? Routes.applicationGuildCommands(clientId, guildId)
-    : Routes.applicationCommands(clientId);
+  console.log('Substituindo os comandos antigos pelos comandos atuais...');
 
-  console.log(`Registrando ${body.length} comandos do Discord...`);
-  await rest.put(route, { body });
+  if (guildId) {
+    await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body });
+    // Remove comandos globais antigos para não deixar opções da versão anterior no Discord.
+    await rest.put(Routes.applicationCommands(clientId), { body: [] });
+  } else {
+    // PUT substitui a lista global inteira, removendo os comandos que não existem nesta versão.
+    await rest.put(Routes.applicationCommands(clientId), { body });
+  }
+
+  console.log('Comandos do Discord atualizados: ' + body.length);
 
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
   client.once(Events.ClientReady, readyClient => {
