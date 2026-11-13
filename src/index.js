@@ -6,8 +6,8 @@ import { handleInteraction } from './interactions.js';
 
 function assertRuntime() {
   const major = Number(process.versions.node.split('.')[0]);
-  if (major < 20) {
-    throw new Error(`Node.js ${process.versions.node} não é compatível. Instale Node.js 22 LTS ou mais recente.`);
+  if (major < 22) {
+    throw new Error(`Node.js ${process.versions.node} não é compatível. Instale Node.js 22 ou mais recente (recomendado: 26 LTS).`);
   }
 }
 
