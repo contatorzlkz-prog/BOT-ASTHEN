@@ -5,7 +5,7 @@ cd /d "%~dp0"
 title ASTHEN BOT
 where node >nul 2>nul
 if errorlevel 1 goto need_install
-node -e "process.exit(Number(process.versions.node.split('.')[0])>=20?0:1)" >nul 2>nul
+node -e "process.exit(Number(process.versions.node.split('.')[0]) >=22?0:1)" >nul 2>nul
 if errorlevel 1 goto old_node
 if not exist node_modules goto need_install
 if not exist ".env" goto need_install
@@ -23,7 +23,7 @@ pause
 exit /b 0
 
 :old_node
-echo Node.js 20 ou mais recente e necessario. Execute INSTALAR.bat para atualizar.
+echo Node.js 22 ou mais recente e necessario. Execute INSTALAR.bat para atualizar.
 pause
 exit /b 1
 
