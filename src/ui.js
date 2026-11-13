@@ -106,18 +106,19 @@ export function makePurchaseReviewEmbed(draft) {
     );
 }
 
-export function makePurchaseReviewControls() {
+export function makePurchaseReviewControls(draft) {
+  const revision = String(draft.revision || '0');
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId('shop:confirm')
+      .setCustomId('shop:confirm:' + revision)
       .setLabel('Confirmar e ir para pagamento')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId('shop:edit-nick')
+      .setCustomId('shop:edit-nick:' + revision)
       .setLabel('Editar nick')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId('shop:cancel')
+      .setCustomId('shop:cancel:' + revision)
       .setLabel('Cancelar')
       .setStyle(ButtonStyle.Danger)
   );
