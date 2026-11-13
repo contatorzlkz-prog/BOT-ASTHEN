@@ -20,7 +20,7 @@ Use uma conta com permissão **Gerenciar servidor**:
 /kit adicionar
 ```
 
-Todos os campos de `/configurar` são opcionais: informe somente os canais que deseja configurar. O canal de logs é bloqueado automaticamente para @everyone e liberado para a equipe configurada e administradores.
+Todos os campos de `/configurar` são opcionais: informe somente os canais que deseja configurar. O canal de logs é bloqueado automaticamente para @everyone e liberado para a equipe configurada e administradores. Ao iniciar, o bot atualiza os painéis já publicados para o formato novo.
 
 ## Loja
 
