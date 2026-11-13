@@ -2,7 +2,7 @@
 
 ## Windows 10/11
 
-1. Instale ou deixe o `INSTALAR.bat` instalar o Node.js LTS (versão 20 ou mais recente).
+1. Instale ou deixe o `INSTALAR.bat` instalar o Node.js LTS (versão 22 ou mais recente; recomendado: 26 LTS).
 2. Execute `INSTALAR.bat`.
 3. Informe `DISCORD_TOKEN` e `CLIENT_ID` quando solicitado. O ID do servidor é opcional.
 4. Execute `INICIAR.bat`.
