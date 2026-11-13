@@ -1,39 +1,43 @@
 # Comandos
 
-Todos os comandos administrativos exigem a permissão **Gerenciar servidor**.
+Todos os comandos exigem **Gerenciar servidor**.
 
-## Configurar os painéis
-
-```text
-/configurar tipo:suporte canal:#suporte equipe:@Equipe
-/configurar tipo:loja canal:#loja
-```
-
-O painel é publicado imediatamente no canal escolhido. O canal precisa ser de texto. O cargo de equipe é opcional e pode ser definido em qualquer uma das configurações. Os tickets são criados dentro da mesma categoria do canal do painel; se o canal não estiver em uma categoria, os tickets ficam na lista principal do servidor.
-
-## Pix
+## Configuração em um só comando
 
 ```text
-/pix chave:SUA_CHAVE_PIX instrucoes:Envie o comprovante neste canal.
+/configurar suporte:#suporte loja:#loja logs:#logs compradores:#compradores equipe:@Equipe
 ```
 
-Os dados aparecem nos novos tickets de compra.
+Informe qualquer combinação de campos:
+- `suporte`: publica ou atualiza o painel de atendimento.
+- `loja`: publica ou atualiza o painel de compras.
+- `logs`: canal privado de auditoria de pedidos. O bot oculta o canal de @everyone e libera acesso à equipe informada e aos administradores.
+- `compradores`: canal público que recebe o anúncio de cada pedido aprovado.
+- `equipe`: cargo que atende os tickets e revisa os pedidos.
+
+O ticket é criado na categoria do respectivo canal do painel.
+
+## Pagamento
+
+```text
+/pix chave:SUA_CHAVE instrucoes:Envie o comprovante neste canal.
+```
 
 ## Kits
 
-- `/kit adicionar`: abre o cadastro por etapas (nome, preço e descrição). Ao salvar, o painel da loja é atualizado.
-- `/kit listar`: mostra os kits cadastrados.
-- `/kit remover nome:Kit Demo 1`: remove pelo nome e atualiza o painel.
+- `/kit adicionar`: cadastro guiado de nome, preço e descrição.
+- `/kit listar`: lista os kits.
+- `/kit remover nome:Kit Demo 1`: remove pelo nome.
 
-Servidores novos recebem três kits de demonstração. Troque os preços e descrições ou remova os exemplos antes de abrir a loja ao público. O catálogo aceita até 25 kits.
+## Fluxo da loja
 
-## Tickets
+1. O cliente clica em **Abrir catálogo** e escolhe um kit.
+2. Informa o nick do Minecraft.
+3. Confere o produto, o preço e o nick. Pode editar ou cancelar.
+4. O ticket só é aberto quando confirma.
+5. O cliente realiza o Pix e envia o comprovante no canal privado.
+6. A equipe confirma ou recusa. A decisão é registrada em logs privados e não fecha o ticket.
+7. Quando aprovado, o bot anuncia o comprador e o kit no canal público configurado.
+8. **Fechar** exclui o canal depois de três segundos.
 
-- Cada botão de suporte abre o canal privado diretamente, sem menu de seleção.
-- Cada botão de compra cria o ticket do kit escolhido, sem a etapa intermediária de "Ver kits".
-- A mensagem privada de confirmação inclui o botão **Ir para o canal**.
-- O cliente envia o comprovante no canal do pedido e conversa com a equipe.
-- O dono do ticket ou a equipe pode usar **Fechar ticket**. O canal é excluído após três segundos.
-- Cada usuário pode manter um ticket de suporte e um pedido de loja abertos ao mesmo tempo.
-
-O bot não lê comprovantes bancários, não confirma Pix e não realiza a entrega automática dos itens.
+A aprovação é manual. O bot não valida comprovantes bancários e não realiza a entrega do item no Minecraft.
