@@ -6,6 +6,12 @@ const channelOption = (option, description) => option
   .addChannelTypes(ChannelType.GuildText)
   .setRequired(true);
 
+const categoryOption = option => option
+  .setName('canal')
+  .setDescription('Categoria do Discord onde os canais privados serão criados.')
+  .addChannelTypes(ChannelType.GuildCategory)
+  .setRequired(true);
+
 export const commandDefinitions = [
   new SlashCommandBuilder()
     .setName('asthen')
@@ -27,19 +33,11 @@ export const commandDefinitions = [
       .addSubcommand(sub => sub
         .setName('suporte')
         .setDescription('Define a categoria dos tickets de suporte.')
-        .addChannelOption(option => option
-          .setName('canal')
-          .setDescription('Categoria do Discord para os tickets de suporte.')
-          .addChannelTypes(ChannelType.GuildCategory)
-          .setRequired(true)))
+        .addChannelOption(categoryOption))
       .addSubcommand(sub => sub
         .setName('loja')
         .setDescription('Define a categoria dos pedidos da loja.')
-        .addChannelOption(option => option
-          .setName('canal')
-          .setDescription('Categoria do Discord para os pedidos da loja.')
-          .addChannelTypes(ChannelType.GuildCategory)
-          .setRequired(true))))
+        .addChannelOption(categoryOption)))
     .addSubcommandGroup(group => group
       .setName('kit')
       .setDescription('Gerencia os kits exibidos na loja.')
@@ -53,23 +51,26 @@ export const commandDefinitions = [
         .setName('remover')
         .setDescription('Remove um kit do catálogo pelo nome.')
         .addStringOption(option => option.setName('nome').setDescription('Nome exato do kit.').setMaxLength(80).setRequired(true))))
-    .addSubcommand(sub => sub
-      .setName('cargo-admin')
-      .setDescription('Define o cargo que poderá atender e analisar pedidos.')
-      .addRoleOption(option => option.setName('cargo').setDescription('Cargo da equipe Asthen.').setRequired(true)))
-    .addSubcommand(sub => sub
-      .setName('pix')
-      .setDescription('Configura a chave Pix enviada dentro dos pedidos privados.')
-      .addStringOption(option => option.setName('chave').setDescription('Chave Pix da loja.').setMaxLength(120).setRequired(true))
-      .addStringOption(option => option.setName('instrucoes').setDescription('Instruções de pagamento (opcional).').setMaxLength(300).setRequired(false)))
-    .addSubcommand(sub => sub
-      .setName('logs')
-      .setDescription('Define um canal opcional para receber transcrições dos tickets fechados.')
-      .addChannelOption(option => channelOption(option, 'Canal privado para os registros.')))
-    .addSubcommand(sub => sub
-      .setName('status')
-      .setDescription('Mostra o estado da configuração da Asthen.'))
-    .addSubcommand(sub => sub
-      .setName('ajuda')
-      .setDescription('Mostra os comandos e a ordem de configuração.'))
+    .addSubcommandGroup(group => group
+      .setName('config')
+      .setDescription('Configura cargos, pagamento e informações do bot.')
+      .addSubcommand(sub => sub
+        .setName('cargo-admin')
+        .setDescription('Define o cargo que poderá atender e analisar pedidos.')
+        .addRoleOption(option => option.setName('cargo').setDescription('Cargo da equipe Asthen.').setRequired(true)))
+      .addSubcommand(sub => sub
+        .setName('pix')
+        .setDescription('Configura a chave Pix enviada dentro dos pedidos privados.')
+        .addStringOption(option => option.setName('chave').setDescription('Chave Pix da loja.').setMaxLength(120).setRequired(true))
+        .addStringOption(option => option.setName('instrucoes').setDescription('Instruções de pagamento (opcional).').setMaxLength(300).setRequired(false)))
+      .addSubcommand(sub => sub
+        .setName('logs')
+        .setDescription('Define um canal opcional para transcrições dos tickets fechados.')
+        .addChannelOption(option => channelOption(option, 'Canal privado para os registros.')))
+      .addSubcommand(sub => sub
+        .setName('status')
+        .setDescription('Mostra o estado da configuração da Asthen.'))
+      .addSubcommand(sub => sub
+        .setName('ajuda')
+        .setDescription('Mostra os comandos e a ordem de configuração.')))
 ];

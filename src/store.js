@@ -81,7 +81,7 @@ export function getTicket(channelId) {
 
 export function findOpenTicket(guildId, userId) {
   return Object.values(state.tickets).find(ticket =>
-    ticket.guildId === guildId && ticket.userId === userId && ticket.status === 'open'
+    ticket.guildId === guildId && ticket.userId === userId && ticket.status !== 'closed'
   ) ?? null;
 }
 

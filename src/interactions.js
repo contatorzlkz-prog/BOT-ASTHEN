@@ -20,7 +20,8 @@ function isStaff(interaction, config = getGuildConfig(interaction.guildId)) {
   if (perms?.has(PermissionsBitField.Flags.Administrator)) return true;
   if (perms?.has(PermissionsBitField.Flags.ManageGuild)) return true;
   if (perms?.has(PermissionsBitField.Flags.ManageChannels)) return true;
-  return Boolean(config.staffRoleId && interaction.member?.roles?.cache?.has(config.staffRoleId));
+  const roles = interaction.member?.roles;
+  return Boolean(config.staffRoleId && (roles?.cache?.has?.(config.staffRoleId) || roles?.includes?.(config.staffRoleId)));
 }
 
 function replyPrivate(interaction, content) {
