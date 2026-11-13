@@ -93,15 +93,15 @@ Reinicie o processo após editar o .env.
 
 Execute os comandos com uma conta que tenha permissão de administrador, gerenciar servidor ou gerenciar canais. Configure primeiro o cargo da equipe e as categorias; depois publique os painéis.
 
-    /asthen cargo-admin cargo:@Equipe
+    /asthen config cargo-admin cargo:@Equipe
     /asthen categoria suporte canal:<categoria-de-suporte>
     /asthen categoria loja canal:<categoria-de-pedidos>
-    /asthen pix chave:SUA_CHAVE_PIX instrucoes:Envie o comprovante neste canal e aguarde a equipe.
+    /asthen config pix chave:SUA_CHAVE_PIX instrucoes:Envie o comprovante neste canal e aguarde a equipe.
     /asthen kit adicionar nome:Kit Bronze preco:R$ 9,90 descricao:Kit inicial
     /asthen painel suporte canal:#abrir-ticket
     /asthen painel loja canal:#loja-da-asthen
-    /asthen logs canal:#logs-tickets
-    /asthen status
+    /asthen config logs canal:#logs-tickets
+    /asthen config status
 
 Consulte docs/COMMANDS.md para a lista completa e a ordem recomendada. Mantenha o canal de logs privado, pois as transcrições podem conter mensagens e anexos de atendimento.
 

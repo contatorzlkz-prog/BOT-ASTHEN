@@ -3,15 +3,15 @@
 Os comandos devem ser usados por administradores, pessoas com Gerenciar servidor/Gerenciar canais ou membros com o cargo de equipe configurado.
 
 ## Configuração inicial
-1. /asthen cargo-admin cargo:@Equipe
+1. /asthen config cargo-admin cargo:@Equipe
 2. /asthen categoria suporte canal:<categoria>
 3. /asthen categoria loja canal:<categoria>
-4. /asthen pix chave:SUA_CHAVE instrucoes:Texto opcional
+4. /asthen config pix chave:SUA_CHAVE instrucoes:Texto opcional
 5. /asthen kit adicionar nome:Kit Bronze preco:R$ 9,90 descricao:Kit inicial
 6. /asthen painel suporte canal:#abrir-ticket
 7. /asthen painel loja canal:#loja-da-asthen
-8. /asthen logs canal:#logs-tickets (opcional)
-9. /asthen status
+8. /asthen config logs canal:#logs-tickets (opcional)
+9. /asthen config status
 
 ## Catálogo
 - /asthen kit adicionar: inclui nome, preço e descrição.
