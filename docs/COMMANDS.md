@@ -1,32 +1,39 @@
-# Comandos administrativos
+# Comandos
 
-Os comandos devem ser usados por administradores, pessoas com Gerenciar servidor/Gerenciar canais ou membros com o cargo de equipe configurado.
+Todos os comandos administrativos exigem a permissão **Gerenciar servidor**.
 
-## Configuração inicial
-1. /asthen config cargo-admin cargo:@Equipe
-2. /asthen categoria suporte canal:<categoria>
-3. /asthen categoria loja canal:<categoria>
-4. /asthen config pix chave:SUA_CHAVE instrucoes:Texto opcional
-5. /asthen kit adicionar nome:Kit Bronze preco:R$ 9,90 descricao:Kit inicial
-6. /asthen painel suporte canal:#abrir-ticket
-7. /asthen painel loja canal:#loja-da-asthen
-8. /asthen config logs canal:#logs-tickets (opcional)
-9. /asthen config status
+## Configurar os painéis
 
-## Catálogo
-- /asthen kit adicionar: inclui nome, preço e descrição.
-- /asthen kit remover: remove pelo nome exato.
-- Máximo de 25 kits, limite da seleção nativa do Discord.
+```text
+/configurar tipo:suporte canal:#suporte equipe:@Equipe
+/configurar tipo:loja canal:#loja
+```
 
-## Atendimento
-No painel, o jogador escolhe bug, hack, dúvida ou suporte geral. O bot abre um canal privado, menciona a equipe e inclui um botão de fechamento.
+O painel é publicado imediatamente no canal escolhido. O canal precisa ser de texto. O cargo de equipe é opcional e pode ser definido em qualquer uma das configurações. Os tickets são criados dentro da mesma categoria do canal do painel; se o canal não estiver em uma categoria, os tickets ficam na lista principal do servidor.
 
-## Loja
-O cliente seleciona o kit, informa o nick e confirma. O bot cria o canal privado, apresenta os dados do pedido e a chave Pix configurada, além de pedir o comprovante. A equipe usa Autorizar ou Não autorizar. A entrega do item continua manual.
+## Pix
 
-## Notas
-- Cada usuário pode ter apenas um ticket aberto por servidor.
-- Fechar canal remove o canal após 5 segundos.
-- O canal de logs recebe a transcrição das últimas 100 mensagens, quando configurado.
-- A configuração de cada servidor fica no arquivo local data/state.json.
-- O bot não lê comprovantes bancários nem confirma pagamentos automaticamente.
+```text
+/pix chave:SUA_CHAVE_PIX instrucoes:Envie o comprovante neste canal.
+```
+
+Os dados aparecem nos novos tickets de compra.
+
+## Kits
+
+- `/kit adicionar`: abre o cadastro por etapas (nome, preço e descrição). Ao salvar, o painel da loja é atualizado.
+- `/kit listar`: mostra os kits cadastrados.
+- `/kit remover nome:Kit Demo 1`: remove pelo nome e atualiza o painel.
+
+Servidores novos recebem três kits de demonstração. Troque os preços e descrições ou remova os exemplos antes de abrir a loja ao público. O catálogo aceita até 25 kits.
+
+## Tickets
+
+- Cada botão de suporte abre o canal privado diretamente, sem menu de seleção.
+- Cada botão de compra cria o ticket do kit escolhido, sem a etapa intermediária de "Ver kits".
+- A mensagem privada de confirmação inclui o botão **Ir para o canal**.
+- O cliente envia o comprovante no canal do pedido e conversa com a equipe.
+- O dono do ticket ou a equipe pode usar **Fechar ticket**. O canal é excluído após três segundos.
+- Cada usuário pode manter um ticket de suporte e um pedido de loja abertos ao mesmo tempo.
+
+O bot não lê comprovantes bancários, não confirma Pix e não realiza a entrega automática dos itens.
