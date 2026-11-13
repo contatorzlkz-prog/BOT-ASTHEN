@@ -1,19 +1,19 @@
-ASTHEN BOT - COMECE AQUI (Windows 10/11)
+ASTHEN BOT — INÍCIO RÁPIDO
 
-1. Extraia a pasta do ZIP.
+1. Extraia o ZIP.
 2. Execute INSTALAR.bat.
-3. Informe o token e o Application ID do seu bot.
+3. Informe o token e o Application ID do seu próprio bot.
 4. Execute INICIAR.bat.
-5. No Discord, configure:
+5. No Discord, configure os canais:
 
-   /configurar tipo:suporte canal:#suporte equipe:@Equipe
-   /configurar tipo:loja canal:#loja
-   /pix chave:SUA_CHAVE_PIX
+/configurar suporte:#suporte loja:#loja logs:#logs compradores:#compradores equipe:@Equipe
+/pix chave:SUA_CHAVE instrucoes:Envie o comprovante neste canal.
 
-Os painéis são publicados automaticamente nos canais escolhidos.
-Os tickets aparecem na mesma categoria dos canais dos painéis.
+Para cadastrar produtos:
+/kit adicionar
 
-Para cadastrar kits, use /kit adicionar. O bot pede nome, preço e descrição
-em etapas. Os três kits de demonstração iniciais podem ser alterados ou removidos.
+O ticket de pagamento só é aberto depois que o cliente escolhe o kit,
+informa o nick do Minecraft e confirma a revisão.
 
-Nunca compartilhe o arquivo .env: ele contém o token do bot.
+Configurações, kits, tickets e compras em preparação são salvos em
+data/state.json. Faça backup desse arquivo. Nunca compartilhe .env.
