@@ -1,5 +1,8 @@
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
-import { findOpenTicket, getGuildConfig, saveTicket } from './store.js';
+import { findOpenTicket, getGuildConfig, saveTicket, updateTicket } from './store.js';
+import { CONFIG } from './config.js';
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function slug(value) {
   return String(value)
@@ -9,41 +12,41 @@ function slug(value) {
     .replace(/[^a-z0-9-]/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
-    .slice(0, 35) || 'membro';
+    .slice(0, 30) || 'membro';
 }
 
-export async function createPrivateTicket({ guild, user, type, kit = null, nickname = null }) {
+export async function createPrivateTicket({ guild, user, type, kit = null }) {
   const config = getGuildConfig(guild.id);
-  const categoryId = type === 'shop' ? config.shopCategoryId : config.supportCategoryId;
+  const isShop = type === 'shop';
+  const panelId = isShop ? config.shopPanelChannelId : config.supportPanelChannelId;
+  const categoryId = isShop ? config.shopCategoryId : config.supportCategoryId;
 
-  if (!categoryId) {
-    throw new Error(type === 'shop'
-      ? 'A categoria da loja ainda não foi configurada. Peça à equipe para usar /asthen categoria loja.'
-      : 'A categoria de suporte ainda não foi configurada. Peça à equipe para usar /asthen categoria suporte.');
-  }
-  if (!config.staffRoleId) {
-    throw new Error('O cargo da equipe ainda não foi configurado. Peça à equipe para usar /asthen cargo-admin.');
-  }
-
-  const category = guild.channels.cache.get(categoryId);
-  const staffRole = guild.roles.cache.get(config.staffRoleId);
-  if (!category || category.type !== ChannelType.GuildCategory) {
-    throw new Error('A categoria configurada não existe mais. A equipe precisa configurá-la novamente.');
-  }
-  if (!staffRole) {
-    throw new Error('O cargo da equipe configurado não existe mais. A equipe precisa configurá-lo novamente.');
+  if (!panelId) {
+    throw new Error(isShop
+      ? 'A loja ainda não foi configurada. Use /configurar com o tipo Loja.'
+      : 'O suporte ainda não foi configurado. Use /configurar com o tipo Suporte.');
   }
 
-  const existing = findOpenTicket(guild.id, user.id);
+  const existing = findOpenTicket(guild.id, user.id, isShop ? 'shop' : 'support');
   if (existing) {
-    const existingChannel = guild.channels.cache.get(existing.channelId);
-    if (existingChannel) {
-      return { channel: existingChannel, alreadyOpen: true };
-    }
+    const existingChannel = guild.channels.cache.get(existing.channelId)
+      ?? await guild.channels.fetch(existing.channelId).catch(() => null);
+    if (existingChannel) return { channel: existingChannel, alreadyOpen: true };
+    updateTicket(existing.channelId, { status: 'closed', closedAt: new Date().toISOString() });
   }
 
-  const ticketLabel = type === 'shop' ? 'pedido' : `suporte-${slug(type)}`;
-  const channelName = `${ticketLabel}-${slug(user.username)}`.slice(0, 90);
+  const panelChannel = guild.channels.cache.get(panelId)
+    ?? await guild.channels.fetch(panelId).catch(() => null);
+  if (!panelChannel || panelChannel.type !== ChannelType.GuildText) {
+    throw new Error('O canal configurado não existe mais. Execute /configurar novamente.');
+  }
+
+  const parent = categoryId || panelChannel.parentId || null;
+  if (parent && !guild.channels.cache.has(parent)) {
+    throw new Error('A categoria do canal configurado não existe mais. Execute /configurar novamente.');
+  }
+
+  const staffRole = config.staffRoleId ? guild.roles.cache.get(config.staffRoleId) : null;
   const botMember = guild.members.me;
   const permissions = [
     {
@@ -59,8 +62,11 @@ export async function createPrivateTicket({ guild, user, type, kit = null, nickn
         PermissionFlagsBits.AttachFiles,
         PermissionFlagsBits.EmbedLinks
       ]
-    },
-    {
+    }
+  ];
+
+  if (staffRole) {
+    permissions.push({
       id: staffRole.id,
       allow: [
         PermissionFlagsBits.ViewChannel,
@@ -69,8 +75,8 @@ export async function createPrivateTicket({ guild, user, type, kit = null, nickn
         PermissionFlagsBits.AttachFiles,
         PermissionFlagsBits.EmbedLinks
       ]
-    }
-  ];
+    });
+  }
 
   if (botMember) {
     permissions.push({
@@ -86,13 +92,14 @@ export async function createPrivateTicket({ guild, user, type, kit = null, nickn
     });
   }
 
+  const channelName = `${isShop ? 'pedido' : 'ticket'}-${slug(user.username)}`.slice(0, 90);
   const channel = await guild.channels.create({
     name: channelName,
     type: ChannelType.GuildText,
-    parent: category.id,
-    topic: `TICKET|type:${type}|owner:${user.id}`,
+    parent,
+    topic: `ASTHEN|type:${type}|owner:${user.id}`,
     permissionOverwrites: permissions,
-    reason: `Ticket Asthen aberto por ${user.tag ?? user.username}`
+    reason: `Ticket aberto por ${user.tag ?? user.username}`
   });
 
   const ticket = {
@@ -102,7 +109,7 @@ export async function createPrivateTicket({ guild, user, type, kit = null, nickn
     type,
     kitId: kit?.id ?? null,
     kitName: kit?.name ?? null,
-    nickname,
+    kitPrice: kit?.price ?? null,
     status: 'open',
     createdAt: new Date().toISOString()
   };
@@ -110,25 +117,17 @@ export async function createPrivateTicket({ guild, user, type, kit = null, nickn
   return { channel, alreadyOpen: false, ticket };
 }
 
-export function formatTicketTranscript(messages, ticket) {
-  const ordered = [...messages.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
-  const lines = [
-    'ASTHEN — TRANSCRIÇÃO DE TICKET',
-    `Canal: ${ticket.channelId}`,
-    `Servidor: ${ticket.guildId}`,
-    `Criado por: ${ticket.userId}`,
-    `Tipo: ${ticket.type}`,
-    `Aberto em: ${ticket.createdAt}`,
-    '----------------------------------------'
-  ];
+export async function archiveAndDeleteTicket({ channel, ticket, closedById }) {
+  updateTicket(channel.id, {
+    status: 'closed',
+    closedBy: closedById,
+    closedAt: new Date().toISOString()
+  });
 
-  for (const message of ordered) {
-    const date = new Date(message.createdTimestamp).toISOString();
-    const content = message.content?.replace(/\s+/g, ' ').trim() || '[sem texto]';
-    lines.push(`[${date}] ${message.author?.tag ?? message.author?.username ?? 'Usuário'}: ${content}`);
-    for (const attachment of message.attachments.values()) {
-      lines.push(`  Anexo: ${attachment.url}`);
-    }
+  await sleep(CONFIG.shop.closeDelaySeconds * 1000);
+  try {
+    await channel.delete('Ticket fechado');
+  } catch (error) {
+    if (error?.code !== 10003) throw error;
   }
-  return lines.join('\n');
 }
