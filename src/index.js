@@ -1,13 +1,47 @@
 import 'dotenv/config';
 import { Client, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
 import { commandDefinitions } from './commands.js';
-import { loadStore } from './store.js';
+import { getGuildConfig, loadStore } from './store.js';
+import { makeShopPanel, makeSupportPanel } from './ui.js';
 import { handleInteraction } from './interactions.js';
 
 function assertRuntime() {
   const major = Number(process.versions.node.split('.')[0]);
   if (major < 22) {
     throw new Error(`Node.js ${process.versions.node} não é compatível. Instale Node.js 22 ou mais recente (recomendado: 26 LTS).`);
+  }
+}
+
+async function refreshPanelMessage(guild, channelId, messageId, payload, label) {
+  if (!channelId || !messageId) return;
+  try {
+    const channel = guild.channels.cache.get(channelId)
+      ?? await guild.channels.fetch(channelId).catch(() => null);
+    if (!channel?.isTextBased()) return;
+    const message = await channel.messages.fetch(messageId).catch(() => null);
+    if (message) await message.edit(payload);
+  } catch (error) {
+    console.error('[Asthen] Não foi possível atualizar o painel de ' + label + ' em ' + guild.name + ':', error.message);
+  }
+}
+
+async function refreshConfiguredPanels(client) {
+  for (const guild of client.guilds.cache.values()) {
+    const config = getGuildConfig(guild.id);
+    await refreshPanelMessage(
+      guild,
+      config.supportPanelChannelId,
+      config.supportPanelMessageId,
+      makeSupportPanel(),
+      'suporte'
+    );
+    await refreshPanelMessage(
+      guild,
+      config.shopPanelChannelId,
+      config.shopPanelMessageId,
+      makeShopPanel(config.kits),
+      'loja'
+    );
   }
 }
 
@@ -41,9 +75,10 @@ async function main() {
   console.log('Comandos do Discord atualizados: ' + body.length);
 
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-  client.once(Events.ClientReady, readyClient => {
+  client.once(Events.ClientReady, async readyClient => {
     console.log(`Bot online como ${readyClient.user.tag}.`);
     console.log(`Servidores conectados: ${readyClient.guilds.cache.size}`);
+    await refreshConfiguredPanels(readyClient);
   });
 
   client.on(Events.InteractionCreate, async interaction => {
