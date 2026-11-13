@@ -15,16 +15,15 @@ function slug(value) {
     .slice(0, 30) || 'membro';
 }
 
-export async function createPrivateTicket({ guild, user, type, kit = null }) {
+export async function createPrivateTicket({ guild, user, type, kit = null, minecraftNick = null }) {
   const config = getGuildConfig(guild.id);
   const isShop = type === 'shop';
   const panelId = isShop ? config.shopPanelChannelId : config.supportPanelChannelId;
-  const categoryId = isShop ? config.shopCategoryId : config.supportCategoryId;
 
   if (!panelId) {
     throw new Error(isShop
-      ? 'A loja ainda não foi configurada. Use /configurar com o tipo Loja.'
-      : 'O suporte ainda não foi configurado. Use /configurar com o tipo Suporte.');
+      ? 'A loja ainda não foi configurada. Use /configurar e informe o canal da loja.'
+      : 'O suporte ainda não foi configurado. Use /configurar e informe o canal de suporte.');
   }
 
   const existing = findOpenTicket(guild.id, user.id, isShop ? 'shop' : 'support');
@@ -41,7 +40,7 @@ export async function createPrivateTicket({ guild, user, type, kit = null }) {
     throw new Error('O canal configurado não existe mais. Execute /configurar novamente.');
   }
 
-  const parent = categoryId || panelChannel.parentId || null;
+  const parent = panelChannel.parentId || null;
   if (parent && !guild.channels.cache.has(parent)) {
     throw new Error('A categoria do canal configurado não existe mais. Execute /configurar novamente.');
   }
@@ -92,14 +91,15 @@ export async function createPrivateTicket({ guild, user, type, kit = null }) {
     });
   }
 
-  const channelName = `${isShop ? 'pedido' : 'ticket'}-${slug(user.username)}`.slice(0, 90);
+  const prefix = isShop ? 'pedido' : 'ticket';
+  const channelName = (prefix + '-' + slug(user.username)).slice(0, 90);
   const channel = await guild.channels.create({
     name: channelName,
     type: ChannelType.GuildText,
     parent,
-    topic: `ASTHEN|type:${type}|owner:${user.id}`,
+    topic: 'ASTHEN|type:' + type + '|owner:' + user.id,
     permissionOverwrites: permissions,
-    reason: `Ticket aberto por ${user.tag ?? user.username}`
+    reason: 'Ticket aberto por ' + (user.tag ?? user.username)
   });
 
   const ticket = {
@@ -110,6 +110,9 @@ export async function createPrivateTicket({ guild, user, type, kit = null }) {
     kitId: kit?.id ?? null,
     kitName: kit?.name ?? null,
     kitPrice: kit?.price ?? null,
+    kitDescription: kit?.description ?? null,
+    minecraftNick,
+    orderStatus: isShop ? 'pending' : null,
     status: 'open',
     createdAt: new Date().toISOString()
   };
@@ -117,14 +120,14 @@ export async function createPrivateTicket({ guild, user, type, kit = null }) {
   return { channel, alreadyOpen: false, ticket };
 }
 
-export async function archiveAndDeleteTicket({ channel, ticket, closedById }) {
+export async function archiveAndDeleteTicket({ channel, closedById }) {
   updateTicket(channel.id, {
     status: 'closed',
     closedBy: closedById,
     closedAt: new Date().toISOString()
   });
 
-  await sleep(CONFIG.shop.closeDelaySeconds * 1000);
+  await sleep(CONFIG.tickets.closeDelaySeconds * 1000);
   try {
     await channel.delete('Ticket fechado');
   } catch (error) {
