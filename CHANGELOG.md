@@ -19,6 +19,7 @@
 ### Configuração e dados
 - /configurar unifica os canais de suporte, loja, logs, compradores e o cargo da equipe.
 - Canal de logs fica oculto para @everyone e liberado para a equipe configurada e administradores.
+- Painéis já publicados são atualizados automaticamente na inicialização; botões antigos de compra continuam compatíveis durante a migração.
 - Compras em preparação também são salvas localmente e podem ser retomadas.
 - Salvamento atômico de data/state.json após alterações.
 
