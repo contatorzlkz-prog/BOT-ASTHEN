@@ -1,324 +1,344 @@
 import {
-  ActionRowBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder,
-  TextInputStyle, PermissionsBitField
+  ActionRowBuilder,
+  ButtonStyle,
+  ModalBuilder,
+  PermissionsBitField,
+  TextInputBuilder,
+  TextInputStyle
 } from 'discord.js';
 import { randomUUID } from 'node:crypto';
+import { addKit, getGuildConfig, getTicket, removeKit, updateGuildConfig } from './store.js';
 import {
-  addKit, getGuildConfig, getTicket, removeKit, updateGuildConfig, updateTicket
-} from './store.js';
-import {
-  makeCloseRow, makeDecisionEmbed, makeKitSelect, makeMissingPixEmbed,
-  makeOrderEmbed, makeOrderRow, makePixEmbed, makeShopPanel, makeSupportPanel,
-  makeSupportTicketEmbed
+  makeChannelLinkRow,
+  makeCloseRow,
+  makeKitWizardEmbed,
+  makeMissingPixEmbed,
+  makeOrderEmbed,
+  makePixEmbed,
+  makeShopPanel,
+  makeSupportPanel,
+  makeSupportTicketEmbed,
+  makeWizardButton
 } from './ui.js';
-import { createPrivateTicket, formatTicketTranscript } from './tickets.js';
+import { archiveAndDeleteTicket, createPrivateTicket } from './tickets.js';
+import { CONFIG } from './config.js';
 
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const kitWizards = new Map();
+const supportTitles = {
+  bug: 'Reporte de bug',
+  hack: 'Denúncia de hack',
+  duvida: 'Dúvida',
+  geral: 'Atendimento geral'
+};
 
-function isStaff(interaction, config = getGuildConfig(interaction.guildId)) {
-  const perms = interaction.memberPermissions;
-  if (perms?.has(PermissionsBitField.Flags.Administrator)) return true;
-  if (perms?.has(PermissionsBitField.Flags.ManageGuild)) return true;
-  if (perms?.has(PermissionsBitField.Flags.ManageChannels)) return true;
-  const roles = interaction.member?.roles;
-  return Boolean(config.staffRoleId && (roles?.cache?.has?.(config.staffRoleId) || roles?.includes?.(config.staffRoleId)));
+function canManage(interaction) {
+  return interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)
+    || interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageGuild);
 }
 
-function replyPrivate(interaction, content) {
-  const payload = { content, ephemeral: true };
+function isStaff(interaction, config = getGuildConfig(interaction.guildId)) {
+  if (canManage(interaction)) return true;
+  return Boolean(config.staffRoleId && interaction.member?.roles?.cache?.has?.(config.staffRoleId));
+}
+
+function replyPrivate(interaction, content, components = []) {
+  const payload = { content, components, ephemeral: true };
   if (interaction.deferred || interaction.replied) return interaction.followUp(payload);
   return interaction.reply(payload);
 }
 
-function channelLabel(guild, channelId) {
-  if (!channelId) return 'Não definido';
-  return guild.channels.cache.get(channelId)?.name ?? 'Canal não encontrado';
+async function syncShopPanel(guild, config = getGuildConfig(guild.id)) {
+  if (!config.shopPanelChannelId || !config.shopPanelMessageId) return false;
+  const channel = guild.channels.cache.get(config.shopPanelChannelId)
+    ?? await guild.channels.fetch(config.shopPanelChannelId).catch(() => null);
+  if (!channel?.isTextBased()) return false;
+  const message = await channel.messages.fetch(config.shopPanelMessageId).catch(() => null);
+  if (!message) return false;
+  await message.edit(makeShopPanel(config.kits));
+  return true;
 }
 
-async function handleCommand(interaction) {
-  if (!interaction.guild) return replyPrivate(interaction, 'Use os comandos da Asthen dentro de um servidor.');
+async function configurePanel(interaction) {
+  if (!canManage(interaction)) {
+    return replyPrivate(interaction, 'Você precisa da permissão Gerenciar servidor para configurar os painéis.');
+  }
+
+  const kind = interaction.options.getString('tipo', true);
+  const channel = interaction.options.getChannel('canal', true);
+  const role = interaction.options.getRole('equipe');
+  if (!channel?.isTextBased()) return replyPrivate(interaction, 'Escolha um canal de texto.');
+
   const config = getGuildConfig(interaction.guildId);
-  const group = interaction.options.getSubcommandGroup(false);
-  const subcommand = interaction.options.getSubcommand();
+  const isShop = kind === 'loja';
+  const channelKey = isShop ? 'shopPanelChannelId' : 'supportPanelChannelId';
+  const messageKey = isShop ? 'shopPanelMessageId' : 'supportPanelMessageId';
+  const categoryKey = isShop ? 'shopCategoryId' : 'supportCategoryId';
+  const previousChannelId = config[channelKey];
+  const previousMessageId = config[messageKey];
+  let message = null;
 
-  if (!isStaff(interaction, config)) {
-    return replyPrivate(interaction, 'Você não tem permissão para configurar a Asthen.');
-  }
-
-  if (subcommand === 'cargo-admin') {
-    const allowed = interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)
-      || interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageGuild);
-    if (!allowed) return replyPrivate(interaction, 'Somente quem tem Gerenciar servidor ou Administrador pode definir o cargo da equipe.');
-    const role = interaction.options.getRole('cargo', true);
-    updateGuildConfig(interaction.guildId, { staffRoleId: role.id });
-    return replyPrivate(interaction, 'Cargo da equipe definido: ' + role.toString());
-  }
-
-  if (group === 'painel') {
-    const channel = interaction.options.getChannel('canal', true);
-    const isShop = subcommand === 'loja';
-    const payload = isShop ? makeShopPanel(config.kits.length) : makeSupportPanel();
-    const message = await channel.send(payload);
-    const key = isShop ? 'shopPanelChannelId' : 'supportPanelChannelId';
-    updateGuildConfig(interaction.guildId, { [key]: channel.id });
-    return replyPrivate(interaction, 'Painel ' + (isShop ? 'da loja' : 'de suporte') + ' publicado em ' + channel.toString() + '. Mensagem: ' + message.url);
-  }
-
-  if (group === 'categoria') {
-    const channel = interaction.options.getChannel('canal', true);
-    const key = subcommand === 'loja' ? 'shopCategoryId' : 'supportCategoryId';
-    updateGuildConfig(interaction.guildId, { [key]: channel.id });
-    return replyPrivate(interaction, 'Categoria de ' + subcommand + ' definida: **' + channel.name + '**.');
-  }
-
-  if (group === 'kit') {
-    if (subcommand === 'adicionar') {
-      const current = getGuildConfig(interaction.guildId);
-      if (current.kits.length >= 25) {
-        return replyPrivate(interaction, 'O catálogo atingiu o limite de 25 kits. Remova um kit antes de adicionar outro.');
-      }
-      const name = interaction.options.getString('nome', true).trim();
-      const price = interaction.options.getString('preco', true).trim();
-      const description = interaction.options.getString('descricao', true).trim();
-      if (current.kits.some(kit => kit.name.toLowerCase() === name.toLowerCase())) {
-        return replyPrivate(interaction, 'Já existe um kit com esse nome. Use outro nome ou remova o cadastro anterior.');
-      }
-      addKit(interaction.guildId, { id: randomUUID().slice(0, 8), name, price, description });
-      return replyPrivate(interaction, 'Kit **' + name + '** adicionado por **' + price + '**. Atualize o painel da loja para refletir o catálogo.');
+  if (previousChannelId === channel.id && previousMessageId) {
+    const oldMessage = await channel.messages.fetch(previousMessageId).catch(() => null);
+    if (oldMessage) {
+      await oldMessage.edit(isShop ? makeShopPanel(config.kits) : makeSupportPanel());
+      message = oldMessage;
     }
-    const name = interaction.options.getString('nome', true).trim().toLowerCase();
-    const current = getGuildConfig(interaction.guildId);
-    const kit = current.kits.find(item => item.name.toLowerCase() === name);
-    if (!kit) return replyPrivate(interaction, 'Não encontrei um kit com esse nome.');
-    removeKit(interaction.guildId, kit.id);
-    return replyPrivate(interaction, 'Kit **' + kit.name + '** removido do catálogo.');
   }
 
-  if (subcommand === 'pix') {
-    const pixKey = interaction.options.getString('chave', true).trim();
-    const pixInstructions = interaction.options.getString('instrucoes')?.trim() ?? '';
-    updateGuildConfig(interaction.guildId, { pixKey, pixInstructions });
-    return replyPrivate(interaction, 'Chave Pix salva. Ela será exibida somente dentro dos novos canais privados de pedido.');
-  }
-
-  if (subcommand === 'logs') {
-    const channel = interaction.options.getChannel('canal', true);
-    updateGuildConfig(interaction.guildId, { logChannelId: channel.id });
-    return replyPrivate(interaction, 'Canal de transcrições definido: ' + channel.toString());
-  }
-
-  if (subcommand === 'status') {
-    const current = getGuildConfig(interaction.guildId);
-    const lines = [
-      '**ASTHEN / STATUS DA CONFIGURAÇÃO**',
-      'Painel suporte: **' + channelLabel(interaction.guild, current.supportPanelChannelId) + '**',
-      'Painel loja: **' + channelLabel(interaction.guild, current.shopPanelChannelId) + '**',
-      'Categoria suporte: **' + channelLabel(interaction.guild, current.supportCategoryId) + '**',
-      'Categoria loja: **' + channelLabel(interaction.guild, current.shopCategoryId) + '**',
-      'Cargo da equipe: ' + (current.staffRoleId ? '<@&' + current.staffRoleId + '>' : '**Não definido**'),
-      'Pix: **' + (current.pixKey ? 'Configurado' : 'Não configurado') + '**',
-      'Kits cadastrados: **' + current.kits.length + '/25**',
-      'Canal de logs: **' + channelLabel(interaction.guild, current.logChannelId) + '**'
-    ];
-    return replyPrivate(interaction, lines.join('\n'));
-  }
-
-  if (subcommand === 'ajuda') {
-    return replyPrivate(interaction, [
-      '**ASTHEN / CONFIGURAÇÃO INICIAL**',
-      '/asthen cargo-admin — define o cargo da equipe.',
-      '/asthen categoria suporte e /asthen categoria loja — definem onde os canais privados serão criados.',
-      '/asthen pix — cadastra a chave e as instruções.',
-      '/asthen kit adicionar — cadastra os kits da loja (até 25).',
-      '/asthen painel suporte e /asthen painel loja — publicam os painéis.',
-      '/asthen logs — configura transcrições opcionais.',
-      '/asthen status — confere a configuração atual.',
-      '',
-      'O bot não confirma Pix nem entrega itens no jogo. A equipe confere o comprovante e realiza a entrega manualmente.'
-    ].join('\n'));
-  }
-}
-
-async function openSupportTicket(interaction) {
-  const kind = interaction.values[0];
-  await interaction.deferReply({ ephemeral: true });
-  const result = await createPrivateTicket({
-    guild: interaction.guild,
-    user: interaction.user,
-    type: kind
-  });
-  if (result.alreadyOpen) {
-    return interaction.editReply('Você já tem um ticket aberto: ' + result.channel.toString() + '. Continue por lá ou feche o atendimento antes de abrir outro.');
-  }
-  const config = getGuildConfig(interaction.guildId);
-  await result.channel.send({
-    content: interaction.user.toString() + (config.staffRoleId ? ' <@&' + config.staffRoleId + '>' : ''),
-    embeds: [makeSupportTicketEmbed(kind, interaction.user)],
-    components: [makeCloseRow()],
-    allowedMentions: {
-      users: [interaction.user.id],
-      roles: config.staffRoleId ? [config.staffRoleId] : []
+  if (!message) {
+    if (previousChannelId && previousMessageId) {
+      const oldChannel = interaction.guild.channels.cache.get(previousChannelId)
+        ?? await interaction.guild.channels.fetch(previousChannelId).catch(() => null);
+      const oldMessage = oldChannel?.isTextBased()
+        ? await oldChannel.messages.fetch(previousMessageId).catch(() => null)
+        : null;
+      if (oldMessage) await oldMessage.delete().catch(() => {});
     }
-  });
-  return interaction.editReply('Seu ticket foi criado: ' + result.channel.toString());
+    message = await channel.send(isShop ? makeShopPanel(config.kits) : makeSupportPanel());
+  }
+
+  const changes = {
+    [channelKey]: channel.id,
+    [messageKey]: message.id,
+    [categoryKey]: channel.parentId ?? null
+  };
+  if (role) changes.staffRoleId = role.id;
+  updateGuildConfig(interaction.guildId, changes);
+
+  const roleLine = role
+    ? `Equipe: ${role}.`
+    : config.staffRoleId
+      ? `Equipe atual: <@&${config.staffRoleId}>.`
+      : 'Sem cargo de equipe definido: somente administradores do servidor verão os tickets.';
+  return replyPrivate(interaction, `${isShop ? 'Loja' : 'Suporte'} configurado em ${channel}. ${roleLine}`);
 }
 
-async function openShopMenu(interaction) {
-  const config = getGuildConfig(interaction.guildId);
-  if (!config.kits.length) {
-    return replyPrivate(interaction, 'A loja ainda não tem kits cadastrados. A equipe pode adicionar kits usando /asthen kit adicionar.');
+async function configurePix(interaction) {
+  if (!canManage(interaction)) {
+    return replyPrivate(interaction, 'Você precisa da permissão Gerenciar servidor para alterar o Pix.');
   }
+  const pixKey = interaction.options.getString('chave', true).trim();
+  const pixInstructions = interaction.options.getString('instrucoes')?.trim() ?? '';
+  updateGuildConfig(interaction.guildId, { pixKey, pixInstructions });
+  return replyPrivate(interaction, 'Dados Pix salvos. Eles serão exibidos nos próximos pedidos.');
+}
+
+function makeFieldModal(field) {
+  const options = {
+    name: { title: 'Nome do kit', label: 'Nome', placeholder: 'Ex.: Kit Demo Premium', max: 60, customId: 'name' },
+    price: { title: 'Preço do kit', label: 'Preço', placeholder: 'Ex.: R$ 9,90', max: 30, customId: 'price' },
+    description: { title: 'Descrição do kit', label: 'Descrição', placeholder: 'O que vem neste kit?', max: 180, customId: 'description' }
+  };
+  const item = options[field];
+  const input = new TextInputBuilder()
+    .setCustomId(item.customId)
+    .setLabel(item.label)
+    .setPlaceholder(item.placeholder)
+    .setStyle(field === 'description' ? TextInputStyle.Paragraph : TextInputStyle.Short)
+    .setMaxLength(item.max)
+    .setRequired(true);
+  if (field !== 'description') input.setMinLength(2);
+
+  return new ModalBuilder()
+    .setCustomId(`kit:field:${field}`)
+    .setTitle(item.title)
+    .addComponents(new ActionRowBuilder().addComponents(input));
+}
+
+async function startKitWizard(interaction) {
+  if (!canManage(interaction)) return replyPrivate(interaction, 'Você não tem permissão para cadastrar kits.');
+  const config = getGuildConfig(interaction.guildId);
+  if (config.kits.length >= CONFIG.shop.maxKits) {
+    return replyPrivate(interaction, `A loja já tem ${CONFIG.shop.maxKits} kits. Remova um antes de adicionar outro.`);
+  }
+  const wizard = {
+    guildId: interaction.guildId,
+    userId: interaction.user.id,
+    name: '',
+    price: '',
+    description: ''
+  };
+  kitWizards.set(interaction.user.id, wizard);
+  return interaction.showModal(makeFieldModal('name'));
+}
+
+function wizardStage(wizard, nextField) {
+  const labels = {
+    price: ['Preço definido. Agora informe o valor do kit.', 'Definir preço'],
+    description: ['Preço salvo. Agora descreva o que vem no kit.', 'Definir descrição']
+  };
+  const [content, label] = labels[nextField];
+  return {
+    content,
+    embeds: [makeKitWizardEmbed(wizard)],
+    components: [new ActionRowBuilder().addComponents(makeWizardButton(`kit:wizard:${nextField}`, label))],
+    ephemeral: true
+  };
+}
+
+async function handleKitField(interaction) {
+  const field = interaction.customId.split(':')[2];
+  const wizard = kitWizards.get(interaction.user.id);
+  if (!wizard || wizard.guildId !== interaction.guildId) {
+    return replyPrivate(interaction, 'Este cadastro expirou. Use /kit adicionar para começar de novo.');
+  }
+
+  const value = interaction.fields.getTextInputValue(field).trim();
+  if (value.length < 2) return replyPrivate(interaction, 'O campo precisa ter pelo menos 2 caracteres.');
+  wizard[field] = value;
+
+  if (field === 'name') {
+    return interaction.reply({
+      content: 'Nome salvo. Agora informe o preço.',
+      embeds: [makeKitWizardEmbed(wizard)],
+      components: [new ActionRowBuilder().addComponents(makeWizardButton('kit:wizard:price', 'Definir preço'))],
+      ephemeral: true
+    });
+  }
+  if (field === 'price') return interaction.reply(wizardStage(wizard, 'description'));
+
   return interaction.reply({
-    content: '**ASTHEN / SELECIONE SEU KIT**\nEscolha uma opção para continuar com o pedido.',
-    components: makeKitSelect(config.kits),
+    content: 'Confira os dados e salve o kit.',
+    embeds: [makeKitWizardEmbed(wizard)],
+    components: [new ActionRowBuilder().addComponents(
+      makeWizardButton('kit:wizard:save', 'Salvar kit', ButtonStyle.Success),
+      makeWizardButton('kit:wizard:cancel', 'Cancelar', ButtonStyle.Danger)
+    )],
     ephemeral: true
   });
 }
 
-async function showNicknameModal(interaction) {
-  const kitId = interaction.values[0];
-  const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
-  if (!kit) return replyPrivate(interaction, 'Esse kit não está mais disponível. Abra a loja novamente para atualizar a lista.');
+async function handleKitWizardButton(interaction) {
+  const action = interaction.customId.split(':')[2];
+  const wizard = kitWizards.get(interaction.user.id);
+  if (!wizard || wizard.guildId !== interaction.guildId) {
+    return replyPrivate(interaction, 'Este cadastro expirou. Use /kit adicionar para começar de novo.');
+  }
 
-  const modal = new ModalBuilder()
-    .setCustomId('shop:nick:' + kit.id)
-    .setTitle('Finalizar pedido');
-  const nicknameInput = new TextInputBuilder()
-    .setCustomId('nickname')
-    .setLabel('Seu nick no servidor')
-    .setPlaceholder('Digite seu nick exatamente como aparece no jogo')
-    .setStyle(TextInputStyle.Short)
-    .setMinLength(2)
-    .setMaxLength(32)
-    .setRequired(true);
-  modal.addComponents(new ActionRowBuilder().addComponents(nicknameInput));
-  return interaction.showModal(modal);
+  if (action === 'price' || action === 'description') {
+    return interaction.showModal(makeFieldModal(action));
+  }
+  if (action === 'cancel') {
+    kitWizards.delete(interaction.user.id);
+    return interaction.update({ content: 'Cadastro cancelado.', embeds: [], components: [] });
+  }
+  if (action === 'save') {
+    const config = getGuildConfig(interaction.guildId);
+    if (config.kits.length >= CONFIG.shop.maxKits) {
+      kitWizards.delete(interaction.user.id);
+      return interaction.update({ content: 'A loja atingiu o limite de kits. Remova um e comece novamente.', embeds: [], components: [] });
+    }
+    if (config.kits.some(kit => kit.name.toLocaleLowerCase('pt-BR') === wizard.name.toLocaleLowerCase('pt-BR'))) {
+      return interaction.reply({ content: 'Já existe um kit com esse nome. Cancele e comece novamente com outro nome.', ephemeral: true });
+    }
+    const kit = { id: randomUUID().slice(0, 10), name: wizard.name, price: wizard.price, description: wizard.description };
+    addKit(interaction.guildId, kit);
+    kitWizards.delete(interaction.user.id);
+    await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
+    return interaction.update({ content: `Kit **${kit.name}** adicionado à loja.`, embeds: [], components: [] });
+  }
 }
 
-async function submitShopOrder(interaction) {
-  const kitId = interaction.customId.split(':')[2];
+async function handleKitCommand(interaction) {
+  if (!canManage(interaction)) return replyPrivate(interaction, 'Você não tem permissão para gerenciar os kits.');
+  const subcommand = interaction.options.getSubcommand();
+  const config = getGuildConfig(interaction.guildId);
+
+  if (subcommand === 'adicionar') return startKitWizard(interaction);
+  if (subcommand === 'listar') {
+    if (!config.kits.length) return replyPrivate(interaction, 'A loja está vazia.');
+    const lines = config.kits.map((kit, index) => `${index + 1}. **${kit.name}** — ${kit.price}\n${kit.description}`);
+    return replyPrivate(interaction, lines.join('\n\n').slice(0, 1900));
+  }
+
+  const wanted = interaction.options.getString('nome', true).trim().toLocaleLowerCase('pt-BR');
+  const kit = config.kits.find(item => item.name.toLocaleLowerCase('pt-BR') === wanted);
+  if (!kit) return replyPrivate(interaction, 'Não encontrei um kit com esse nome.');
+  removeKit(interaction.guildId, kit.id);
+  await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
+  return replyPrivate(interaction, `Kit **${kit.name}** removido da loja.`);
+}
+
+async function openSupportTicket(interaction, kind) {
+  if (!supportTitles[kind]) return replyPrivate(interaction, 'Tipo de atendimento inválido.');
+  await interaction.deferReply({ ephemeral: true });
+  const result = await createPrivateTicket({ guild: interaction.guild, user: interaction.user, type: kind });
+  if (!result.alreadyOpen) {
+    const config = getGuildConfig(interaction.guildId);
+    const staffMention = config.staffRoleId ? `<@&${config.staffRoleId}>` : '';
+    await result.channel.send({
+      content: `${interaction.user} ${staffMention}`.trim(),
+      embeds: [makeSupportTicketEmbed(kind, interaction.user)],
+      components: [makeCloseRow()],
+      allowedMentions: { users: [interaction.user.id], roles: config.staffRoleId ? [config.staffRoleId] : [] }
+    });
+  }
+  return interaction.editReply({
+    content: result.alreadyOpen ? 'Você já tem um atendimento aberto.' : 'Atendimento aberto.',
+    components: [makeChannelLinkRow(result.channel)]
+  });
+}
+
+async function openShopTicket(interaction, kitId) {
   const config = getGuildConfig(interaction.guildId);
   const kit = config.kits.find(item => item.id === kitId);
-  if (!kit) return replyPrivate(interaction, 'Esse kit não está mais disponível. Abra a loja novamente para escolher outro.');
-  const nickname = interaction.fields.getTextInputValue('nickname').trim();
-  if (nickname.length < 2 || nickname.length > 32) {
-    return replyPrivate(interaction, 'O nick precisa ter entre 2 e 32 caracteres.');
-  }
+  if (!kit) return replyPrivate(interaction, 'Este kit não está mais disponível. Atualize o painel da loja.');
 
   await interaction.deferReply({ ephemeral: true });
-  const result = await createPrivateTicket({
-    guild: interaction.guild,
-    user: interaction.user,
-    type: 'shop',
-    kit,
-    nickname
-  });
-  if (result.alreadyOpen) {
-    return interaction.editReply('Você já tem um ticket aberto: ' + result.channel.toString() + '. Termine ou feche o atendimento atual antes de abrir outro.');
+  const result = await createPrivateTicket({ guild: interaction.guild, user: interaction.user, type: 'shop', kit });
+  if (!result.alreadyOpen) {
+    const orderCode = result.channel.id.slice(-6).toUpperCase();
+    const staffMention = config.staffRoleId ? `<@&${config.staffRoleId}>` : '';
+    await result.channel.send({
+      content: `${interaction.user} ${staffMention}`.trim(),
+      embeds: [makeOrderEmbed({ user: interaction.user, kit, orderCode }), config.pixKey ? makePixEmbed(config) : makeMissingPixEmbed()],
+      components: [makeCloseRow()],
+      allowedMentions: { users: [interaction.user.id], roles: config.staffRoleId ? [config.staffRoleId] : [] }
+    });
   }
-
-  const orderCode = result.channel.id.slice(-6).toUpperCase();
-  const staffMention = config.staffRoleId ? '<@&' + config.staffRoleId + '>' : '';
-  const embeds = [makeOrderEmbed({ user: interaction.user, kit, nickname, orderCode })];
-  embeds.push(config.pixKey ? makePixEmbed(config) : makeMissingPixEmbed());
-  await result.channel.send({
-    content: interaction.user.toString() + ' ' + staffMention,
-    embeds,
-    components: [makeOrderRow()],
-    allowedMentions: {
-      users: [interaction.user.id],
-      roles: config.staffRoleId ? [config.staffRoleId] : []
-    }
+  return interaction.editReply({
+    content: result.alreadyOpen ? 'Você já tem um pedido aberto.' : 'Pedido criado. Envie o comprovante no canal privado.',
+    components: [makeChannelLinkRow(result.channel)]
   });
-  await result.channel.send({
-    content: '**COMPROVANTE**\nDepois de realizar o pagamento, envie o comprovante como imagem ou arquivo neste canal e aguarde um administrador. Não envie dados sensíveis além do comprovante necessário.'
-  });
-  return interaction.editReply('Pedido criado com sucesso: ' + result.channel.toString() + '. Envie o comprovante no canal privado e aguarde a equipe.');
-}
-
-async function decideOrder(interaction, approved) {
-  const config = getGuildConfig(interaction.guildId);
-  if (!isStaff(interaction, config)) {
-    return replyPrivate(interaction, 'Somente a equipe configurada pode analisar pedidos.');
-  }
-  const ticket = getTicket(interaction.channelId);
-  if (!ticket || ticket.type !== 'shop') {
-    return replyPrivate(interaction, 'Este canal não está registrado como pedido da loja.');
-  }
-  if (ticket.status !== 'open') {
-    return replyPrivate(interaction, 'Este pedido já foi analisado ou encerrado.');
-  }
-
-  updateTicket(interaction.channelId, {
-    status: approved ? 'approved' : 'rejected',
-    reviewedBy: interaction.user.id,
-    reviewedAt: new Date().toISOString()
-  });
-  await interaction.message.edit({ components: [makeOrderRow(true)] });
-  await interaction.channel.send({
-    embeds: [makeDecisionEmbed(approved, interaction.user.tag ?? interaction.user.username)]
-  });
-  return replyPrivate(interaction, approved
-    ? 'Pedido autorizado. A equipe ainda precisa entregar o kit manualmente no servidor.'
-    : 'Pedido marcado como não autorizado. O cliente poderá conversar com a equipe neste canal.');
 }
 
 async function closeTicket(interaction) {
   const ticket = getTicket(interaction.channelId);
-  if (!ticket) return replyPrivate(interaction, 'Este canal não está registrado como ticket Asthen.');
+  if (!ticket) return replyPrivate(interaction, 'Este canal não está registrado como ticket.');
   const config = getGuildConfig(interaction.guildId);
   const isOwner = interaction.user.id === ticket.userId;
   if (!isOwner && !isStaff(interaction, config)) {
-    return replyPrivate(interaction, 'Somente quem abriu o ticket ou a equipe pode fechar este canal.');
+    return replyPrivate(interaction, 'Somente quem abriu o ticket ou a equipe pode fechá-lo.');
   }
-  if (ticket.status === 'closed') return replyPrivate(interaction, 'Este ticket já está sendo encerrado.');
+  if (ticket.status !== 'open') return replyPrivate(interaction, 'Este ticket já está sendo fechado.');
 
-  await interaction.reply({ content: 'Este canal será removido automaticamente em 5 segundos.', ephemeral: true });
-  await interaction.channel.send('🔒 Ticket fechado por ' + interaction.user.toString() + '. O canal será apagado em 5 segundos.');
-  updateTicket(interaction.channelId, {
-    status: 'closed',
-    closedBy: interaction.user.id,
-    closedAt: new Date().toISOString()
-  });
+  await interaction.reply({ content: 'Este canal será excluído em 3 segundos.', ephemeral: true });
+  await interaction.channel.send(`Ticket fechado por ${interaction.user}. O canal será excluído em 3 segundos.`);
+  await archiveAndDeleteTicket({ channel: interaction.channel, ticket, closedById: interaction.user.id });
+}
 
-  if (config.logChannelId) {
-    try {
-      const logChannel = interaction.guild.channels.cache.get(config.logChannelId);
-      if (logChannel?.isTextBased()) {
-        const messages = await interaction.channel.messages.fetch({ limit: 100 });
-        const transcript = formatTicketTranscript(messages, ticket);
-        const attachment = new AttachmentBuilder(Buffer.from(transcript, 'utf8'), {
-          name: 'ticket-' + interaction.channelId + '.txt'
-        });
-        await logChannel.send({
-          content: 'Transcrição do ticket **' + interaction.channel.name + '** fechado por ' + interaction.user.toString() + '.',
-          files: [attachment]
-        });
-      }
-    } catch (error) {
-      console.error('[Asthen] Falha ao enviar transcrição:', error);
-    }
-  }
-
-  await sleep(5000);
-  await interaction.channel.delete('Ticket fechado por ' + (interaction.user.tag ?? interaction.user.username));
+async function handleCommand(interaction) {
+  if (!interaction.guild) return replyPrivate(interaction, 'Use este comando dentro de um servidor.');
+  if (interaction.commandName === 'configurar') return configurePanel(interaction);
+  if (interaction.commandName === 'pix') return configurePix(interaction);
+  if (interaction.commandName === 'kit') return handleKitCommand(interaction);
 }
 
 export async function handleInteraction(interaction) {
-  if (interaction.isChatInputCommand() && interaction.commandName === 'asthen') {
-    return handleCommand(interaction);
-  }
-  if (interaction.isStringSelectMenu()) {
-    if (interaction.customId === 'support:open') return openSupportTicket(interaction);
-    if (interaction.customId === 'shop:kit') return showNicknameModal(interaction);
-  }
+  if (interaction.isChatInputCommand()) return handleCommand(interaction);
+
   if (interaction.isButton()) {
-    if (interaction.customId === 'shop:open') return openShopMenu(interaction);
-    if (interaction.customId === 'order:approve') return decideOrder(interaction, true);
-    if (interaction.customId === 'order:reject') return decideOrder(interaction, false);
+    if (interaction.customId.startsWith('support:open:')) {
+      return openSupportTicket(interaction, interaction.customId.split(':')[2]);
+    }
+    if (interaction.customId.startsWith('shop:buy:')) {
+      return openShopTicket(interaction, interaction.customId.split(':')[2]);
+    }
     if (interaction.customId === 'ticket:close') return closeTicket(interaction);
+    if (interaction.customId.startsWith('kit:wizard:')) return handleKitWizardButton(interaction);
   }
-  if (interaction.isModalSubmit() && interaction.customId.startsWith('shop:nick:')) {
-    return submitShopOrder(interaction);
+
+  if (interaction.isModalSubmit() && interaction.customId.startsWith('kit:field:')) {
+    return handleKitField(interaction);
   }
 }
