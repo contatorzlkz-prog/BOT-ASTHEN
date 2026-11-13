@@ -159,9 +159,17 @@ async function configureChannels(interaction) {
   const effectiveStaffRoleId = changes.staffRoleId ?? config.staffRoleId;
 
   if (logsChannel) {
-    await secureLogsChannel(logsChannel, interaction.guild, effectiveStaffRoleId);
     changes.logsChannelId = logsChannel.id;
     updated.push('logs privados: ' + logsChannel.toString());
+  }
+
+  const effectiveLogsId = changes.logsChannelId ?? config.logsChannelId;
+  if ((logsChannel || staffRole) && effectiveLogsId) {
+    const targetLogsChannel = logsChannel ?? await fetchTextChannel(interaction.guild, effectiveLogsId);
+    if (!targetLogsChannel) {
+      return replyPrivate(interaction, 'O canal de logs configurado não existe mais. Escolha outro canal em /configurar logs.');
+    }
+    await secureLogsChannel(targetLogsChannel, interaction.guild, effectiveStaffRoleId);
   }
 
   if (buyersChannel) {
@@ -380,10 +388,19 @@ async function openCatalog(interaction) {
   const existingDraft = getPurchaseDraft(interaction.guildId, interaction.user.id);
   if (existingDraft) {
     if (existingDraft.kit && config.kits.some(kit => kit.id === existingDraft.kit.id)) {
+      if (existingDraft.stage === 'creating') {
+        existingDraft.stage = 'review';
+        savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
+      }
+      const hasNick = Boolean(existingDraft.minecraftNick);
       return interaction.reply({
-        content: 'Você já tem uma compra em preparação. Continue de onde parou.',
-        embeds: [makePurchaseReviewEmbed(existingDraft)],
-        components: existingDraft.minecraftNick ? [makePurchaseReviewControls()] : [],
+        content: hasNick
+          ? 'Você já iniciou uma compra. Confira os dados e confirme quando estiver tudo certo.'
+          : 'Você já escolheu um kit. Continue informando o nick do Minecraft.',
+        embeds: hasNick ? [makePurchaseReviewEmbed(existingDraft)] : [],
+        components: hasNick
+          ? [makePurchaseReviewControls()]
+          : [new ActionRowBuilder().addComponents(makeWizardButton('shop:continue', 'Informar nick'))],
         ephemeral: true
       });
     }
@@ -395,6 +412,25 @@ async function openCatalog(interaction) {
     components: [makeCatalogMenu(config.kits)],
     ephemeral: true
   });
+}
+
+async function continuePurchase(interaction) {
+  const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
+  if (!draft) return replyPrivate(interaction, 'Não encontrei uma compra em preparação. Abra o catálogo novamente.');
+  if (draft.stage === 'creating') {
+    return replyPrivate(interaction, 'Seu pedido está sendo criado. Aguarde a confirmação.');
+  }
+  if (draft.minecraftNick) {
+    draft.stage = 'review';
+    savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
+    return replyPrivate(
+      interaction,
+      'Confira os dados antes de continuar.',
+      [makePurchaseReviewControls()],
+      [makePurchaseReviewEmbed(draft)]
+    );
+  }
+  return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
 }
 
 async function handleCatalogSelection(interaction) {
@@ -463,8 +499,14 @@ async function cancelPurchase(interaction) {
 
 async function confirmPurchase(interaction) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
-  if (!draft || !draft.kit || !draft.minecraftNick || draft.stage !== 'review') {
+  if (!draft || !draft.kit || !draft.minecraftNick) {
     return replyPrivate(interaction, 'Não encontrei uma compra pronta para confirmar. Abra o catálogo e tente novamente.');
+  }
+  if (draft.stage === 'creating') {
+    return replyPrivate(interaction, 'Seu pedido já está sendo criado. Aguarde alguns instantes.');
+  }
+  if (draft.stage !== 'review') {
+    return replyPrivate(interaction, 'Revise os dados do pedido antes de confirmar.');
   }
 
   const config = getGuildConfig(interaction.guildId);
@@ -485,10 +527,6 @@ async function confirmPurchase(interaction) {
         components: [makeChannelLinkRow(channel)]
       });
     }
-  }
-
-  if (draft.stage === 'creating') {
-    return replyPrivate(interaction, 'Seu pedido já está sendo criado. Aguarde alguns instantes.');
   }
 
   draft.stage = 'creating';
@@ -656,6 +694,7 @@ export async function handleInteraction(interaction) {
     }
 
     if (interaction.customId === 'shop:catalog') return openCatalog(interaction);
+    if (interaction.customId === 'shop:continue') return continuePurchase(interaction);
     if (interaction.customId === 'shop:edit-nick') return editMinecraftNick(interaction);
     if (interaction.customId === 'shop:confirm') return confirmPurchase(interaction);
     if (interaction.customId === 'shop:cancel') return cancelPurchase(interaction);
