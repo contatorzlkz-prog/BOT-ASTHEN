@@ -11,12 +11,12 @@ echo.
 
 where node >nul 2>nul
 if errorlevel 1 goto install_node
-node -e "process.exit(Number(process.versions.node.split('.')[0])>=20?0:1)" >nul 2>nul
+node -e "process.exit(Number(process.versions.node.split('.')[0]) >=22?0:1)" >nul 2>nul
 if errorlevel 1 goto install_node
 goto have_node
 
 :install_node
-echo Node.js 20 ou mais recente nao encontrado. Instalando Node.js LTS...
+echo Node.js 22 ou mais recente nao encontrado. Instalando Node.js LTS...
 where winget >nul 2>nul
 if errorlevel 1 goto install_node_manual
 winget install -e --id OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements
