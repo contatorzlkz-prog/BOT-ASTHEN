@@ -437,9 +437,8 @@ async function continuePurchase(interaction) {
   return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
 }
 
-async function handleCatalogSelection(interaction) {
+async function beginPurchaseWithKit(interaction, kitId) {
   const config = getGuildConfig(interaction.guildId);
-  const kitId = interaction.values[0];
   const kit = config.kits.find(item => item.id === kitId);
   if (!kit) return replyPrivate(interaction, 'Este kit não está mais disponível. Abra o catálogo novamente.');
 
@@ -464,6 +463,10 @@ async function handleCatalogSelection(interaction) {
   };
   savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
   return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
+}
+
+async function handleCatalogSelection(interaction) {
+  return beginPurchaseWithKit(interaction, interaction.values[0]);
 }
 
 async function handleNickSubmit(interaction) {
@@ -717,6 +720,9 @@ export async function handleInteraction(interaction) {
     }
 
     if (interaction.customId === 'shop:catalog') return openCatalog(interaction);
+    if (interaction.customId.startsWith('shop:buy:')) {
+      return beginPurchaseWithKit(interaction, interaction.customId.split(':')[2]);
+    }
     if (interaction.customId === 'shop:continue') return continuePurchase(interaction);
     if (interaction.customId.startsWith('shop:edit-nick:')) {
       return editMinecraftNick(interaction, interaction.customId.split(':')[2]);
