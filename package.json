@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Bot de Discord com tickets privados e loja de kits por botões.",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "start": "node src/index.js",
