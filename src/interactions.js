@@ -399,7 +399,7 @@ async function openCatalog(interaction) {
           : 'Você já escolheu um kit. Continue informando o nick do Minecraft.',
         embeds: hasNick ? [makePurchaseReviewEmbed(existingDraft)] : [],
         components: hasNick
-          ? [makePurchaseReviewControls()]
+          ? [makePurchaseReviewControls(existingDraft)]
           : [new ActionRowBuilder().addComponents(makeWizardButton('shop:continue', 'Informar nick'))],
         ephemeral: true
       });
@@ -426,7 +426,7 @@ async function continuePurchase(interaction) {
     return replyPrivate(
       interaction,
       'Confira os dados antes de continuar.',
-      [makePurchaseReviewControls()],
+      [makePurchaseReviewControls(draft)],
       [makePurchaseReviewEmbed(draft)]
     );
   }
@@ -455,7 +455,8 @@ async function handleCatalogSelection(interaction) {
       description: kit.description
     },
     minecraftNick: '',
-    stage: 'nick'
+    stage: 'nick',
+    revision: randomUUID().slice(0, 8)
   };
   savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
   return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
@@ -470,25 +471,40 @@ async function handleNickSubmit(interaction) {
     return replyPrivate(interaction, 'Informe um nick válido, com até 32 caracteres.');
   }
 
+  if (interaction.customId.startsWith('shop:nick:edit:')) {
+    const requestedRevision = interaction.customId.split(':')[3];
+    if (draft.revision !== requestedRevision) {
+      return replyPrivate(interaction, 'Esta etapa da compra já foi atualizada. Use a revisão mais recente.');
+    }
+  }
+
   draft.minecraftNick = minecraftNick;
   draft.stage = 'review';
+  draft.revision = randomUUID().slice(0, 8);
   savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
 
   return interaction.reply({
     content: 'Revise os dados antes de continuar.',
     embeds: [makePurchaseReviewEmbed(draft)],
-    components: [makePurchaseReviewControls()],
+    components: [makePurchaseReviewControls(draft)],
     ephemeral: true
   });
 }
 
-async function editMinecraftNick(interaction) {
+async function editMinecraftNick(interaction, requestedRevision) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
   if (!draft) return replyPrivate(interaction, 'Sua compra não está mais em preparação. Abra o catálogo novamente.');
-  return interaction.showModal(makeMinecraftNickModal('shop:nick:edit', draft.minecraftNick));
+  if (draft.revision !== requestedRevision) {
+    return replyPrivate(interaction, 'Esta revisão do pedido ficou desatualizada. Use os botões da mensagem mais recente.');
+  }
+  return interaction.showModal(makeMinecraftNickModal('shop:nick:edit:' + draft.revision, draft.minecraftNick));
 }
 
-async function cancelPurchase(interaction) {
+async function cancelPurchase(interaction, requestedRevision) {
+  const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
+  if (!draft || draft.revision !== requestedRevision) {
+    return replyPrivate(interaction, 'Esta revisão da compra já foi atualizada. Confira a mensagem mais recente.');
+  }
   deletePurchaseDraft(interaction.guildId, interaction.user.id);
   return interaction.update({
     content: 'Compra cancelada. Nenhum ticket foi aberto.',
@@ -497,8 +513,11 @@ async function cancelPurchase(interaction) {
   });
 }
 
-async function confirmPurchase(interaction) {
+async function confirmPurchase(interaction, requestedRevision) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
+  if (draft && draft.revision !== requestedRevision) {
+    return replyPrivate(interaction, 'Esta revisão do pedido ficou desatualizada. Confira a mensagem mais recente.');
+  }
   if (!draft || !draft.kit || !draft.minecraftNick) {
     return replyPrivate(interaction, 'Não encontrei uma compra pronta para confirmar. Abra o catálogo e tente novamente.');
   }
@@ -695,9 +714,15 @@ export async function handleInteraction(interaction) {
 
     if (interaction.customId === 'shop:catalog') return openCatalog(interaction);
     if (interaction.customId === 'shop:continue') return continuePurchase(interaction);
-    if (interaction.customId === 'shop:edit-nick') return editMinecraftNick(interaction);
-    if (interaction.customId === 'shop:confirm') return confirmPurchase(interaction);
-    if (interaction.customId === 'shop:cancel') return cancelPurchase(interaction);
+    if (interaction.customId.startsWith('shop:edit-nick:')) {
+      return editMinecraftNick(interaction, interaction.customId.split(':')[2]);
+    }
+    if (interaction.customId.startsWith('shop:confirm:')) {
+      return confirmPurchase(interaction, interaction.customId.split(':')[2]);
+    }
+    if (interaction.customId.startsWith('shop:cancel:')) {
+      return cancelPurchase(interaction, interaction.customId.split(':')[2]);
+    }
     if (interaction.customId === 'ticket:close') return closeTicket(interaction);
     if (interaction.customId === 'order:approve') return decideOrder(interaction, 'approved');
     if (interaction.customId === 'order:reject') return decideOrder(interaction, 'rejected');
@@ -710,7 +735,7 @@ export async function handleInteraction(interaction) {
 
   if (interaction.isModalSubmit()) {
     if (interaction.customId.startsWith('kit:field:')) return handleKitField(interaction);
-    if (interaction.customId === 'shop:nick:submit' || interaction.customId === 'shop:nick:edit') {
+    if (interaction.customId === 'shop:nick:submit' || interaction.customId.startsWith('shop:nick:edit:')) {
       return handleNickSubmit(interaction);
     }
   }
