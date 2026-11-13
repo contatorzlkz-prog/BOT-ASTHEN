@@ -1,7 +1,7 @@
 # ASTHEN BOT
 
 [![Baixar ZIP](https://img.shields.io/badge/BAIXAR%20ZIP-%E2%86%93-2F6BFF?style=for-the-badge)](https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip)
-[![Node.js](https://img.shields.io/badge/Node.js-20%2B-43853D?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22%2B-43853D?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![discord.js](https://img.shields.io/badge/discord.js-14-5865F2?logo=discord&logoColor=white)](https://discord.js.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-222222.svg)](LICENSE)
 
@@ -14,7 +14,7 @@ Bot de Discord com atendimento privado e loja de kits. Cada servidor usa sua pr�
 3. Informe o token do bot e o Application ID quando solicitado.
 4. Abra `INICIAR.bat`.
 
-É necessário Node.js 20 ou mais recente. O instalador tenta instalar o Node.js LTS quando necessário.
+É necessário Node.js 22 ou mais recente. Recomendado: Node.js 26 LTS. O instalador tenta instalar o Node.js LTS quando necessário.
 
 ## Configurar no Discord
 
