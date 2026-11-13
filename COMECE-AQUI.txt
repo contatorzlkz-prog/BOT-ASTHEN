@@ -1,0 +1,19 @@
+ASTHEN BOT - COMECE AQUI (Windows 10/11)
+
+1. Extraia a pasta do ZIP.
+2. Execute INSTALAR.bat.
+3. Informe o token e o Application ID do seu bot.
+4. Execute INICIAR.bat.
+5. No Discord, configure:
+
+   /configurar tipo:suporte canal:#suporte equipe:@Equipe
+   /configurar tipo:loja canal:#loja
+   /pix chave:SUA_CHAVE_PIX
+
+Os painéis são publicados automaticamente nos canais escolhidos.
+Os tickets aparecem na mesma categoria dos canais dos painéis.
+
+Para cadastrar kits, use /kit adicionar. O bot pede nome, preço e descrição
+em etapas. Os três kits de demonstração iniciais podem ser alterados ou removidos.
+
+Nunca compartilhe o arquivo .env: ele contém o token do bot.
