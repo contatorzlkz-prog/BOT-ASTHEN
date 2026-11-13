@@ -1,58 +1,60 @@
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 const adminOnly = command => command.setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
+const textChannel = option => option
+  .addChannelTypes(ChannelType.GuildText)
+  .setRequired(false);
 
 export const commandDefinitions = [
   adminOnly(new SlashCommandBuilder()
     .setName('configurar')
-    .setDescription('Ativa a loja ou o suporte em um canal.')
-    .addStringOption(option => option
-      .setName('tipo')
-      .setDescription('Qual painel deseja publicar?')
-      .setRequired(true)
-      .addChoices(
-        { name: 'Suporte', value: 'suporte' },
-        { name: 'Loja', value: 'loja' }
-      ))
-    .addChannelOption(option => option
-      .setName('canal')
-      .setDescription('Canal onde o painel ficará.')
-      .addChannelTypes(ChannelType.GuildText)
-      .setRequired(true))
+    .setDescription('Define os canais do suporte, loja e atendimento.')
+    .addChannelOption(option => textChannel(option
+      .setName('suporte')
+      .setDescription('Canal que receberá o painel de suporte.')))
+    .addChannelOption(option => textChannel(option
+      .setName('loja')
+      .setDescription('Canal que receberá o painel da loja.')))
+    .addChannelOption(option => textChannel(option
+      .setName('logs')
+      .setDescription('Canal privado para decisões e registros dos pedidos.')))
+    .addChannelOption(option => textChannel(option
+      .setName('compradores')
+      .setDescription('Canal público para anunciar compras aprovadas.')))
     .addRoleOption(option => option
       .setName('equipe')
-      .setDescription('Cargo que poderá ver e responder aos tickets. Opcional.')
+      .setDescription('Cargo autorizado a atender e revisar pedidos.')
       .setRequired(false))),
 
   adminOnly(new SlashCommandBuilder()
     .setName('pix')
-    .setDescription('Define os dados de pagamento da loja.')
+    .setDescription('Configura os dados de pagamento da loja.')
     .addStringOption(option => option
       .setName('chave')
-      .setDescription('Chave Pix da loja.')
+      .setDescription('Chave Pix que será exibida no pedido.')
       .setMaxLength(120)
       .setRequired(true))
     .addStringOption(option => option
       .setName('instrucoes')
-      .setDescription('Instrução curta para o cliente (opcional).')
-      .setMaxLength(250)
+      .setDescription('Orientações para o cliente após o pagamento.')
+      .setMaxLength(500)
       .setRequired(false))),
 
   adminOnly(new SlashCommandBuilder()
     .setName('kit')
-    .setDescription('Gerencia os produtos da loja.')
+    .setDescription('Gerencia os kits disponíveis na loja.')
     .addSubcommand(subcommand => subcommand
       .setName('adicionar')
       .setDescription('Abre o cadastro guiado de um kit.'))
     .addSubcommand(subcommand => subcommand
       .setName('listar')
-      .setDescription('Mostra os kits cadastrados.'))
+      .setDescription('Lista os kits cadastrados.'))
     .addSubcommand(subcommand => subcommand
       .setName('remover')
       .setDescription('Remove um kit pelo nome.')
       .addStringOption(option => option
         .setName('nome')
-        .setDescription('Nome exato do kit.')
+        .setDescription('Nome do kit que será removido.')
         .setMaxLength(80)
         .setRequired(true))))
 ];
