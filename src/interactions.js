@@ -96,9 +96,13 @@ async function updatePanel(guild, config, kind, channel) {
   };
 }
 
-async function secureLogsChannel(channel, guild, staffRoleId) {
+async function secureLogsChannel(channel, guild, staffRoleId, previousStaffRoleId = null) {
   const everyoneId = guild.roles.everyone.id;
   await channel.permissionOverwrites.edit(everyoneId, { ViewChannel: false });
+
+  if (previousStaffRoleId && previousStaffRoleId !== staffRoleId && guild.roles.cache.has(previousStaffRoleId)) {
+    await channel.permissionOverwrites.edit(previousStaffRoleId, { ViewChannel: false });
+  }
 
   if (staffRoleId && guild.roles.cache.has(staffRoleId)) {
     await channel.permissionOverwrites.edit(staffRoleId, {
@@ -169,7 +173,7 @@ async function configureChannels(interaction) {
     if (!targetLogsChannel) {
       return replyPrivate(interaction, 'O canal de logs configurado não existe mais. Escolha outro canal em /configurar logs.');
     }
-    await secureLogsChannel(targetLogsChannel, interaction.guild, effectiveStaffRoleId);
+    await secureLogsChannel(targetLogsChannel, interaction.guild, effectiveStaffRoleId, config.staffRoleId);
   }
 
   if (buyersChannel) {
