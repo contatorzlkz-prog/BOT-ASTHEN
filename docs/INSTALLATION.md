@@ -1,28 +1,24 @@
 # Instalação
 
 ## Windows 10/11
-1. Baixe o repositório por Code → Download ZIP.
-2. Instale Node.js 26 LTS: https://nodejs.org/
-3. Execute setup-windows.bat.
-4. Abra .env e preencha DISCORD_TOKEN e CLIENT_ID.
-5. Convide o bot com os escopos bot e applications.commands.
-6. Execute start-windows.bat.
 
-## Linux/VPS
-Requisitos: Node.js 24.17+ (recomendado Node 26 LTS), npm e acesso de rede ao Discord.
+1. Instale ou deixe o `INSTALAR.bat` instalar o Node.js LTS (versão 20 ou mais recente).
+2. Execute `INSTALAR.bat`.
+3. Informe `DISCORD_TOKEN` e `CLIENT_ID` quando solicitado. O ID do servidor é opcional.
+4. Execute `INICIAR.bat`.
 
-    chmod +x setup-linux.sh start-linux.sh
-    ./setup-linux.sh
-    nano .env
-    ./start-linux.sh
+Se preferir configurar manualmente, copie `.env.example` para `.env` e preencha as duas variáveis obrigatórias.
 
-## Developer Portal
-- Crie uma aplicação e depois crie seu bot.
-- Copie o token somente para o arquivo .env local.
-- Copie Application ID para CLIENT_ID.
-- Para usar transcrições, habilite Message Content Intent no bot.
-- Convide com bot e applications.commands.
-- Permissões recomendadas: View Channels, Send Messages, Embed Links, Attach Files, Read Message History e Manage Channels.
+## Linux / VPS
 
-## Atualização
-Faça backup de data/state.json e do .env. Baixe a nova versão, reinstale as dependências com npm install e mantenha seus arquivos locais. Nunca sobrescreva o .env com credenciais de terceiros.
+```bash
+bash linux/setup-linux.sh
+nano .env
+bash linux/start-linux.sh
+```
+
+## Aplicação Discord
+
+Crie a aplicação no Discord Developer Portal, crie o bot e copie o token. Gere um convite com os escopos `bot` e `applications.commands` e as permissões `View Channels`, `Send Messages`, `Embed Links`, `Attach Files`, `Read Message History` e `Manage Channels`.
+
+O bot usa somente o intent `Guilds`; não é necessário ativar Message Content Intent.
