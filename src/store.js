@@ -7,12 +7,12 @@ const dataDir = path.resolve(currentDir, '../data');
 const dataFile = path.join(dataDir, 'state.json');
 
 const demoKits = () => [
-  { id: 'demo-kit-1', name: 'Kit Demo 1', price: 'R$ 5,00', description: 'Kit de demonstração. Edite ou remova antes de usar.' },
-  { id: 'demo-kit-2', name: 'Kit Demo 2', price: 'R$ 10,00', description: 'Kit de demonstração. Edite ou remova antes de usar.' },
-  { id: 'demo-kit-3', name: 'Kit Demo 3', price: 'R$ 15,00', description: 'Kit de demonstração. Edite ou remova antes de usar.' }
+  { id: 'demo-kit-1', name: 'Kit Demo 1', price: 'R$ 5,00', description: 'Kit de demonstração. Edite ou remova antes de abrir a loja.' },
+  { id: 'demo-kit-2', name: 'Kit Demo 2', price: 'R$ 10,00', description: 'Kit de demonstração. Edite ou remova antes de abrir a loja.' },
+  { id: 'demo-kit-3', name: 'Kit Demo 3', price: 'R$ 15,00', description: 'Kit de demonstração. Edite ou remova antes de abrir a loja.' }
 ];
 
-const emptyState = () => ({ guilds: {}, tickets: {} });
+const emptyState = () => ({ guilds: {}, tickets: {}, purchaseDrafts: {} });
 let state = emptyState();
 
 function defaultGuildConfig() {
@@ -23,6 +23,8 @@ function defaultGuildConfig() {
     shopPanelChannelId: null,
     shopPanelMessageId: null,
     shopCategoryId: null,
+    logsChannelId: null,
+    buyersChannelId: null,
     staffRoleId: null,
     pixKey: null,
     pixInstructions: '',
@@ -36,7 +38,6 @@ function ensureGuildConfig(guildId) {
   const config = state.guilds[guildId];
   const defaults = defaultGuildConfig();
 
-  // Adiciona os exemplos apenas uma vez na migração de configurações antigas.
   if (!('demoKitsLoaded' in config)) {
     if (Array.isArray(config.kits) && config.kits.length === 0) config.kits = demoKits();
     config.demoKitsLoaded = true;
@@ -44,14 +45,6 @@ function ensureGuildConfig(guildId) {
 
   for (const [key, value] of Object.entries(defaults)) {
     if (!(key in config)) config[key] = value;
-  }
-
-  // Migra a configuração antiga: os canais de painel já indicavam o destino dos tickets.
-  if (!config.supportCategoryId && config.supportPanelChannelId) {
-    config.supportCategoryId = null;
-  }
-  if (!config.shopCategoryId && config.shopPanelChannelId) {
-    config.shopCategoryId = null;
   }
   return config;
 }
@@ -62,12 +55,15 @@ export function loadStore() {
     const parsed = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
     state = {
       guilds: parsed.guilds && typeof parsed.guilds === 'object' ? parsed.guilds : {},
-      tickets: parsed.tickets && typeof parsed.tickets === 'object' ? parsed.tickets : {}
+      tickets: parsed.tickets && typeof parsed.tickets === 'object' ? parsed.tickets : {},
+      purchaseDrafts: parsed.purchaseDrafts && typeof parsed.purchaseDrafts === 'object'
+        ? parsed.purchaseDrafts
+        : {}
     };
     for (const guildId of Object.keys(state.guilds)) ensureGuildConfig(guildId);
   } catch (error) {
     if (error.code !== 'ENOENT') {
-      console.error('[Asthen] Não foi possível ler data/state.json. Um estado novo será criado.', error);
+      console.error('[Asthen] O arquivo data/state.json não pôde ser lido. Um estado novo será criado.', error);
     }
     state = emptyState();
   }
@@ -76,9 +72,21 @@ export function loadStore() {
 
 export function saveStore() {
   fs.mkdirSync(dataDir, { recursive: true });
-  const temporaryFile = `${dataFile}.tmp`;
-  fs.writeFileSync(temporaryFile, JSON.stringify(state, null, 2), 'utf8');
-  fs.renameSync(temporaryFile, dataFile);
+  const temporaryFile = dataFile + '.tmp';
+  const contents = JSON.stringify(state, null, 2) + '\n';
+  try {
+    const descriptor = fs.openSync(temporaryFile, 'w');
+    try {
+      fs.writeFileSync(descriptor, contents, 'utf8');
+      fs.fsyncSync(descriptor);
+    } finally {
+      fs.closeSync(descriptor);
+    }
+    fs.renameSync(temporaryFile, dataFile);
+  } catch (error) {
+    try { fs.rmSync(temporaryFile, { force: true }); } catch {}
+    throw new Error('Falha ao salvar data/state.json: ' + error.message);
+  }
 }
 
 export function getGuildConfig(guildId) {
@@ -131,4 +139,31 @@ export function updateTicket(channelId, changes) {
   Object.assign(ticket, changes);
   saveStore();
   return ticket;
+}
+
+function purchaseDraftKey(guildId, userId) {
+  return guildId + ':' + userId;
+}
+
+export function getPurchaseDraft(guildId, userId) {
+  return state.purchaseDrafts[purchaseDraftKey(guildId, userId)] ?? null;
+}
+
+export function savePurchaseDraft(guildId, userId, draft) {
+  state.purchaseDrafts[purchaseDraftKey(guildId, userId)] = {
+    ...draft,
+    guildId,
+    userId,
+    updatedAt: new Date().toISOString()
+  };
+  saveStore();
+  return state.purchaseDrafts[purchaseDraftKey(guildId, userId)];
+}
+
+export function deletePurchaseDraft(guildId, userId) {
+  const key = purchaseDraftKey(guildId, userId);
+  const existed = Boolean(state.purchaseDrafts[key]);
+  delete state.purchaseDrafts[key];
+  if (existed) saveStore();
+  return existed;
 }
