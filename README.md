@@ -1,145 +1,93 @@
 # ASTHEN BOT
 
-**Bot de Discord de suporte e loja de kits — versão 1.1.0**
-
-[![Node.js](https://img.shields.io/badge/Node.js-24.17%2B-43853D?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![discord.js](https://img.shields.io/badge/discord.js-14.27%2B-5865F2?logo=discord&logoColor=white)](https://discord.js.org/)
+[![Baixar ZIP](https://img.shields.io/badge/BAIXAR%20ZIP-%E2%86%93-2F6BFF?style=for-the-badge)](https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip)
+[![Node.js](https://img.shields.io/badge/Node.js-20%2B-43853D?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![discord.js](https://img.shields.io/badge/discord.js-14-5865F2?logo=discord&logoColor=white)](https://discord.js.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-222222.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.1.0-6B5CA5)](CHANGELOG.md)
 
-O ASTHEN BOT reúne dois sistemas em um projeto: central de atendimento por tickets privados e loja de kits para servidores Discord. O código é público e pode ser baixado, utilizado, adaptado e distribuído de acordo com a licença MIT.
+Bot de Discord com atendimento privado e loja de kits. Cada servidor usa sua própria aplicação, token, chave Pix e configurações.
 
-Cada pessoa instala sua própria cópia, cria sua própria aplicação no Discord Developer Portal e configura token, nome, cor, Pix, cargos, categorias e catálogo. Nenhuma credencial do autor está incluída.
+## Instalar no Windows 10/11
 
-## Download
+1. Baixe o ZIP pelo botão acima e extraia a pasta.
+2. Abra `INSTALAR.bat`. Ele instala as dependências e prepara o arquivo `.env`.
+3. Informe o token do bot e o Application ID quando solicitado.
+4. Abra `INICIAR.bat`.
 
-- **Baixar o projeto:** abra o menu **Code → Download ZIP** no GitHub.
-- **Clonar:** git clone https://github.com/contatorzlkz-prog/BOT-ASTHEN.git
-- Extraia o projeto, configure o arquivo .env e siga a instalação abaixo.
+É necessário Node.js 20 ou mais recente. O instalador tenta instalar o Node.js LTS quando necessário.
 
-## Funcionalidades
+## Configurar no Discord
 
-| Módulo | Recursos |
-|---|---|
-| Suporte | Painel com opções para reportar bugs, denunciar hacks, tirar dúvidas e suporte geral. |
-| Loja | Catálogo de até 25 kits, com nome, preço e descrição. |
-| Pedido | Seleção de kit, formulário de nick e criação de canal privado. |
-| Pagamento | Chave Pix e instruções enviadas no canal do pedido; o cliente anexa o comprovante no mesmo canal. |
-| Equipe | Botões para autorizar, não autorizar e fechar o pedido. |
-| Logs | Transcrição opcional das mensagens recentes ao fechar o ticket. |
+Use uma conta com **Gerenciar servidor**:
 
-O bot limita a um ticket aberto por usuário em cada servidor. Ao fechar, ele avisa os participantes e exclui o canal após alguns segundos.
+```text
+/configurar tipo:suporte canal:#suporte equipe:@Equipe
+/configurar tipo:loja canal:#loja
+/pix chave:SUA_CHAVE_PIX instrucoes:Envie o comprovante neste canal.
+```
 
-**Importante:** o bot não processa Pix, não confirma pagamentos automaticamente e não entrega itens dentro do jogo. A equipe deve conferir o comprovante e realizar a entrega manualmente. Autorizar no Discord apenas registra a decisão administrativa.
+O comando `/configurar` já publica o painel no canal escolhido. Os tickets são criados na mesma categoria desse canal; não é necessário configurar categorias separadamente. O cargo `equipe` é opcional. Sem ele, somente administradores do servidor terão acesso aos tickets privados.
 
-## Requisitos
+## Como funciona
 
-- Windows 10/11 ou Linux (VPS).
-- Node.js 24.17 ou superior. Recomendado: Node.js 26 LTS.
-- npm, instalado junto com o Node.js.
-- Aplicação criada no Discord Developer Portal.
+**Suporte:** os botões de reportar bug, reportar hack, dúvida e outro assunto abrem o ticket direto. A resposta privada do bot traz um botão para entrar no canal.
 
-A dependência discord.js 14.27 requer Node.js 24.17 ou superior. Instale uma versão LTS em https://nodejs.org/en/download/.
+**Loja:** cada kit aparece como um botão **Comprar**. Ao clicar, o bot cria o pedido privado, mostra o produto e os dados Pix, e entrega um botão para abrir o canal. O cliente envia o comprovante ali e conversa com a equipe.
 
-## Instalação no Windows 10/11
+**Fechamento:** o dono do ticket ou a equipe pode clicar em **Fechar ticket**. O canal é excluído três segundos depois.
 
-1. Baixe o ZIP pelo botão Code → Download ZIP e extraia a pasta.
-2. Instale Node.js 26 LTS pelo site oficial.
-3. Execute setup-windows.bat.
-4. Abra o arquivo .env criado pelo instalador.
-5. Preencha DISCORD_TOKEN e CLIENT_ID com os dados da sua própria aplicação.
-6. Execute start-windows.bat.
+É permitido manter um ticket de suporte e um pedido da loja abertos ao mesmo tempo. O bot não confirma pagamentos e não entrega itens automaticamente: a equipe confere o comprovante e faz a entrega.
 
-## Instalação em Linux ou VPS
+## Kits de demonstração
 
-Instale Node.js 26 LTS e npm. Dentro da pasta do projeto, execute:
+Em um servidor novo, a loja começa com `Kit Demo 1`, `Kit Demo 2` e `Kit Demo 3`, com preços de exemplo. Altere ou remova esses kits antes de usar a loja de verdade.
 
-    chmod +x setup-linux.sh start-linux.sh
-    ./setup-linux.sh
-    nano .env
-    ./start-linux.sh
+Para cadastrar outro produto, use `/kit adicionar`. O bot abre um cadastro em etapas: nome, preço e descrição. Depois de salvar, o painel da loja é atualizado automaticamente.
 
-Para manter o processo ativo após sair do terminal, utilize um gerenciador de processos ou um serviço do sistema. Faça backup de data/state.json antes de migrar ou atualizar o bot.
+Comandos disponíveis:
 
-## Criar seu próprio bot
+| Comando | Função |
+| --- | --- |
+| `/configurar` | Publica ou atualiza o painel de suporte ou loja em um canal. |
+| `/pix` | Define a chave Pix e uma instrução curta. |
+| `/kit adicionar` | Abre o cadastro guiado de um kit. |
+| `/kit listar` | Lista os produtos cadastrados. |
+| `/kit remover` | Remove um produto pelo nome. |
 
-1. Acesse https://discord.com/developers/applications e crie uma aplicação.
-2. Na aba Bot, crie o bot e copie o token. Nunca compartilhe esse token.
-3. Em General Information, copie o Application ID.
-4. Em Bot → Privileged Gateway Intents, habilite Message Content Intent para permitir que as transcrições opcionais incluam o conteúdo das mensagens.
-5. Em OAuth2 → URL Generator, selecione os escopos bot e applications.commands.
-6. Conceda as permissões necessárias: View Channels, Send Messages, Embed Links, Attach Files, Read Message History e Manage Channels.
-7. Gere o link e adicione o bot ao seu servidor.
-8. Copie .env.example para .env (o instalador faz isso automaticamente) e configure:
+## Criar o bot no Discord
 
-    DISCORD_TOKEN=TOKEN_DO_SEU_BOT
-    CLIENT_ID=APPLICATION_ID_DO_SEU_BOT
-    GUILD_ID=ID_DO_SERVIDOR_DE_TESTE
-    BOT_NAME=Nome da sua loja
-    BOT_COLOR=29263D
+1. Crie uma aplicação em [Discord Developer Portal](https://discord.com/developers/applications).
+2. Na aba **Bot**, crie o bot e copie o token. Não compartilhe esse token.
+3. Em **General Information**, copie o Application ID.
+4. Em **OAuth2 → URL Generator**, selecione `bot` e `applications.commands`.
+5. Conceda `View Channels`, `Send Messages`, `Embed Links`, `Attach Files`, `Read Message History` e `Manage Channels`.
+6. Use o link gerado para adicionar o bot ao servidor.
 
-GUILD_ID é opcional. Preenchido, registra os comandos no servidor informado e acelera os testes. Vazio, registra comandos globais, cuja propagação pode demorar.
+O bot não precisa do Message Content Intent.
 
-## Personalização
+## Linux / VPS
 
-- BOT_NAME: nome exibido nos títulos e rodapés das embeds, limitado a 32 caracteres.
-- BOT_COLOR: cor hexadecimal das embeds, com seis dígitos e sem o símbolo #.
-- Nome e avatar do usuário do bot: altere no perfil da aplicação pelo Developer Portal.
-- Chave Pix, instruções, cargos, categorias, painéis e kits: configure pelos comandos do Discord.
+```bash
+bash linux/setup-linux.sh
+# preencha .env com DISCORD_TOKEN e CLIENT_ID
+bash linux/start-linux.sh
+```
 
-Reinicie o processo após editar o .env.
+## Arquivos importantes
 
-## Configuração administrativa
-
-Execute os comandos com uma conta que tenha permissão de administrador, gerenciar servidor ou gerenciar canais. Configure primeiro o cargo da equipe e as categorias; depois publique os painéis.
-
-    /asthen config cargo-admin cargo:@Equipe
-    /asthen categoria suporte canal:<categoria-de-suporte>
-    /asthen categoria loja canal:<categoria-de-pedidos>
-    /asthen config pix chave:SUA_CHAVE_PIX instrucoes:Envie o comprovante neste canal e aguarde a equipe.
-    /asthen kit adicionar nome:Kit Bronze preco:R$ 9,90 descricao:Kit inicial
-    /asthen painel suporte canal:#abrir-ticket
-    /asthen painel loja canal:#loja-da-asthen
-    /asthen config logs canal:#logs-tickets
-    /asthen config status
-
-Consulte docs/COMMANDS.md para a lista completa e a ordem recomendada. Mantenha o canal de logs privado, pois as transcrições podem conter mensagens e anexos de atendimento.
-
-## Estrutura do projeto
-
-    ASTHEN-BOT/
-    ├── .github/              Modelos de contribuição e issues
-    ├── data/                 Estado local (não versionado)
-    ├── docs/                 Guias de instalação e comandos
-    ├── src/
-    │   ├── commands.js       Slash commands
-    │   ├── index.js          Inicialização e conexão
-    │   ├── interactions.js   Botões, menus e formulários
-    │   ├── store.js          Persistência local em JSON
-    │   ├── tickets.js        Canais privados e transcrições
-    │   └── ui.js             Embeds, menus e botões
-    ├── .env.example
-    ├── CHANGELOG.md
-    ├── CONTRIBUTING.md
-    ├── LICENSE
-    └── package.json
-
-## Segurança e dados
-
-- .env, node_modules e data/state.json são ignorados pelo Git.
-- A chave Pix e as configurações dos servidores ficam no arquivo local data/state.json. Proteja esse arquivo e mantenha backup seguro.
-- Não publique tokens, chaves Pix, comprovantes ou transcrições.
-- Evite conceder Administrator ao bot quando as permissões específicas forem suficientes.
-- Cada instalação deve utilizar credenciais próprias.
+- `src/config.js`: cores, textos e tempo de fechamento.
+- `data/state.json`: configurações locais, kits, chave Pix e tickets. Não compartilhe esse arquivo.
+- `.env`: token e Application ID. Nunca publique esse arquivo.
 
 ## Desenvolvimento
 
-    npm install
-    npm run check
-    npm start
-
-O projeto usa discord.js e dotenv. Para sugerir melhorias, leia CONTRIBUTING.md. Problemas de segurança devem ser reportados de forma privada, conforme SECURITY.md.
+```bash
+npm install
+npm run check
+npm run check:commands
+npm start
+```
 
 ## Licença
 
-Distribuído sob a licença MIT. Consulte LICENSE para os termos completos.
+MIT. Consulte `LICENSE`.
