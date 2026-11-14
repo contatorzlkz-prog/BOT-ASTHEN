@@ -79,6 +79,7 @@ if "%CLIENTID%"=="" goto env_missing
 >> ".env" echo SUPABASE_URL=
 >> ".env" echo SUPABASE_SECRET_KEY=
 >> ".env" echo SUPABASE_TABLE=asthen_bot_state
+>> ".env" echo SUPABASE_KITS_TABLE=asthen_bot_kits
 goto done
 
 :env_missing
