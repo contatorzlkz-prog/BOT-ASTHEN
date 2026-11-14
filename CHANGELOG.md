@@ -1,4 +1,97 @@
-# Changelog
+# Changelog ASTHEN BOT
+
+## 2.6.0 — 14/11/2026
+
+### Integração Plugin-ASTHEN (Minecraft Java)
+- Adicionada API HTTP local no bot compatível com o transporte `poll` do Plugin-ASTHEN.
+- Implementadas as rotas autenticadas `/plugin/v1/pull`, `/plugin/v1/result` e `/plugin/v1/kits`.
+- O segredo compartilhado `DKB_SECRET` é configurado no `.env` e comparado em tempo constante; a API escuta em `127.0.0.1` por padrão.
+- O catálogo recebido do plugin é sincronizado ao estado local e usado para publicar somente kits ativos.
+- O fluxo de aprovação envia nick Java, plataforma `java`, nome exato do kit e `request_id` estável.
+- Nova tentativa administrativa respeita a idempotência: reutiliza o mesmo ID quando o resultado é desconhecido e gera outro somente quando o plugin confirma que não houve entrega.
+- Adicionado comando `/kit configurar` para preço, descrição e imagem comercial.
+
+### Loja e tickets
+- Painel da loja passa a mostrar o seletor de kits diretamente, sem botão intermediário de catálogo.
+- Seleção apresenta prévia do kit, itens cadastrados no servidor, preço, descrição e imagem.
+- Validação de nick Java (3–16 caracteres) antes de abrir o ticket de pagamento.
+- A aprovação do pagamento e o resultado da entrega Minecraft passam a ser estados separados.
+- O ticket informa quando o plugin entregou o kit ou o guardou para `/dk claim`.
+
+### Supabase e estabilidade
+- Project URL normalizada automaticamente para remover `/v1` ou `/rest/v1` finais.
+- Sincronização agrupa estados recentes, reduz tentativas repetidas e usa intervalo progressivo quando o Supabase falha.
+- Backup `data/state.json` continua sendo gravado antes da sincronização remota.
+- Incluídos testes automatizados para bridge, autenticação, validação de nomes e URL Supabase.
+- GitHub Actions valida sintaxe, comandos e testes da bridge.
+
+### Compatibilidade e limitações
+- Mantidos os dados e fluxo de tickets do projeto 2.4.0; o estado local existente continua sendo usado.
+- Removidas referências comerciais de terceiros e atualizados os textos para a identidade ASTHEN e termos de mods.
+- O plugin atual entrega itens cadastrados em Shulker Box, mas ainda não implementa KeepInventory ao morrer; o Kit Keep fica bloqueado para compra até essa função existir e ser testada (R$ 125,00 é o preço planejado).
+
+---
+## [2.4.0] - 2026-11-13
+
+### Inicialização e Supabase
+- Removido o `.env.example`; o bot cria o `.env` no primeiro início e solicita token, Application ID e credenciais opcionais do Supabase.
+- Os módulos de banco só são carregados depois que o `.env` foi preenchido, evitando ler URL/chave vazias antes da configuração.
+- A configuração do Supabase aceita a chave secreta nova `sb_secret_...` no cabeçalho `apikey`, sem tentar tratá-la como JWT.
+- `data/state.json` é criado e atualizado localmente antes de qualquer sincronização online, inclusive quando o Supabase está funcionando.
+- Erros HTTP 401/403 e 404 mostram instruções de diagnóstico sem revelar as chaves.
+
+### Atendimento
+- Painel de suporte trocado por um menu de seleção de departamentos no estilo do seletor nativo do Discord.
+- Categorias: Dúvidas & Compras, Licenças & Suporte, Reportar Bugs, Parcerias & Comercial e Marketing & Serviços.
+- Menção/identificação do solicitante movida para dentro do embed do ticket; a mensagem solta acima do embed não marca mais o comprador.
+- Após confirmar ou recusar pedido, o embed de pagamento é preservado e o bot envia uma única mensagem pública: “O canal continua aberto. Use Fechar quando o atendimento terminar.”
+- Ao fechar, a confirmação é pública no canal em vez de duplicar uma resposta privada e outra pública.
+
+### Loja
+- Removidos os kits de demonstração e migrados os catálogos existentes para produtos reais.
+- Adicionados Kit Keep (R$ 125,00), Kit Ferro (R$ 15,00), Kit Dima (R$ 25,00), Kit Netherita (R$ 30,00), Kit Elytra (preço pendente) e Kit Construção (preço pendente).
+- Ao selecionar um produto, o cliente vê uma descrição e o preço antes de continuar para informar o nick.
+- Itens com preço pendente aparecem no catálogo, mas não podem ser comprados até que um administrador configure o valor com `/kit preco`.
+
+---
+
+## [2.3.0] - 2026-11-13
+
+### Pix
+- Removida a geração de QR Code por código: o pedido agora anexa a imagem original enviada pelo responsável da loja (attachment ID `1570926843719327874`).
+- A imagem fica dentro do projeto em `assets/pix-keybytes.jpg`, evitando depender de um link temporário do CDN do Discord.
+- A chave padrão é `keybytes.a@gmail.com`; o QR original só aparece quando a chave configurada corresponde a ela.
+- Removida a dependência `qrcode` e os campos de recebedor/cidade que não são usados pela imagem pronta.
+
+### Banco e tickets
+- Tickets abertos continuam persistidos no Supabase e no backup local `data/state.json`.
+- Ao excluir o canal do ticket, o registro é removido do snapshot Supabase e do backup local.
+- A exclusão manual de um canal também limpa o registro; na inicialização, canais inexistentes são reconciliados.
+- Tickets marcados como fechados por versões anteriores são reabertos no estado se o canal ainda existir.
+- O encerramento normal por Ctrl+C/SIGTERM aguarda a sincronização do último snapshot com o Supabase; a exclusão de canal também força a sincronização da limpeza.
+- O banco guarda somente o estado atual, sem histórico de tickets fechados.
+
+---
+
+## [2.2.0] - 2026-11-13
+
+### Loja e Pix
+- Pedido e pagamento agora aparecem em um único embed, sem exibir identificador interno do pedido.
+- QR Code Pix estático é gerado automaticamente a partir da chave configurada.
+- Chave Pix aparece na mensagem e tem botão para exibi-la em resposta privada copiável.
+- Orientações de comprovante, entrega do kit e prazo de análise de até dez minutos ficam no início do pedido.
+- Menção do comprador permanece na mensagem do ticket; o campo duplicado de cliente foi removido.
+- Confirmar, recusar e fechar pedidos exigem permissão de Administrador do servidor.
+- Fechamentos de pedidos pendentes sem decisão geram log específico: "Pedido fechado sem resultado".
+
+### Banco de dados
+- Adicionada integração REST opcional com Supabase e backup local em `data/state.json`.
+- Adicionado SQL do Supabase e guia de configuração.
+
+### Dependências
+- Adicionada a biblioteca `qrcode` para gerar a imagem Pix.
+
+---
 
 ## 2.1.0
 
