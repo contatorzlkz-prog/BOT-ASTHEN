@@ -54,6 +54,8 @@ call npm run check --silent
 if errorlevel 1 goto check_failed
 call npm run check:commands --silent
 if errorlevel 1 goto check_failed
+call npm test --silent
+if errorlevel 1 goto check_failed
 
 if not exist data mkdir data
 if exist ".env" goto env_exists
