@@ -1,6 +1,6 @@
 {
   "name": "asthen-discord-bot",
-  "version": "2.1.0",
+  "version": "2.6.0",
   "private": false,
   "type": "module",
   "description": "Bot de Discord com atendimento privado e loja de kits.",
@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node src/index.js",
     "check": "node --check src/index.js && node --check src/config.js && node --check src/commands.js && node --check src/store.js && node --check src/ui.js && node --check src/tickets.js && node --check src/interactions.js",
-    "check:commands": "node --input-type=module -e \"import('./src/commands.js').then(({commandDefinitions}) => { commandDefinitions.forEach(command => command.toJSON()); console.log('Slash commands: valid'); })\""
+    "check:commands": "node --input-type=module -e \"import('./src/commands.js').then(({commandDefinitions}) => { commandDefinitions.forEach(command => command.toJSON()); console.log('Slash commands: valid'); })\"",
+    "test": "node --test"
   },
   "dependencies": {
     "discord.js": "^14.27.0",
