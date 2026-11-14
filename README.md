@@ -70,24 +70,56 @@ A comunicação usa o modo `poll`: o plugin faz conexões de saída e consulta o
 
 **Importante:** a versão atual do repositório do plugin ainda precisa receber os ajustes descritos em [PLUGIN-IMPLEMENTATION-HANDOFF.md](docs/PLUGIN-IMPLEMENTATION-HANDOFF.md), principalmente para aceitar a chave gerada pelo bot. Até esse ajuste ser feito, a integração completa não está pronta para uso real.
 
-### Teste local no mesmo Windows
+### Teste com computadores diferentes (sem host Minecraft)
 
-Para testar sem VPS, o bot e o servidor Paper precisam estar na mesma máquina:
+O bot e o plugin **não ficam no mesmo computador**:
+- **Seu PC (Windows):** executa o ASTHEN BOT e a API de integração.
+- **PC do seu amigo (Windows):** executa um servidor Paper local e temporário, com o Plugin-ASTHEN instalado.
+- **Internet:** o plugin consulta a API do seu bot por um endereço HTTPS público.
 
-- Bot: `DKB_HOST=127.0.0.1` e `DKB_PORT=8787` (padrão).
-- Plugin: `bridge.poll.url: "http://127.0.0.1:8787"`.
-- Plugin: `bridge.mode: "poll"`.
-- Plugin: `bridge.secret`: a chave exibida pelo comando privado `/bridge chave`.
+Para o teste, seu amigo não precisa contratar uma host Minecraft. Ele inicia Paper localmente, entra no mundo de teste pelo Minecraft usando `localhost` e mantém esse servidor de teste no próprio PC.
 
-Depois de alterar o `config.yml`, reinicie o servidor ou use `/dk reload`.
+**Um mundo single-player vanilla, aberto normalmente pelo botão “Jogar”, não carrega plugins Paper.** Para testar o plugin, é necessário iniciar Paper localmente. Isso não significa publicar o servidor nem colocá-lo na host definitiva.
 
-**Um mundo single-player vanilla não carrega plugins Paper.** Para testar o plugin localmente, rode um pequeno servidor Paper no Windows e entre nele pelo Minecraft usando `localhost`. Quando o bot e o Paper estiverem no mesmo PC, o endereço `127.0.0.1` funciona para o teste.
+No seu PC, deixe o bot e a API ligados. A API escuta localmente em `127.0.0.1:8787`. Configure um túnel HTTPS para encaminhar um endereço público até `http://127.0.0.1:8787`.
+
+No `.env` do bot:
+
+```env
+DKB_HOST=127.0.0.1
+DKB_PORT=8787
+```
+
+No PC do amigo, em `plugins/DiscordKitBridge/config.yml`:
+
+```yaml
+bridge:
+  enabled: true
+  mode: "poll"
+  secret: "CHAVE_COPIADA_DO_COMANDO_bridge_chave"
+  poll:
+    url: "https://ENDERECO-HTTPS-DO-TUNEL"
+    interval-seconds: 3
+    max-per-poll: 5
+    http-timeout: 10
+```
+
+O amigo substitui o endereço de exemplo pela URL HTTPS real do túnel que encaminha para a API do seu PC. Use somente a URL base, sem acrescentar `/plugin/v1`.
+
+**Não use `127.0.0.1` ou `localhost` no plugin para apontar ao seu bot.** Esses endereços apontam para o PC do amigo, onde o plugin está rodando. O túnel HTTPS resolve essa diferença.
+
+### Chave da integração
+
+1. Inicie o ASTHEN BOT.
+2. Um administrador usa `/bridge chave` no Discord.
+3. Copia a chave recebida em resposta privada e envia ao amigo de forma privada.
+4. O amigo cola o mesmo valor em `bridge.secret` no `config.yml` do plugin.
+
+A chave é gerada pelo bot. O plugin deve aceitar essa chave e não gerar uma própria. Ela não é o token Discord nem a chave Supabase.
 
 ### Quando o bot for para uma VPS
 
-A hospedagem Minecraft continuará consultando o bot. Publique a API do bot por HTTPS usando um proxy reverso ou serviço equivalente. O plugin deve apontar para a URL HTTPS pública, sem acrescentar `/plugin/v1`. Não exponha a API em HTTP aberto na internet.
-
-Consulte [docs/PLUGIN-INTEGRATION.md](docs/PLUGIN-INTEGRATION.md) para os passos e [docs/PLUGIN-IMPLEMENTATION-HANDOFF.md](docs/PLUGIN-IMPLEMENTATION-HANDOFF.md) para o trabalho que falta no plugin.
+Quando o bot sair do seu PC e for para uma VPS, a API poderá usar um domínio HTTPS estável ou proxy reverso. O plugin continuará consultando o bot no modo `poll`; a host Minecraft não precisa abrir uma porta de entrada para essa comunicação.
 
 ### Kits no Minecraft
 
