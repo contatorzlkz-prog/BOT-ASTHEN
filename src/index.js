@@ -4,6 +4,7 @@ import { commandDefinitions } from './commands.js';
 import { getGuildConfig, loadStore } from './store.js';
 import { makeShopPanel, makeSupportPanel } from './ui.js';
 import { handleInteraction } from './interactions.js';
+import { ensureBridgeSecret, startBridge } from './bridge.js';
 
 function assertRuntime() {
   const major = Number(process.versions.node.split('.')[0]);
@@ -59,6 +60,20 @@ async function main() {
   }
 
   loadStore();
+  const bridgeSecret = ensureBridgeSecret();
+  if (bridgeSecret.generated) {
+    console.log('[Asthen Bridge] Chave de integração criada e salva no .env. Um administrador pode copiá-la com /bridge chave.');
+  }
+  const bridge = await startBridge({
+    token: bridgeSecret.token,
+    host: process.env.DKB_HOST?.trim() || '127.0.0.1',
+    port: Number(process.env.DKB_PORT || 8787),
+    onKits: kits => {
+      const enabled = kits.filter(kit => kit.enabled).map(kit => kit.name);
+      console.log('[Asthen Bridge] Plugin sincronizou ' + kits.length + ' kit(s): ' + (enabled.join(', ') || 'nenhum ativo'));
+    }
+  });
+  console.log('[Asthen Bridge] API ativa em http://' + bridge.host + ':' + bridge.port + '.');
   const rest = new REST({ version: '10' }).setToken(token);
   const body = commandDefinitions.map(command => command.toJSON());
   console.log('Substituindo os comandos antigos pelos comandos atuais...');
