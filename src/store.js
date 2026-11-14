@@ -6,11 +6,7 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.resolve(currentDir, '../data');
 const dataFile = path.join(dataDir, 'state.json');
 
-const demoKits = () => [
-  { id: 'demo-kit-1', name: 'Kit Demo 1', price: 'R$ 5,00', description: 'Kit de demonstração. Edite ou remova antes de abrir a loja.' },
-  { id: 'demo-kit-2', name: 'Kit Demo 2', price: 'R$ 10,00', description: 'Kit de demonstração. Edite ou remova antes de abrir a loja.' },
-  { id: 'demo-kit-3', name: 'Kit Demo 3', price: 'R$ 15,00', description: 'Kit de demonstração. Edite ou remova antes de abrir a loja.' }
-];
+const demoKits = () => [];
 
 const emptyState = () => ({ guilds: {}, tickets: {}, purchaseDrafts: {} });
 let state = emptyState();
