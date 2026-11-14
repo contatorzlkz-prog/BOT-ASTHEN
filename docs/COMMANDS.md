@@ -1,59 +1,48 @@
-# Comandos administrativos
+# Comandos do ASTHEN BOT 2.7.0
 
-Os comandos abaixo são disponibilizados no Discord. Com exceção dos comandos de atendimento usados pelos membros, estes comandos administrativos exigem a permissão **Gerenciar servidor**.
+Os comandos administrativos exigem a permissão **Gerenciar servidor**. Para revisar pagamentos e fechar tickets, também é autorizado o cargo definido em /configurar equipe.
 
-## Configuração do servidor
+## Configurar canais
 
-```text
+~~~text
 /configurar suporte:#suporte loja:#loja logs:#logs compradores:#compradores equipe:@Equipe
-```
+~~~
 
-Informe os canais e o cargo que a equipe usará para atender pedidos:
+- suporte: publica o seletor de departamentos Minecraft.
+- loja: publica o botão que abre o catálogo de kits.
+- logs: recebe registros privados de aprovação, recusa e fechamento.
+- compradores: recebe os anúncios de compras confirmadas.
+- equipe: cargo que pode revisar pagamentos, repetir entregas e fechar tickets.
 
-- `suporte`: publica ou atualiza o painel de atendimento.
-- `loja`: publica ou atualiza o painel da loja.
-- `logs`: canal privado para registrar decisões de pedidos.
-- `compradores`: canal para anunciar compras aprovadas.
-- `equipe`: cargo que pode atender tickets e revisar pagamentos.
+Os tickets são criados na categoria do canal usado para o painel correspondente.
 
-Os tickets são criados na categoria do canal usado para o painel.
+## Gerenciar kits
+
+### /kit listar
+
+Lista os kits recebidos do plugin, seus nomes de exibição, preços e estado no Minecraft.
+
+### /kit editar
+
+1. Selecione um kit sincronizado do plugin.
+2. Selecione a informação a alterar.
+3. Edite o nome de exibição, preço, descrição ou imagem HTTPS.
+
+O identificador técnico do plugin não é alterado. Por exemplo, o plugin pode continuar usando Kit_Ferro, enquanto a loja exibe “Kit Ferro”.
+
+### /kit remover
+
+Remove o produto do catálogo da loja. Não apaga os itens do servidor Minecraft. Para excluir o kit real, use o comando administrativo de exclusão do próprio plugin. A próxima sincronização atualiza a lista do bot e remove o registro antigo do Supabase.
+
+## Integração
+
+- /bridge status: mostra se a API local está online, quantos pedidos aguardam resposta, a última lista de kits recebida do plugin e o estado do Supabase.
+- /bridge chave: mostra em privado a chave de integração salva no .env.
+
+A chave é gerada uma vez por instalação e permanece igual nas atualizações normais. Não existe comando para regenerá-la. Preserve o arquivo .env.
 
 ## Pagamento
 
-```text
-/pix chave:SUA_CHAVE instrucoes:Envie o comprovante neste canal.
-```
+A chave Pix e o QR Code são fixos no código da loja. Não existe comando /pix. A mensagem do pedido contém o QR, a chave, o botão **Copiar Pix** e a orientação para anexar o comprovante.
 
-O bot mostra os dados configurados dentro do ticket de compra.
-
-## Kits da loja
-
-- `/kit adicionar`: abre o cadastro guiado do produto. Informe o nome exato do plugin, preço, descrição e link HTTPS opcional para imagem.
-- `/kit listar`: lista os produtos cadastrados no bot.
-- `/kit remover nome:Kit_Ferro`: remove o produto da loja sem apagar o kit real do servidor Minecraft.
-
-O cadastro comercial não cria os itens do jogo. O mesmo identificador precisa ter sido criado anteriormente no Plugin-ASTHEN.
-
-## Integração Minecraft
-
-Antes de conectar o plugin em outro computador, inicie o bot e execute `INICIAR-TUNEL.bat` para gerar a URL HTTPS temporária. Consulte [PLUGIN-INTEGRATION.md](PLUGIN-INTEGRATION.md) para a instalação do `cloudflared` e a configuração do túnel.
-
-- `/bridge status`: mostra se a API local está online, quantos pedidos aguardam resposta, a última lista de kits recebida do plugin e o estado do Supabase.
-- `/bridge chave`: exibe em resposta privada a chave que deve ser colocada em `bridge.secret` no `config.yml` do plugin.
-- `/bridge regenerar`: cria uma nova chave e invalida a anterior. Depois, atualize `bridge.secret` no plugin e recarregue-o.
-
-Não envie a chave em mensagens públicas. Ela é diferente do token do Discord e da chave Supabase.
-
-## Fluxo de compra
-
-1. O cliente abre o catálogo e escolhe um kit.
-2. O bot mostra a prévia com nome, preço, descrição e imagem.
-3. O cliente pode trocar o kit ou confirmar.
-4. Ao confirmar, informa o nick Java no formulário.
-5. Ao enviar o formulário, o ticket privado é criado com a prévia e os dados de pagamento.
-6. O cliente envia o comprovante.
-7. A equipe confirma ou recusa o pagamento. A decisão é registrada no canal privado de logs e, quando aprovada, o comprador é anunciado no canal configurado.
-8. Após a aprovação, o bot pede ao plugin a entrega do kit. O resultado aparece no próprio ticket.
-9. O botão Fechar encerra o atendimento.
-
-O bot não valida comprovantes bancários automaticamente. A conferência do pagamento continua sendo manual.
+A equipe confere o comprovante manualmente. Depois, um membro autorizado confirma ou recusa o pedido.
