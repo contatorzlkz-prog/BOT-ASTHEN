@@ -47,6 +47,7 @@ import { deliverKit, getBridgeSecret, getBridgeStatus, regenerateBridgeSecret } 
 import { getSupabaseStatus } from './supabase.js';
 
 const kitWizards = new Map();
+const closingTickets = new Set();
 
 function normalizeImageUrl(value) {
   if (!value) return '';
@@ -809,6 +810,21 @@ async function confirmPurchase(interaction, requestedRevision) {
   }
 }
 
+async function showPixKey(interaction) {
+  const ticket = getTicket(interaction.channelId);
+  if (!ticket || ticket.type !== 'shop') {
+    return replyPrivate(interaction, 'Este botão só funciona em tickets de compra.');
+  }
+
+  const config = getGuildConfig(interaction.guildId);
+  if (!config.pixKey) return replyPrivate(interaction, 'A chave Pix ainda não foi configurada pela loja.');
+
+  return replyPrivate(
+    interaction,
+    'Chave Pix para copiar:\n```' + String(config.pixKey).slice(0, 900) + '```\nToque e segure a chave para copiá-la no celular.'
+  );
+}
+
 async function closeTicket(interaction) {
   const ticket = getTicket(interaction.channelId);
   if (!ticket) return replyPrivate(interaction, 'Este canal não está registrado como ticket.');
@@ -818,11 +834,47 @@ async function closeTicket(interaction) {
   if (!isOwner && !isStaff(interaction, config)) {
     return replyPrivate(interaction, 'Somente quem abriu o ticket ou a equipe pode fechá-lo.');
   }
-  if (ticket.status !== 'open') return replyPrivate(interaction, 'Este ticket já está sendo fechado.');
+  if (ticket.status !== 'open' || closingTickets.has(interaction.channelId)) {
+    return replyPrivate(interaction, 'Este ticket já está sendo fechado.');
+  }
 
-  await interaction.reply({ content: 'Este canal será excluído em 3 segundos.', ephemeral: true });
-  await interaction.channel.send('Ticket fechado por ' + interaction.user.toString() + '. O canal será excluído em 3 segundos.');
-  await archiveAndDeleteTicket({ channel: interaction.channel, closedById: interaction.user.id });
+  closingTickets.add(interaction.channelId);
+  try {
+    if (ticket.type === 'shop' && ticket.orderStatus === 'pending') {
+      const logsChannel = await fetchTextChannel(interaction.guild, config.logsChannelId);
+      if (!logsChannel) {
+        return replyPrivate(
+          interaction,
+          'Não posso fechar este pedido pendente sem registrar o resultado. Configure o canal de logs com /configurar logs:#canal e tente novamente.'
+        );
+      }
+
+      await logsChannel.send({
+        embeds: [makeOrderLogEmbed({
+          ticket,
+          decision: 'closed_without_result',
+          staffUser: interaction.user
+        })],
+        allowedMentions: { users: [], roles: [] }
+      });
+
+      updateTicket(interaction.channelId, {
+        orderStatus: 'closed_without_result',
+        closedWithoutResultBy: interaction.user.id,
+        closedWithoutResultAt: new Date().toISOString()
+      });
+    }
+
+    // Atualiza a interação sem mandar uma segunda confirmação privada.
+    await interaction.deferUpdate();
+    await interaction.channel.send(
+      'Este atendimento será encerrado por ' + interaction.user.toString() +
+      ' e o canal será excluído em 3 segundos.'
+    );
+    await archiveAndDeleteTicket({ channel: interaction.channel, closedById: interaction.user.id });
+  } finally {
+    closingTickets.delete(interaction.channelId);
+  }
 }
 
 async function decideOrder(interaction, decision) {
@@ -1061,6 +1113,7 @@ export async function handleInteraction(interaction) {
       return cancelPurchase(interaction, interaction.customId.split(':')[2]);
     }
     if (interaction.customId === 'ticket:close') return closeTicket(interaction);
+    if (interaction.customId === 'pix:copy') return showPixKey(interaction);
     if (interaction.customId === 'order:approve') return decideOrder(interaction, 'approved');
     if (interaction.customId === 'order:reject') return decideOrder(interaction, 'rejected');
     if (interaction.customId.startsWith('delivery:retry:')) {
