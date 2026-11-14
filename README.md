@@ -2,7 +2,7 @@
 
 Bot de Discord para suporte, pedidos privados e venda de kits de Minecraft Java com entrega pelo Plugin-ASTHEN.
 
-**Versão do bot: 2.6.0**
+**Versão do bot: 2.6.1**
 
 <p align="center">
   <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip">
@@ -72,7 +72,7 @@ Use `/kit adicionar`. O cadastro pede:
 - Descrição comercial.
 - Link HTTPS da imagem (opcional).
 
-Use `/kit listar` para conferir os produtos e `/kit remover` para retirar um produto da loja. Cadastrar o produto no bot não cria os itens no Minecraft: o mesmo kit precisa existir no plugin.
+Use `/kit listar` para conferir os produtos, `/kit preco` para alterar o preço e `/kit remover` para retirar um produto da loja. Cadastrar o produto no bot não cria os itens no Minecraft: o mesmo kit precisa existir no plugin.
 
 ## Integração com Minecraft Java
 
@@ -91,32 +91,17 @@ Para o teste, seu amigo não precisa contratar uma host Minecraft. Ele inicia Pa
 
 **Um mundo single-player vanilla, aberto normalmente pelo botão “Jogar”, não carrega plugins Paper.** Para testar o plugin, é necessário iniciar Paper localmente. Isso não significa publicar o servidor nem colocá-lo na host definitiva.
 
-No seu PC, deixe o bot e a API ligados. A API escuta localmente em `127.0.0.1:8787`. Configure um túnel HTTPS para encaminhar um endereço público até `http://127.0.0.1:8787`.
+No seu PC, deixe o bot ligado. A API escuta localmente em `http://127.0.0.1:8787`. Para gerar o endereço HTTPS que seu amigo usará, deixei um iniciador automático:
 
-No `.env` do bot:
+1. Baixe o **cloudflared para Windows 64-bit** na [página oficial de downloads da Cloudflare](https://developers.cloudflare.com/tunnel/downloads/).
+2. Renomeie o executável baixado para `cloudflared.exe` e coloque-o na mesma pasta do bot.
+3. Inicie o bot com `INICIAR.bat` e confira no console a mensagem `[Asthen Bridge] API ativa em http://127.0.0.1:8787`.
+4. Abra `INICIAR-TUNEL.bat`. Ele vai gerar uma URL parecida com `https://nome-aleatorio.trycloudflare.com`.
+5. Copie essa URL e envie ao amigo em uma conversa privada. Ele deve colocá-la em `bridge.poll.url` no `config.yml` do plugin.
 
-```env
-DKB_HOST=127.0.0.1
-DKB_PORT=8787
-```
+O Cloudflare Quick Tunnel é temporário, não exige conta ou domínio e só funciona enquanto a janela do túnel estiver aberta. A URL muda quando você cria outro túnel. Mantenha abertas as janelas do bot e do túnel durante os testes. Esse tipo de túnel é para desenvolvimento e teste, não para produção. [Documentação oficial do Quick Tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
 
-No PC do amigo, em `plugins/DiscordKitBridge/config.yml`:
-
-```yaml
-bridge:
-  enabled: true
-  mode: "poll"
-  secret: "CHAVE_COPIADA_DO_COMANDO_bridge_chave"
-  poll:
-    url: "https://ENDERECO-HTTPS-DO-TUNEL"
-    interval-seconds: 3
-    max-per-poll: 5
-    http-timeout: 10
-```
-
-O amigo substitui o endereço de exemplo pela URL HTTPS real do túnel que encaminha para a API do seu PC. Use somente a URL base, sem acrescentar `/plugin/v1`.
-
-**Não use `127.0.0.1` ou `localhost` no plugin para apontar ao seu bot.** Esses endereços apontam para o PC do amigo, onde o plugin está rodando. O túnel HTTPS resolve essa diferença.
+O plugin usa a URL base, sem acrescentar `/plugin/v1`. O bot continua validando cada rota pela chave `DKB_SECRET`; não compartilhe a URL e a chave em canais públicos.
 
 ### Chave da integração
 
