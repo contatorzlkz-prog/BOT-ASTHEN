@@ -295,7 +295,11 @@ export function makeOrderControls() {
     new ButtonBuilder()
       .setCustomId('order:reject')
       .setLabel('Recusar')
-      .setStyle(ButtonStyle.Danger)
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId('pix:copy')
+      .setLabel('Copiar chave Pix')
+      .setStyle(ButtonStyle.Primary)
   );
 }
 
@@ -318,16 +322,17 @@ export function makeChannelLinkRow(channel) {
 }
 
 export function makeOrderLogEmbed({ ticket, decision, staffUser }) {
+  const closed = decision === 'closed_without_result';
   const approved = decision === 'approved';
   return new EmbedBuilder()
-    .setColor(approved ? 0x3BA55D : 0xD45B5B)
-    .setTitle(approved ? 'Pedido confirmado' : 'Pedido recusado')
+    .setColor(closed ? 0xD49B42 : approved ? 0x3BA55D : 0xD45B5B)
+    .setTitle(closed ? 'Pedido fechado sem resultado' : approved ? 'Pedido confirmado' : 'Pedido recusado')
     .addFields(
       { name: 'Cliente', value: '<@' + ticket.userId + '>', inline: true },
       { name: 'Kit', value: String(ticket.kitName || '—'), inline: true },
       { name: 'Valor', value: String(ticket.kitPrice || '—'), inline: true },
       { name: 'Nick Minecraft', value: String(ticket.minecraftNick || '—'), inline: true },
-      { name: 'Responsável', value: String(staffUser), inline: true },
+      { name: closed ? 'Fechado por' : 'Responsável', value: String(staffUser), inline: true },
       { name: 'Canal do pedido', value: '<#' + ticket.channelId + '>', inline: true }
     )
     .setTimestamp();
