@@ -4,16 +4,27 @@ export const CONFIG = {
   },
   support: {
     colors: {
+      compras: '#3D82D8',
+      licencas: '#C27A52',
+      bugs: '#8A6CE8',
+      parcerias: '#3D9A79',
+      marketing: '#D49B42',
+      // Compatibilidade com tickets e painéis antigos.
       bug: '#D45B5B',
       hack: '#8A6CE8',
       duvida: '#3D82D8',
       geral: '#768398'
     },
     descriptions: {
-      bug: 'Descreva o problema com o máximo de contexto possível. Informe em qual situação aconteceu, o que você esperava que acontecesse e o que ocorreu de fato. Se souber, explique os passos para reproduzir o erro. Capturas de tela, vídeos curtos e mensagens de erro ajudam a equipe a entender e corrigir o problema.',
-      hack: 'Use este atendimento para encaminhar uma suspeita de trapaça ou comportamento abusivo. Informe o nome do jogador, onde e quando aconteceu e o que você observou. Anexe gravações ou capturas de tela quando tiver. A equipe analisará as informações com cuidado; evite expor acusações ou dados pessoais em canais públicos.',
-      duvida: 'Conte qual é a sua dúvida e explique o que você está tentando fazer. Inclua o contexto necessário para que a equipe consiga orientar você sem precisar pedir as mesmas informações várias vezes. A conversa ficará visível somente para você e para a equipe autorizada.',
-      geral: 'Explique o motivo do contato e o tipo de ajuda que precisa. Este espaço serve para assuntos que não se encaixam nas outras opções. Envie os detalhes em uma única mensagem, quando possível, e aguarde a resposta da equipe neste canal privado.'
+      compras: 'Informações sobre produtos, pedidos e formas de pagamento. Explique qual plano ou compra deseja consultar para que a equipe possa orientar você.',
+      licencas: 'Ajuda técnica com ativação de licenças, configuração, versões e permissões. Informe o produto, a plataforma e o que aconteceu.',
+      bugs: 'Envie logs, capturas de tela ou detalhes sobre falhas. Descreva o que estava fazendo quando o problema apareceu.',
+      parcerias: 'Canal para propostas comerciais, afiliações e parcerias. Apresente seu projeto e a proposta de colaboração.',
+      marketing: 'Atendimento para contratação de serviços e pedidos de orçamento. Conte qual serviço procura e os detalhes principais.',
+      bug: 'Descreva o problema com contexto, o que esperava que acontecesse e o que ocorreu. Capturas de tela e mensagens de erro ajudam a equipe.',
+      hack: 'Use este atendimento para encaminhar suspeitas de trapaça ou comportamento abusivo. Informe o jogador, o contexto e o que observou.',
+      duvida: 'Conte qual é sua dúvida e explique o que está tentando fazer. Inclua o contexto necessário para a equipe orientar você.',
+      geral: 'Explique o motivo do contato e o tipo de ajuda que precisa. Este espaço serve para assuntos que não se encaixam nas outras opções.'
     }
   },
   shop: {
