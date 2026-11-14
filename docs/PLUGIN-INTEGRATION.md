@@ -30,13 +30,18 @@ DKB_HOST=127.0.0.1
 DKB_PORT=8787
 ```
 
-Inicie o bot. A API fica em `http://127.0.0.1:8787`. Configure um túnel/proxy HTTPS que encaminhe o endereço público para esse endereço local. Mantenha o bot e o túnel ligados durante o teste.
+1. Inicie o ASTHEN BOT com `INICIAR.bat`.
+2. Confira no console: `[Asthen Bridge] API ativa em http://127.0.0.1:8787`.
+3. Baixe o executável **Windows 64-bit** do [cloudflared na página oficial da Cloudflare](https://developers.cloudflare.com/tunnel/downloads/).
+4. Renomeie para `cloudflared.exe` e coloque na pasta do bot.
+5. Execute `INICIAR-TUNEL.bat`. Esse arquivo executa `cloudflared tunnel --url http://127.0.0.1:8787`.
+6. Copie a URL `https://....trycloudflare.com` que aparece no console.
 
-Não abra a porta 8787 diretamente no roteador e não exponha HTTP sem HTTPS.
+O Quick Tunnel não exige conta nem domínio, mas é temporário: a URL muda quando o túnel é recriado e deixa de funcionar quando você fecha a janela. Mantenha a janela aberta durante o teste. É indicado para teste, não produção. [Guia oficial Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
 
 ### No PC do amigo
 
-Instale o plugin no servidor Paper local e configure `plugins/DiscordKitBridge/config.yml`:
+No `plugins/DiscordKitBridge/config.yml`:
 
 ```yaml
 bridge:
@@ -50,9 +55,11 @@ bridge:
     http-timeout: 10
 ```
 
-Troque a URL de exemplo pelo endereço HTTPS real do túnel. Use somente a URL base, sem o caminho `/plugin/v1`.
+Troque a URL de exemplo pela URL recebida no console do túnel. Use somente a URL base, sem o caminho `/plugin/v1`.
 
 **Não use `127.0.0.1` ou `localhost` no plugin para apontar ao PC do dono do bot.** Esses endereços apontam para o PC do amigo. O plugin deve usar o endereço HTTPS público do túnel.
+
+O bot e a janela do túnel precisam permanecer ligados durante os testes.
 
 ## 3. Gerar e compartilhar a chave
 
@@ -65,7 +72,7 @@ A chave é gerada e guardada pelo bot em `DKB_SECRET`. O plugin não deve gerar 
 
 A versão atual do plugin ainda precisa ser ajustada para aceitar a chave gerada pelo bot. Consulte o documento de implementação para esse trabalho.
 
-## 3. Criar o kit no Minecraft
+## 4. Criar o kit no Minecraft
 
 Crie o conteúdo do kit em uma Shulker Box e cadastre-o no servidor Paper. Exemplo:
 
@@ -75,7 +82,7 @@ Crie o conteúdo do kit em uma Shulker Box e cadastre-o no servidor Paper. Exemp
 
 Use um nome de até 32 caracteres com letras, números, `_` ou `-`.
 
-## 4. Cadastrar o mesmo produto na loja do Discord
+## 5. Cadastrar o mesmo produto na loja do Discord
 
 No Discord, use `/kit adicionar` e informe:
 
@@ -86,13 +93,13 @@ No Discord, use `/kit adicionar` e informe:
 
 O cadastro comercial no bot não cria nem altera os itens do plugin. Os itens reais continuam no kit do Minecraft. Os dois nomes precisam corresponder.
 
-## 5. Confirmar que o plugin está se comunicando
+## 6. Confirmar que o plugin está se comunicando
 
 Use `/bridge status` no Discord. A resposta mostra se a API local está online e quais kits foram enviados pelo plugin.
 
 A lista enviada pelo plugin é usada para diagnóstico. O cadastro comercial da loja permanece no bot, para que o administrador defina preço, descrição e imagem.
 
-## 6. Fluxo de compra
+## 7. Fluxo de compra
 
 1. O cliente escolhe o kit.
 2. O bot mostra a prévia privada com nome, preço, descrição e imagem, com os botões **Trocar kit** e **Confirmar kit**.
@@ -104,12 +111,12 @@ A lista enviada pelo plugin é usada para diagnóstico. O cadastro comercial da 
 
 O plugin usa o identificador do pedido para impedir entregas duplicadas quando a mesma solicitação é reenviada.
 
-## 7. Quando o bot for hospedado em VPS
+## 8. Quando o bot for hospedado em VPS
 
 A hospedagem Minecraft continuará usando o modo `poll`. Publique a API do bot por uma rota HTTPS e configure `bridge.poll.url` com a URL HTTPS pública, sem acrescentar `/plugin/v1`.
 
 O padrão mais simples é deixar o Node escutando em `127.0.0.1:8787` na VPS e configurar um proxy reverso HTTPS para encaminhar à porta local. Não exponha a porta HTTP diretamente à internet.
 
-## 8. Supabase
+## 9. Supabase
 
 Supabase guarda o snapshot do estado do bot e é independente da API Minecraft. O segredo `DKB_SECRET` não deve ser colocado no banco. Consulte [SUPABASE.md](SUPABASE.md).
