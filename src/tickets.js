@@ -111,6 +111,7 @@ export async function createPrivateTicket({ guild, user, type, kit = null, minec
     kitName: kit?.name ?? null,
     kitPrice: kit?.price ?? null,
     kitDescription: kit?.description ?? null,
+    kitImageUrl: kit?.imageUrl ?? null,
     minecraftNick,
     orderStatus: isShop ? 'pending' : null,
     status: 'open',
