@@ -44,6 +44,7 @@ import {
 import { archiveAndDeleteTicket, createPrivateTicket } from './tickets.js';
 import { CONFIG } from './config.js';
 import { deliverKit, getBridgeSecret, getBridgeStatus, regenerateBridgeSecret } from './bridge.js';
+import { getSupabaseStatus } from './supabase.js';
 
 const kitWizards = new Map();
 
@@ -835,6 +836,7 @@ async function handleBridgeCommand(interaction) {
   const action = interaction.options.getSubcommand();
   if (action === 'status') {
     const status = getBridgeStatus();
+    const database = getSupabaseStatus();
     const kits = status.kits.length
       ? status.kits.map(kit => (kit.enabled ? '• ' : '• [desativado] ') + kit.name + ' (' + kit.items + ' itens)').join('\n')
       : 'Nenhum kit sincronizado ainda.';
@@ -844,9 +846,12 @@ async function handleBridgeCommand(interaction) {
       'Endereço local: ' + (status.running ? 'http://' + status.host + ':' + status.port : 'não iniciada'),
       'Pedidos aguardando: ' + status.pending,
       'Kits recebidos do plugin: ' + status.kits.length,
+      'Supabase: ' + (database.enabled ? 'configurado' : 'desativado'),
+      database.lastSyncedAt ? 'Última sincronização: ' + database.lastSyncedAt : '',
+      database.lastError ? 'Aviso Supabase: ' + database.lastError : '',
       '',
       kits
-    ].join('\n'));
+    ].filter(Boolean).join('\n'));
   }
 
   if (action === 'chave') {
