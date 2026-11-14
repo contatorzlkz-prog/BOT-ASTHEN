@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import { Client, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
 import { commandDefinitions } from './commands.js';
-import { getGuildConfig, loadStore } from './store.js';
+import { getGuildConfig, loadStore, initializeStoreSync } from './store.js';
+import { flushSupabaseSync, getSupabaseStatus } from './supabase.js';
 import { makeShopPanel, makeSupportPanel } from './ui.js';
 import { handleInteraction } from './interactions.js';
 import { ensureBridgeSecret, startBridge } from './bridge.js';
@@ -60,6 +61,10 @@ async function main() {
   }
 
   loadStore();
+  const supabaseState = await initializeStoreSync();
+  if (supabaseState.enabled) {
+    console.log('[Asthen Supabase] Sincronização ativa.' + (supabaseState.restored ? ' Snapshot remoto restaurado.' : ' Backup local preservado.'));
+  }
   const bridgeSecret = ensureBridgeSecret();
   if (bridgeSecret.generated) {
     console.log('[Asthen Bridge] Chave de integração criada e salva no .env. Um administrador pode copiá-la com /bridge chave.');
@@ -107,6 +112,19 @@ async function main() {
   });
 
   await client.login(token);
+
+  const shutdown = async signal => {
+    console.log('[Asthen] Encerrando com segurança (' + signal + ')...');
+    try {
+      await flushSupabaseSync();
+    } catch (error) {
+      console.error('[Asthen Supabase] Não foi possível concluir a última sincronização:', error.message);
+    }
+    client.destroy();
+    process.exit(0);
+  };
+  process.once('SIGINT', () => { void shutdown('SIGINT'); });
+  process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
 
   try {
     const bridge = await startBridge({
