@@ -73,7 +73,15 @@ DKB_HOST=127.0.0.1
 DKB_PORT=8787
 ```
 
-Configure um túnel/proxy HTTPS para encaminhar o endereço público para `http://127.0.0.1:8787`. O bot e o túnel precisam permanecer ligados durante o teste. Não abra a porta 8787 no roteador e não exponha HTTP aberto.
+Para gerar esse endereço no Windows, o dono do bot deve:
+
+1. Baixar o executável **Windows 64-bit** do [cloudflared na página oficial da Cloudflare](https://developers.cloudflare.com/tunnel/downloads/).
+2. Renomear para `cloudflared.exe` e colocá-lo na pasta do bot.
+3. Iniciar o ASTHEN BOT e confirmar no console que a API está ativa em `http://127.0.0.1:8787`.
+4. Executar `INICIAR-TUNEL.bat` (ou rodar `cloudflared tunnel --url http://127.0.0.1:8787` em outra janela).
+5. Copiar o endereço aleatório `https://....trycloudflare.com` exibido pelo Cloudflare e enviá-lo ao amigo.
+
+O endereço Quick Tunnel é temporário, muda ao criar outro túnel e só responde enquanto `cloudflared` estiver aberto. É para teste, não produção. O bot e o túnel precisam ficar ligados durante a sessão. Não abra a porta 8787 no roteador nem exponha HTTP aberto.
 
 No PC do amigo, use no `plugins/DiscordKitBridge/config.yml`:
 
