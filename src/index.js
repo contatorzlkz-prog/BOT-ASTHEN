@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { Client, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
 import { commandDefinitions } from './commands.js';
 import { getGuildConfig, loadStore, initializeStoreSync } from './store.js';
-import { flushSupabaseSync, getSupabaseStatus } from './supabase.js';
+import { flushSupabaseSync } from './supabase.js';
 import { makeShopPanel, makeSupportPanel } from './ui.js';
 import { handleInteraction } from './interactions.js';
 import { ensureBridgeSecret, startBridge } from './bridge.js';
