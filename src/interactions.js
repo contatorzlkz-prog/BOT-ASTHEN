@@ -349,8 +349,9 @@ async function handleKitEditModal(interaction) {
   const updated = updateKit(interaction.guildId, kitId, changes);
   await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
   return interaction.reply({
-    content: 'Informação do kit atualizada e salva no catálogo.',
+    content: 'Informação do kit atualizada. Você pode selecionar outro campo para editar.',
     embeds: updated ? [makeKitPreviewEmbed(updated)] : [],
+    components: updated ? [makeKitEditFieldMenu(updated)] : [],
     ephemeral: true
   });
 }
