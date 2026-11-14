@@ -1,45 +1,105 @@
 # ASTHEN BOT
 
-[![BAIXAR ZIP](https://img.shields.io/badge/BAIXAR%20ZIP-DOWNLOAD-2F6BFF?style=for-the-badge)](https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip)
+Bot de Discord para atendimento privado e gerenciamento de uma loja de kits de Minecraft. O projeto oferece painéis de suporte e loja, fluxo de pedidos com Pix, ferramentas administrativas e armazenamento local com sincronização opcional pelo Supabase.
 
-Bot de Discord com tickets privados e loja de kits. Node.js 22 ou superior.
+## O que faz
 
-## Instalar
+- Abre tickets privados por departamento usando menus nativos do Discord.
+- Exibe o catálogo de kits por menu de seleção, sem uma sequência de botões de compra.
+- Mostra detalhes do kit em uma resposta privada e coleta o nick do Minecraft.
+- Cria o canal do pedido após a confirmação dos dados e apresenta o Pix e as instruções de pagamento.
+- Permite que administradores confirmem, recusem ou encerrem pedidos.
+- Registra decisões e fechamentos nos canais de log configurados.
+- Atualiza os painéis existentes quando o bot inicia.
+- Salva as alterações localmente e sincroniza um snapshot atual no Supabase, quando configurado.
 
-1. Baixe o ZIP acima e extraia a pasta.
-2. Execute `INSTALAR.bat` e informe o token e o Application ID do seu bot.
+## Requisitos
+
+- Node.js 22 ou superior.
+- Aplicação criada no [Discord Developer Portal](https://discord.com/developers/applications).
+- Permissões do bot: View Channels, Send Messages, Read Message History, Embed Links, Attach Files e Manage Channels.
+- Escopos OAuth2: `bot` e `applications.commands`.
+
+O Message Content Intent não é necessário.
+
+## Instalação
+
+### Windows 10/11
+
+1. Extraia o projeto.
+2. Execute `INSTALAR.bat` para instalar as dependências.
 3. Execute `INICIAR.bat`.
+4. Na primeira inicialização, informe o token do bot e o Application ID no terminal.
+5. Configure o Supabase quando solicitado ou continue usando somente o armazenamento local.
 
-## Configurar
+O assistente cria o arquivo `.env` automaticamente. As credenciais ficam no computador onde o bot é executado.
 
-Use uma conta com permissão **Gerenciar servidor**:
+### Linux
 
-```text
-/configurar suporte:#suporte loja:#loja logs:#logs compradores:#compradores equipe:@Equipe
-/pix chave:SUA_CHAVE instrucoes:Envie o comprovante neste canal.
-/kit adicionar
+```bash
+bash setup-linux.sh
+./start-linux.sh
 ```
 
-Todos os campos de `/configurar` são opcionais: informe somente os canais que deseja configurar. O canal de logs é bloqueado automaticamente para @everyone e liberado para a equipe configurada e administradores. Ao iniciar, o bot atualiza os painéis já publicados para o formato novo.
+A primeira inicialização também cria o `.env` de forma interativa.
 
-## Loja
+## Configuração no Discord
 
-O painel tem um único botão **Abrir catálogo**. O cliente escolhe um kit, informa o nick do Minecraft e revisa o pedido. Pode editar o nick ou cancelar. Nenhum canal é criado até clicar em **Confirmar e ir para pagamento**.
+Depois que o bot estiver online, use `/configurar` para definir os canais de suporte, loja, logs e compradores, além do cargo da equipe.
 
-Depois da confirmação, o bot cria o ticket privado com o resumo, a chave Pix e as instruções. O cliente envia o comprovante no canal. A equipe usa **Confirmar** ou **Recusar**; as duas ações geram registro no canal privado de logs e mantêm o ticket aberto. Ao confirmar, o bot também anuncia o comprador e o kit no canal de compradores. O botão **Fechar** fica separado e exclui o ticket após três segundos.
+Comandos administrativos:
 
-## Suporte
+- `/configurar`: configura canais e equipe.
+- `/pix`: define a chave Pix e as instruções de pagamento.
+- `/kit listar`: exibe o catálogo.
+- `/kit preco`: define o preço de um kit marcado como “A definir”.
+- `/kit adicionar`: cadastra um kit.
+- `/kit remover`: remove um kit.
 
-Os botões têm cores diferentes por assunto e abrem o canal privado diretamente. Cada ticket apresenta orientações próprias para o cliente enviar as informações certas.
+## Kits iniciais
 
-## Kits e salvamento
+| Kit | Preço |
+|---|---:|
+| Keep | R$ 125,00 |
+| Ferro | R$ 15,00 |
+| Dima | R$ 25,00 |
+| Netherita | R$ 30,00 |
+| Elytra | A definir |
+| Construção | A definir |
 
-Novas instalações começam com Kit Demo 1, Kit Demo 2 e Kit Demo 3. Use `/kit adicionar`, `/kit listar` e `/kit remover`.
+Elytra e Construção ficam indisponíveis para compra até que um administrador defina seus preços.
 
-Configurações, kits, tickets e compras em preparação são salvos automaticamente em `data/state.json`. Faça backup desse arquivo e nunca publique o token do `.env` nem os dados Pix.
+## Armazenamento e Supabase
 
-## Permissões do bot
+O arquivo `data/state.json` é atualizado localmente antes de qualquer sincronização remota. O Supabase é opcional e guarda somente o snapshot atual do estado; não é usado como histórico de tickets encerrados.
 
-Convide com os escopos `bot` e `applications.commands`, concedendo: View Channels, Send Messages, Embed Links, Attach Files, Read Message History e Manage Channels. Não precisa ativar Message Content Intent.
+Para ativar a integração:
 
-Consulte [COMECE-AQUI.txt](COMECE-AQUI.txt) para o início rápido. Licença MIT.
+1. Execute `supabase/001_asthen_bot_state.sql` no SQL Editor do projeto Supabase.
+2. Informe a Project URL e a Secret API Key `sb_secret_...` durante a configuração inicial.
+3. Use a URL base do projeto. O bot normaliza URLs que terminam em `/rest/v1` ou `/v1`.
+
+Consulte [docs/SUPABASE.md](docs/SUPABASE.md) para detalhes sobre a sincronização e o backup local.
+
+## Estrutura
+
+- `src/`: comandos, menus, tickets, loja, integrações e inicialização.
+- `assets/`: imagens estáticas usadas pelo bot.
+- `supabase/`: SQL para criar a tabela de estado.
+- `docs/`: instruções de instalação, comandos e banco de dados.
+- `data/`: backup local gerado durante a execução.
+
+## Verificação
+
+```bash
+npm install
+npm run check
+npm run check:commands
+```
+
+Os testes automatizados verificam a normalização da URL do Supabase. O workflow do GitHub Actions também valida sintaxe e definições dos comandos.
+
+## Segurança
+
+Nunca publique o arquivo `.env`. Ele contém o token do Discord e a chave secreta do Supabase. Não compartilhe esses valores nem os coloque em issues, prints ou commits.
+
