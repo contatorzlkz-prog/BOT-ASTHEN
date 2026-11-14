@@ -35,8 +35,14 @@ export function makeKitDisplayName(name) {
 }
 
 function isLegacySampleKit(kit) {
-  return LEGACY_SAMPLE_KITS.has(normalizeKitName(kit?.name))
-    || LEGACY_SAMPLE_KITS.has(normalizeKitName(kit?.displayName));
+  const id = String(kit?.id || '').toLowerCase();
+  const name = normalizeKitName(kit?.name);
+  const displayName = normalizeKitName(kit?.displayName);
+  return id.startsWith('demo-kit-')
+    || /kit demo/.test(name)
+    || /kit demo/.test(displayName)
+    || LEGACY_SAMPLE_KITS.has(name)
+    || LEGACY_SAMPLE_KITS.has(displayName);
 }
 
 function defaultGuildConfig() {
@@ -67,7 +73,11 @@ function ensureGuildConfig(guildId) {
   if (!Array.isArray(config.kits)) config.kits = [];
   if (!Array.isArray(config.hiddenPluginKits)) config.hiddenPluginKits = [];
 
-  // Remove only the six sample entries that shipped with 2.4.0.
+  // Pix is fixed for this store; discard values left by the old /pix command.
+  delete config.pixKey;
+  delete config.pixInstructions;
+
+  // Remove only the sample entries that shipped with older demo catalogs.
   // Real custom kits are preserved.
   config.kits = config.kits.filter(kit => !isLegacySampleKit(kit));
 
