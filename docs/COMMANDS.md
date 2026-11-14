@@ -36,6 +36,8 @@ O cadastro comercial não cria os itens do jogo. O mesmo identificador precisa t
 
 ## Integração Minecraft
 
+Antes de conectar o plugin em outro computador, inicie o bot e execute `INICIAR-TUNEL.bat` para gerar a URL HTTPS temporária. Consulte [PLUGIN-INTEGRATION.md](PLUGIN-INTEGRATION.md) para a instalação do `cloudflared` e a configuração do túnel.
+
 - `/bridge status`: mostra se a API local está online, quantos pedidos aguardam resposta, a última lista de kits recebida do plugin e o estado do Supabase.
 - `/bridge chave`: exibe em resposta privada a chave que deve ser colocada em `bridge.secret` no `config.yml` do plugin.
 - `/bridge regenerar`: cria uma nova chave e invalida a anterior. Depois, atualize `bridge.secret` no plugin e recarregue-o.
