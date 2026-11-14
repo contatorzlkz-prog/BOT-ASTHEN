@@ -22,33 +22,33 @@ function safeImageUrl(value) {
 const supportOptions = [
   {
     value: 'compras',
-    label: 'Dúvidas & Compras',
-    description: 'Informações sobre produtos, pedidos e pagamentos.',
+    label: 'Compras & Kits',
+    description: 'Dúvidas sobre kits, pedidos e pagamentos.',
     emoji: '🛒'
   },
   {
-    value: 'licencas',
-    label: 'Licenças & Suporte',
-    description: 'Ajuda técnica, configuração e ativação.',
-    emoji: '🔑'
+    value: 'servidor',
+    label: 'Ajuda no Servidor',
+    description: 'Problemas para entrar, jogar ou usar comandos.',
+    emoji: '⛏️'
   },
   {
     value: 'bugs',
-    label: 'Reportar Bugs',
-    description: 'Envie logs, imagens e detalhes sobre falhas.',
+    label: 'Reportar Problema',
+    description: 'Erros, falhas e comportamentos inesperados.',
     emoji: '🐛'
   },
   {
-    value: 'parcerias',
-    label: 'Parcerias & Comercial',
-    description: 'Propostas comerciais e parcerias.',
-    emoji: '🤝'
+    value: 'denuncias',
+    label: 'Denúncias',
+    description: 'Relate jogadores ou situações que precisam de análise.',
+    emoji: '🛡️'
   },
   {
-    value: 'marketing',
-    label: 'Marketing & Serviços',
-    description: 'Contratação de serviços e orçamentos.',
-    emoji: '📣'
+    value: 'outros',
+    label: 'Outros Assuntos',
+    description: 'Sugestões e assuntos que não se encaixam acima.',
+    emoji: '💬'
   }
 ];
 
@@ -61,6 +61,15 @@ const supportTitles = {
 };
 
 const supportColor = kind => hexToInt(CONFIG.support.colors[kind], brandColor());
+
+function displayKitName(kit) {
+  const value = String(kit?.displayName || kit?.name || 'Kit');
+  return value.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+}
+
+function canBuyKit(kit) {
+  return kit?.enabled !== false && Boolean(String(kit?.price || '').trim());
+}
 
 export function makeSupportPanel() {
   const embed = new EmbedBuilder()
@@ -100,36 +109,76 @@ export function makeShopPanel(kits = []) {
 
   const button = new ButtonBuilder()
     .setCustomId('shop:catalog')
-    .setLabel(kits.length ? 'Abrir catálogo' : 'Catálogo indisponível')
+    .setLabel(kits.some(canBuyKit) ? 'Escolher kit' : 'Loja indisponível')
     .setStyle(ButtonStyle.Primary)
-    .setDisabled(kits.length === 0);
+    .setDisabled(!kits.some(canBuyKit));
 
   return { embeds: [embed], components: [new ActionRowBuilder().addComponents(button)] };
 }
 
 export function makeCatalogMenu(kits = []) {
+  const available = kits.filter(canBuyKit).slice(0, CONFIG.shop.maxKits);
   const menu = new StringSelectMenuBuilder()
     .setCustomId('shop:select')
-    .setPlaceholder('Selecione o kit que deseja comprar')
+    .setPlaceholder('Selecione um kit')
     .setMinValues(1)
     .setMaxValues(1)
-    .addOptions(kits.slice(0, CONFIG.shop.maxKits).map(kit => ({
-      label: String(kit.name).slice(0, 100),
-      description: (String(kit.price) + ' · ' + String(kit.description || 'Kit disponível para compra')).slice(0, 100),
+    .addOptions(available.map(kit => ({
+      label: displayKitName(kit),
+      description: String(kit.price || 'Preço a definir').slice(0, 100),
       value: String(kit.id)
     })));
   return new ActionRowBuilder().addComponents(menu);
 }
 
+export function makeKitAdminMenu(kits = [], customId = 'kit:admin:select') {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(customId)
+    .setPlaceholder('Selecione um kit')
+    .setMinValues(1)
+    .setMaxValues(1)
+    .addOptions(kits.slice(0, 25).map(kit => ({
+      label: displayKitName(kit),
+      description: (String(kit.price || 'Preço a definir') + ' · ' + String(kit.name)).slice(0, 100),
+      value: String(kit.id)
+    })));
+  return new ActionRowBuilder().addComponents(menu);
+}
+
+export function makeKitEditFieldMenu(kit) {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId('kit:edit-field:' + kit.id)
+    .setPlaceholder('O que deseja alterar?')
+    .setMinValues(1)
+    .setMaxValues(1)
+    .addOptions(
+      { label: 'Nome exibido na loja', description: 'Nome bonito que o cliente verá, sem underscores.', value: 'displayName' },
+      { label: 'Preço', description: 'Valor de venda do kit.', value: 'price' },
+      { label: 'Descrição', description: 'Texto que aparece na prévia.', value: 'description' },
+      { label: 'Imagem', description: 'Link HTTPS da imagem do kit.', value: 'imageUrl' }
+    );
+  return new ActionRowBuilder().addComponents(menu);
+}
+
+export function makeKitRemoveControls(kitId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('kit:remove:confirm:' + kitId)
+      .setLabel('Remover da loja')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId('kit:remove:cancel')
+      .setLabel('Cancelar')
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
 export function makeKitPreviewEmbed(kit) {
   const embed = new EmbedBuilder()
     .setColor(brandColor())
-    .setTitle('Prévia do kit: ' + String(kit.name))
-    .setDescription(String(kit.description || 'Este kit não possui uma descrição cadastrada.'))
-    .addFields(
-      { name: 'Preço', value: String(kit.price || 'A consultar'), inline: true },
-      { name: 'Identificador no Minecraft', value: '`' + String(kit.name) + '`', inline: true }
-    );
+    .setTitle(displayKitName(kit))
+    .setDescription(String(kit.description || 'Descrição em atualização.'))
+    .addFields({ name: 'Preço', value: String(kit.price || 'A definir'), inline: true });
   const image = safeImageUrl(kit.imageUrl);
   if (image) embed.setImage(image);
   return embed;
@@ -159,27 +208,25 @@ export function makeSupportTicketEmbed(kind, user) {
     .setColor(supportColor(kind))
     .setTitle(supportTitles[kind] || 'Atendimento')
     .setDescription(
-      (descriptions[kind] || descriptions.geral || 'Descreva o assunto para a equipe.') +
-      '\n\n**Como continuar:** envie as informações neste canal e aguarde a equipe. ' +
-      'Este atendimento é privado. Não compartilhe senhas, tokens ou dados de pagamento.'
+      '**Solicitante:** <@' + user.id + '>\n\n' +
+      (descriptions[kind] || descriptions.outros || 'Descreva o assunto para a equipe.') +
+      '\n\nEnvie aqui os detalhes e imagens que ajudem a equipe.'
     )
-    .addFields({ name: 'Responsável', value: String(user), inline: true })
     .setTimestamp();
 }
 
 export function makePurchaseReviewEmbed(draft) {
   const embed = new EmbedBuilder()
     .setColor(brandColor())
-    .setTitle('Revise seu pedido')
+    .setTitle('Confira sua compra')
     .setDescription(CONFIG.shop.reviewDescription)
     .addFields(
-      { name: 'Kit escolhido', value: String(draft.kit.name), inline: true },
-      { name: 'Valor', value: String(draft.kit.price), inline: true },
-      { name: 'Nick do Minecraft Java', value: String(draft.minecraftNick), inline: true },
-      { name: 'O que está incluído', value: String(draft.kit.description || 'Consulte a equipe.'), inline: false }
+      { name: 'Kit', value: displayKitName(draft.kit), inline: true },
+      { name: 'Preço', value: String(draft.kit.price), inline: true },
+      { name: 'Nick', value: String(draft.minecraftNick), inline: true }
     );
   const image = safeImageUrl(draft.kit.imageUrl);
-  if (image) embed.setImage(image);
+  if (image) embed.setThumbnail(image);
   return embed;
 }
 
@@ -205,27 +252,27 @@ export function makePurchaseReviewControls(draft) {
   );
 }
 
-export function makeOrderEmbed({ user, kit, minecraftNick, orderCode }) {
+export function makeOrderEmbed({ userId, kit, minecraftNick }) {
   const embed = new EmbedBuilder()
     .setColor(brandColor())
-    .setTitle('Pedido de compra · ' + String(kit.name))
+    .setTitle('Pagamento · ' + displayKitName(kit))
     .setDescription(
-      'Seu pedido foi aberto. Confira a prévia do kit abaixo. ' +
-      'Faça o pagamento usando os dados deste canal e envie o comprovante para a equipe conferir. ' +
-      'A entrega no Minecraft só será solicitada depois da confirmação manual do pagamento.'
+      (userId ? '**Comprador:** <@' + userId + '>\n\n' : '') +
+      'Faça o Pix no valor indicado e envie a foto ou o arquivo do comprovante aqui. ' +
+      'A equipe confere o pagamento antes de solicitar a entrega.'
     )
     .addFields(
-      { name: 'Pedido', value: orderCode, inline: true },
-      { name: 'Cliente', value: String(user), inline: true },
-      { name: 'Kit', value: String(kit.name), inline: true },
-      { name: 'Valor', value: String(kit.price), inline: true },
-      { name: 'Nick do Minecraft Java', value: String(minecraftNick), inline: true },
-      { name: 'Conteúdo do kit', value: String(kit.description || 'Consulte a equipe.'), inline: false },
-      { name: 'Comprovante', value: CONFIG.order.receiptInstructions, inline: false }
+      { name: 'Kit', value: displayKitName(kit), inline: true },
+      { name: 'Valor', value: String(kit.price || '—'), inline: true },
+      { name: 'Nick', value: String(minecraftNick || '—'), inline: true },
+      { name: 'Chave Pix', value: '`keybytes.a@gmail.com`', inline: true },
+      { name: 'Comprovante', value: 'Anexe a imagem ou o PDF nesta conversa.', inline: false }
     )
     .setTimestamp();
-  const image = safeImageUrl(kit.imageUrl);
-  if (image) embed.setImage(image);
+
+  const kitImage = safeImageUrl(kit.imageUrl);
+  if (kitImage) embed.setThumbnail(kitImage);
+  embed.setImage('attachment://pix-keybytes.png');
   return embed;
 }
 
@@ -260,26 +307,6 @@ export function makeDeliveryRetryControls(mode = 'same') {
       .setLabel('Fechar')
       .setStyle(ButtonStyle.Secondary)
   );
-}
-
-export function makePixEmbed(config) {
-  const embed = new EmbedBuilder()
-    .setColor(0x3BA55D)
-    .setTitle('Pagamento via Pix')
-    .setDescription('Use a chave abaixo para realizar o pagamento no valor indicado no pedido.')
-    .addFields({ name: 'Chave Pix', value: String(config.pixKey).slice(0, 1024) });
-
-  if (config.pixInstructions) {
-    embed.addFields({ name: 'Orientações da loja', value: String(config.pixInstructions).slice(0, 1024) });
-  }
-  return embed;
-}
-
-export function makeMissingPixEmbed() {
-  return new EmbedBuilder()
-    .setColor(0xD45B5B)
-    .setTitle('Pagamento ainda não configurado')
-    .setDescription(CONFIG.pix.missingDescription);
 }
 
 export function makeOrderControls() {
@@ -339,14 +366,18 @@ export function makeOrderLogEmbed({ ticket, decision, staffUser }) {
 }
 
 export function makeBuyerAnnouncement(ticket) {
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(brandColor())
-    .setTitle('Nova compra confirmada')
+    .setTitle('Compra confirmada')
     .setDescription(
-      '<@' + ticket.userId + '> concluiu a compra de **' + String(ticket.kitName) + '**.\n' +
-      'Nick do Minecraft: **' + String(ticket.minecraftNick || '—') + '**.'
+      '<@' + ticket.userId + '> comprou **' + String(ticket.kitDisplayName || ticket.kitName || 'Kit') + '**.'
+    )
+    .addFields(
+      { name: 'Valor', value: String(ticket.kitPrice || '—'), inline: true },
+      { name: 'Nick', value: String(ticket.minecraftNick || '—'), inline: true }
     )
     .setTimestamp();
+  return embed;
 }
 
 export function makeKitWizardEmbed(wizard) {
