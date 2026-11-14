@@ -41,8 +41,8 @@ O Message Content Intent não é necessário.
 ## Instalação no Windows
 
 1. Baixe o projeto pelo botão **Code > Download ZIP** e extraia a pasta.
-2. Abra `.env.example`, faça uma cópia com o nome `.env` e preencha `DISCORD_TOKEN` e `CLIENT_ID`.
-3. Execute `INSTALAR.bat` uma vez.
+2. Execute `INSTALAR.bat` uma vez e informe o token Discord e o Application ID quando o instalador pedir.
+3. O instalador cria o `.env` automaticamente e preserva esse arquivo nas próximas execuções.
 4. Execute `INICIAR.bat` para ligar o bot.
 
 Não publique nem envie seu arquivo `.env`. A chave de integração Minecraft será criada automaticamente na primeira inicialização e será gravada nesse arquivo.
@@ -115,7 +115,7 @@ O nome usado no cadastro da loja precisa ser igual ao identificador criado no pl
 
 ## Supabase (opcional)
 
-O arquivo local `data/state.json` continua sendo o backup principal. Quando Supabase estiver configurado, o bot sincroniza um snapshot da configuração, dos tickets abertos e das compras em preparação.
+O arquivo local `data/state.json` continua sendo o backup principal. Quando Supabase estiver configurado, o bot sincroniza um snapshot da configuração, dos tickets abertos e das compras em preparação. O instalador deixa as variáveis Supabase vazias; você pode preencher `SUPABASE_URL` e `SUPABASE_SECRET_KEY` no `.env` depois.
 
 1. Execute `supabase/001_asthen_bot_state.sql` no SQL Editor do seu projeto.
 2. No `.env`, preencha `SUPABASE_URL` com a URL base do projeto e `SUPABASE_SECRET_KEY` com a chave secreta `sb_secret_...`.
