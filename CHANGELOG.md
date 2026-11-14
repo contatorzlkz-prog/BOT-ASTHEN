@@ -1,3 +1,36 @@
+## 2.7.0 — 14/11/2026
+
+### Catálogo ligado ao Plugin-ASTHEN
+- Kits criados no Minecraft são importados automaticamente quando o plugin sincroniza POST /plugin/v1/kits.
+- O bot preserva nome técnico do plugin e nome de exibição separado para a loja.
+- Novos kits entram sem preço; o administrador configura nome exibido, preço, descrição e imagem com /kit editar.
+- /kit remover remove o produto do catálogo sem apagar o arquivo real do kit no Minecraft.
+- Quando o plugin informa que um kit foi excluído, o catálogo e a tabela asthen_bot_kits são reconciliados e a entrada antiga é removida.
+- Removidos os kits de demonstração da migração antiga.
+
+### Administração e tickets
+- Comandos reduzidos a /configurar, /kit listar, /kit editar, /kit remover, /bridge status e /bridge chave.
+- Removido /pix: a loja usa a chave Pix fixa keybytes.a@gmail.com e o QR correspondente.
+- Menu de suporte reescrito para assuntos do servidor Minecraft.
+- Mensagem de pagamento compactada em um único embed, com imagem do kit, QR Pix, chave e botão de cópia.
+- Comprovante solicitado como anexo de imagem ou PDF; identificador interno e descrição dos itens não aparecem no ticket.
+- Avisos técnicos de falha na entrega enviados de forma privada ao administrador que aprovou o pedido.
+- Confirmação, recusa, repetição de entrega e fechamento restritos à equipe autorizada ou administradores.
+- Anúncio de compra inclui o valor e exibe o comprador uma única vez.
+
+### Chave e Supabase
+- A chave de integração é gerada quando ainda não existe e mantida em DKB_SECRET; atualização normal do bot não gera uma nova chave.
+- Removido o comando de regeneração. /bridge chave apenas mostra o valor salvo.
+- Adicionada a tabela normalizada asthen_bot_kits em supabase/002_asthen_bot_kits.sql.
+- O snapshot local continua em data/state.json; o catálogo também é sincronizado para a tabela de kits do Supabase.
+
+### Instalação e documentação
+- Adicionado SUPABASE_KITS_TABLE ao instalador.
+- README, guia de comandos, integração e handoff do plugin atualizados para o fluxo de dois computadores.
+- Incluída a orientação para preservar .env e data ao atualizar a pasta do bot.
+
+---
+
 ## 2.6.1 — 14/11/2026
 
 ### Correções e compatibilidade com a 2.4.0
