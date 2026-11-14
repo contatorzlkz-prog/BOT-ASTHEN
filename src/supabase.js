@@ -1,5 +1,3 @@
-import crypto from 'node:crypto';
-
 let syncTimer = null;
 let retryTimer = null;
 let syncInFlight = false;
@@ -35,12 +33,18 @@ export function getSupabaseConfig() {
 }
 
 function buildHeaders(config, extra = {}) {
-  return {
+  const headers = {
     apikey: config.secretKey,
-    Authorization: 'Bearer ' + config.secretKey,
     'Content-Type': 'application/json',
     ...extra
   };
+
+  // sb_secret_ keys are opaque API keys, not JWTs: send them only as apikey.
+  // Legacy service_role keys are JWTs and still need the Authorization header.
+  if (!config.secretKey.startsWith('sb_secret_')) {
+    headers.Authorization = 'Bearer ' + config.secretKey;
+  }
+  return headers;
 }
 
 async function supabaseRequest(config, path, options = {}) {
@@ -116,6 +120,8 @@ async function pushSnapshot(snapshot) {
     }
 
     retryCount = 0;
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = null;
     lastSyncError = null;
     lastSyncedAt = new Date().toISOString();
     return true;
