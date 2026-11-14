@@ -6,6 +6,7 @@ import {
   StringSelectMenuBuilder
 } from 'discord.js';
 import { CONFIG, hexToInt } from './config.js';
+import { PIX_KEY_DEFAULT } from './pix.js';
 
 const brandColor = () => hexToInt(CONFIG.brand.color);
 
@@ -102,9 +103,9 @@ export function makeShopPanel(kits = []) {
     .setColor(brandColor())
     .setTitle('Loja de kits')
     .setDescription(
-      kits.length
+      kits.some(canBuyKit)
         ? CONFIG.shop.panelDescription
-        : 'A loja ainda não possui kits disponíveis. A equipe precisa cadastrar os produtos antes de receber pedidos.'
+        : 'A loja ainda não possui kits ativos com preço definido.'
     );
 
   const button = new ButtonBuilder()
@@ -265,7 +266,7 @@ export function makeOrderEmbed({ userId, kit, minecraftNick }) {
       { name: 'Kit', value: displayKitName(kit), inline: true },
       { name: 'Valor', value: String(kit.price || '—'), inline: true },
       { name: 'Nick', value: String(minecraftNick || '—'), inline: true },
-      { name: 'Chave Pix', value: '`keybytes.a@gmail.com`', inline: true },
+      { name: 'Chave Pix', value: '`' + PIX_KEY_DEFAULT + '`', inline: true },
       { name: 'Comprovante', value: 'Anexe a imagem ou o PDF nesta conversa.', inline: false }
     )
     .setTimestamp();
