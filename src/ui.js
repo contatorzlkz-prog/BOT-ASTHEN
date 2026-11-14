@@ -19,14 +19,41 @@ function safeImageUrl(value) {
   }
 }
 
-const supportButtonStyles = {
-  bug: ButtonStyle.Secondary,
-  hack: ButtonStyle.Danger,
-  duvida: ButtonStyle.Primary,
-  geral: ButtonStyle.Success
-};
+const supportOptions = [
+  {
+    value: 'compras',
+    label: 'Dúvidas & Compras',
+    description: 'Informações sobre produtos, pedidos e pagamentos.',
+    emoji: '🛒'
+  },
+  {
+    value: 'licencas',
+    label: 'Licenças & Suporte',
+    description: 'Ajuda técnica, configuração e ativação.',
+    emoji: '🔑'
+  },
+  {
+    value: 'bugs',
+    label: 'Reportar Bugs',
+    description: 'Envie logs, imagens e detalhes sobre falhas.',
+    emoji: '🐛'
+  },
+  {
+    value: 'parcerias',
+    label: 'Parcerias & Comercial',
+    description: 'Propostas comerciais e parcerias.',
+    emoji: '🤝'
+  },
+  {
+    value: 'marketing',
+    label: 'Marketing & Serviços',
+    description: 'Contratação de serviços e orçamentos.',
+    emoji: '📣'
+  }
+];
 
 const supportTitles = {
+  ...Object.fromEntries(supportOptions.map(option => [option.value, option.label])),
   bug: 'Reportar bug',
   hack: 'Reportar hack',
   duvida: 'Tirar dúvida',
@@ -40,20 +67,25 @@ export function makeSupportPanel() {
     .setColor(brandColor())
     .setTitle('Atendimento')
     .setDescription(
-      'Precisa de ajuda? Escolha abaixo o assunto que melhor descreve o que aconteceu. ' +
-      'O bot abrirá um canal privado, visível somente para você e para a equipe autorizada.\n\n' +
-      'Para agilizar o atendimento, explique a situação com detalhes e envie imagens ou vídeos quando forem úteis. ' +
-      'A equipe responderá dentro do próprio canal; não é necessário abrir vários tickets para o mesmo assunto.'
+      'Precisa de ajuda? Selecione o departamento que melhor combina com o assunto. ' +
+      'O bot abrirá um canal privado, visível somente para você e para a equipe autorizada.\\n\\n' +
+      'Explique o que aconteceu e envie logs ou imagens quando forem úteis. Escolha apenas uma opção; ' +
+      'a equipe continuará o atendimento dentro do próprio canal.'
     );
 
-  const buttons = Object.entries(supportTitles).map(([kind, label]) =>
-    new ButtonBuilder()
-      .setCustomId('support:open:' + kind)
-      .setLabel(label)
-      .setStyle(supportButtonStyles[kind])
-  );
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId('support:select')
+    .setPlaceholder('Selecione um departamento para abrir ticket...')
+    .setMinValues(1)
+    .setMaxValues(1)
+    .addOptions(supportOptions.map(option => ({
+      label: option.label,
+      description: option.description,
+      value: option.value,
+      emoji: option.emoji
+    })));
 
-  return { embeds: [embed], components: [new ActionRowBuilder().addComponents(buttons)] };
+  return { embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] };
 }
 
 export function makeShopPanel(kits = []) {
@@ -127,7 +159,7 @@ export function makeSupportTicketEmbed(kind, user) {
     .setColor(supportColor(kind))
     .setTitle(supportTitles[kind] || 'Atendimento')
     .setDescription(
-      descriptions[kind] +
+      (descriptions[kind] || descriptions.geral || 'Descreva o assunto para a equipe.') +
       '\n\n**Como continuar:** envie as informações neste canal e aguarde a equipe. ' +
       'Este atendimento é privado. Não compartilhe senhas, tokens ou dados de pagamento.'
     )
