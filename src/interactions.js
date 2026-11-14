@@ -8,15 +8,16 @@ import {
 } from 'discord.js';
 import { randomUUID } from 'node:crypto';
 import {
-  addKit,
   deletePurchaseDraft,
   findOpenTicket,
   getGuildConfig,
   getPurchaseDraft,
   getTicket,
+  makeKitDisplayName,
   removeKit,
   savePurchaseDraft,
   updateGuildConfig,
+  updateKit,
   updateTicket
 } from './store.js';
 import {
@@ -24,29 +25,28 @@ import {
   makeCatalogMenu,
   makeChannelLinkRow,
   makeCloseRow,
-  makeKitWizardEmbed,
+  makeKitAdminMenu,
+  makeKitEditFieldMenu,
+  makeKitRemoveControls,
   makeKitPreviewEmbed,
   makeKitPreviewControls,
   makeDeliveryEmbed,
   makeDeliveryRetryControls,
-  makeMissingPixEmbed,
   makeOrderControls,
   makeOrderEmbed,
   makeOrderLogEmbed,
-  makePixEmbed,
   makePurchaseReviewControls,
   makePurchaseReviewEmbed,
   makeShopPanel,
   makeSupportPanel,
-  makeSupportTicketEmbed,
-  makeWizardButton
+  makeSupportTicketEmbed
 } from './ui.js';
 import { archiveAndDeleteTicket, createPrivateTicket } from './tickets.js';
 import { CONFIG } from './config.js';
-import { deliverKit, getBridgeSecret, getBridgeStatus, regenerateBridgeSecret } from './bridge.js';
+import { deliverKit, getBridgeSecret, getBridgeStatus } from './bridge.js';
+import { PIX_KEY_DEFAULT, PIX_QR_FILENAME, PIX_QR_IMAGE_PATH } from './pix.js';
 import { getSupabaseStatus } from './supabase.js';
 
-const kitWizards = new Map();
 const closingTickets = new Set();
 
 function normalizeImageUrl(value) {
@@ -236,169 +236,138 @@ async function configureChannels(interaction) {
   );
 }
 
-async function configurePix(interaction) {
-  if (!canManage(interaction)) {
-    return replyPrivate(interaction, 'Você precisa da permissão Gerenciar servidor para alterar o Pix.');
-  }
-  const pixKey = interaction.options.getString('chave', true).trim();
-  const pixInstructions = interaction.options.getString('instrucoes')?.trim() ?? '';
-  updateGuildConfig(interaction.guildId, { pixKey, pixInstructions });
-  return replyPrivate(interaction, 'Dados de pagamento salvos. Eles serão exibidos nos próximos pedidos.');
-}
-
-function makeKitFieldModal(field) {
-  const options = {
-    name: { title: 'Nome do kit', label: 'Nome exato do plugin', placeholder: 'Ex.: Kit_Ferro', max: 32 },
-    price: { title: 'Preço do kit', label: 'Preço', placeholder: 'Ex.: R$ 9,90', max: 30 },
-    description: { title: 'Descrição do kit', label: 'Descrição', placeholder: 'Explique o que vem neste kit', max: 180 }
+function makeKitEditModal(kit, field) {
+  const fields = {
+    displayName: { title: 'Nome na loja', label: 'Nome que o cliente verá', placeholder: 'Ex.: Kit do Guerreiro', max: 80, style: TextInputStyle.Short },
+    price: { title: 'Preço do kit', label: 'Novo preço', placeholder: 'Ex.: R$ 19,90', max: 30, style: TextInputStyle.Short },
+    description: { title: 'Descrição do kit', label: 'Descrição exibida na loja', placeholder: 'Explique brevemente o que o kit oferece', max: 800, style: TextInputStyle.Paragraph },
+    imageUrl: { title: 'Imagem do kit', label: 'Link HTTPS da imagem', placeholder: 'https://.../imagem.png', max: 500, style: TextInputStyle.Short }
   };
-  const item = options[field];
+  const config = fields[field];
+  if (!config) throw new Error('Campo de edição desconhecido.');
+
   const input = new TextInputBuilder()
-    .setCustomId(field)
-    .setLabel(item.label)
-    .setPlaceholder(item.placeholder)
-    .setStyle(field === 'description' ? TextInputStyle.Paragraph : TextInputStyle.Short)
-    .setMaxLength(item.max)
-    .setMinLength(1)
-    .setRequired(true);
+    .setCustomId('value')
+    .setLabel(config.label)
+    .setPlaceholder(config.placeholder)
+    .setStyle(config.style)
+    .setMaxLength(config.max)
+    .setRequired(field !== 'imageUrl' && field !== 'description');
 
-  const modal = new ModalBuilder()
-    .setCustomId('kit:field:' + field)
-    .setTitle(item.title)
+  const current = String(kit[field] || '');
+  if (current) input.setValue(current.slice(0, config.max));
+
+  return new ModalBuilder()
+    .setCustomId('kit:edit-modal:' + field + ':' + kit.id)
+    .setTitle(config.title)
     .addComponents(new ActionRowBuilder().addComponents(input));
-
-  if (field === 'description') {
-    const imageInput = new TextInputBuilder()
-      .setCustomId('imageUrl')
-      .setLabel('Link da imagem (opcional)')
-      .setPlaceholder('https://.../imagem.png')
-      .setStyle(TextInputStyle.Short)
-      .setMaxLength(500)
-      .setRequired(false);
-    modal.addComponents(new ActionRowBuilder().addComponents(imageInput));
-  }
-
-  return modal;
 }
 
-
-async function startKitWizard(interaction) {
-  if (!canManage(interaction)) return replyPrivate(interaction, 'Você não tem permissão para cadastrar kits.');
+async function handleKitCommand(interaction) {
+  if (!canManage(interaction)) return replyPrivate(interaction, 'Somente administradores podem gerenciar os kits.');
+  const subcommand = interaction.options.getSubcommand();
   const config = getGuildConfig(interaction.guildId);
-  if (config.kits.length >= CONFIG.shop.maxKits) {
-    return replyPrivate(interaction, 'A loja já atingiu o limite de ' + CONFIG.shop.maxKits + ' kits.');
+
+  if (subcommand === 'listar') {
+    if (!config.kits.length) return replyPrivate(interaction, 'Nenhum kit foi recebido do plugin ainda.');
+    const lines = config.kits.map((kit, index) => {
+      const state = kit.enabled === false ? ' · desativado no Minecraft' : '';
+      const price = kit.price ? kit.price : 'preço não definido';
+      return (index + 1) + '. **' + String(kit.displayName || makeKitDisplayName(kit.name)) + '** — ' + price +
+        state + '\nIdentificador do plugin: `' + kit.name + '`';
+    });
+    return replyPrivate(interaction, lines.join('\n\n').slice(0, 1900));
   }
 
-  kitWizards.set(interaction.user.id, {
-    guildId: interaction.guildId,
-    userId: interaction.user.id,
-    name: '',
-    price: '',
-    description: '',
-    imageUrl: ''
-  });
-  return interaction.showModal(makeKitFieldModal('name'));
-}
+  if (!config.kits.length) return replyPrivate(interaction, 'Nenhum kit foi sincronizado do plugin. Crie o kit no Minecraft e aguarde a sincronização.');
 
-function wizardStage(wizard, nextField) {
-  const content = nextField === 'price'
-    ? 'Nome salvo. Agora informe o preço.'
-    : 'Preço salvo. Agora descreva o que vem no kit.';
-  const label = nextField === 'price' ? 'Definir preço' : 'Definir descrição';
-  return {
-    content,
-    embeds: [makeKitWizardEmbed(wizard)],
-    components: [new ActionRowBuilder().addComponents(makeWizardButton('kit:wizard:' + nextField, label))],
+  const customId = subcommand === 'editar' ? 'kit:edit-select' : 'kit:remove-select';
+  const prompt = subcommand === 'editar'
+    ? 'Selecione o kit e depois escolha qual informação deseja alterar.'
+    : 'Selecione o kit que deseja remover do catálogo da loja.';
+  return interaction.reply({
+    content: prompt,
+    components: [makeKitAdminMenu(config.kits, customId)],
     ephemeral: true
-  };
+  });
 }
 
-async function handleKitField(interaction) {
-  const field = interaction.customId.split(':')[2];
-  const wizard = kitWizards.get(interaction.user.id);
-  if (!wizard || wizard.guildId !== interaction.guildId) {
-    return replyPrivate(interaction, 'Este cadastro expirou. Use /kit adicionar para começar novamente.');
-  }
+async function handleKitAdminSelection(interaction, action) {
+  const kitId = interaction.values[0];
+  const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
+  if (!kit) return replyPrivate(interaction, 'Este kit não está mais no catálogo. Atualize a lista e tente novamente.');
 
-  const value = interaction.fields.getTextInputValue(field).trim();
-  if (field === 'name' && !/^[A-Za-z0-9_-]{1,32}$/.test(value)) {
-    return replyPrivate(interaction, 'Use o nome exato do kit no plugin: de 1 a 32 caracteres, somente letras, números, _ ou -. Exemplo: Kit_Ferro.');
-  }
-  if (value.length < 2 && field !== 'name') {
-    return replyPrivate(interaction, 'O campo precisa ter pelo menos 2 caracteres.');
-  }
-  wizard[field] = value;
-
-  if (field === 'description') {
-    const rawImageUrl = interaction.fields.getTextInputValue('imageUrl').trim();
-    const imageUrl = normalizeImageUrl(rawImageUrl);
-    if (rawImageUrl && !imageUrl) {
-      return replyPrivate(interaction, 'O link da imagem precisa ser um endereço HTTPS válido. Você pode deixar o campo vazio.');
-    }
-    wizard.imageUrl = imageUrl;
-  }
-
-  if (field === 'name') {
-    return interaction.reply({
-      content: 'Nome salvo. Agora informe o preço.',
-      embeds: [makeKitWizardEmbed(wizard)],
-      components: [new ActionRowBuilder().addComponents(makeWizardButton('kit:wizard:price', 'Definir preço'))],
-      ephemeral: true
+  if (action === 'edit') {
+    return interaction.update({
+      content: 'Kit selecionado: **' + String(kit.displayName || makeKitDisplayName(kit.name)) +
+        '**. Escolha o que deseja editar.',
+      embeds: [makeKitPreviewEmbed(kit)],
+      components: [makeKitEditFieldMenu(kit)]
     });
   }
 
-  if (field === 'price') return interaction.reply(wizardStage(wizard, 'description'));
+  return interaction.update({
+    content: 'Confirma a remoção de **' + String(kit.displayName || makeKitDisplayName(kit.name)) +
+      '** do catálogo da loja? O kit e os itens do servidor Minecraft não serão apagados.',
+    embeds: [],
+    components: [makeKitRemoveControls(kit.id)]
+  });
+}
 
+async function handleKitEditFieldSelection(interaction) {
+  const kitId = interaction.customId.split(':')[2];
+  const field = interaction.values[0];
+  const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
+  if (!kit) return replyPrivate(interaction, 'Este kit não está mais no catálogo.');
+  return interaction.showModal(makeKitEditModal(kit, field));
+}
+
+async function handleKitEditModal(interaction) {
+  const [, , field, kitId] = interaction.customId.split(':');
+  const current = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
+  if (!current) return replyPrivate(interaction, 'Este kit não está mais no catálogo.');
+
+  const value = interaction.fields.getTextInputValue('value').trim();
+  const changes = {};
+
+  if (field === 'displayName') {
+    if (value.length < 2) return replyPrivate(interaction, 'O nome exibido precisa ter pelo menos 2 caracteres.');
+    changes.displayName = value;
+  } else if (field === 'price') {
+    if (value.length < 2) return replyPrivate(interaction, 'Informe um preço válido, por exemplo R$ 19,90.');
+    changes.price = value;
+  } else if (field === 'description') {
+    changes.description = value;
+  } else if (field === 'imageUrl') {
+    const imageUrl = normalizeImageUrl(value);
+    if (value && !imageUrl) return replyPrivate(interaction, 'A imagem precisa ser um link HTTPS válido.');
+    changes.imageUrl = imageUrl || '';
+  } else {
+    return replyPrivate(interaction, 'Campo de edição inválido.');
+  }
+
+  const updated = updateKit(interaction.guildId, kitId, changes);
+  await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
   return interaction.reply({
-    content: 'Confira os dados e salve o kit.',
-    embeds: [makeKitWizardEmbed(wizard)],
-    components: [new ActionRowBuilder().addComponents(
-      makeWizardButton('kit:wizard:save', 'Salvar kit', ButtonStyle.Success),
-      makeWizardButton('kit:wizard:cancel', 'Cancelar', ButtonStyle.Danger)
-    )],
+    content: 'Informação do kit atualizada e salva no catálogo.',
+    embeds: updated ? [makeKitPreviewEmbed(updated)] : [],
     ephemeral: true
   });
 }
 
+async function confirmKitRemoval(interaction, kitId) {
+  const config = getGuildConfig(interaction.guildId);
+  const kit = config.kits.find(item => item.id === kitId);
+  if (!kit) return interaction.update({ content: 'Este kit já foi removido.', embeds: [], components: [] });
 
-async function handleKitWizardButton(interaction) {
-  const action = interaction.customId.split(':')[2];
-  const wizard = kitWizards.get(interaction.user.id);
-  if (!wizard || wizard.guildId !== interaction.guildId) {
-    return replyPrivate(interaction, 'Este cadastro expirou. Use /kit adicionar para começar novamente.');
-  }
-
-  if (action === 'price' || action === 'description') {
-    return interaction.showModal(makeKitFieldModal(action));
-  }
-
-  if (action === 'cancel') {
-    kitWizards.delete(interaction.user.id);
-    return interaction.update({ content: 'Cadastro cancelado.', embeds: [], components: [] });
-  }
-
-  if (action === 'save') {
-    const config = getGuildConfig(interaction.guildId);
-    if (config.kits.length >= CONFIG.shop.maxKits) {
-      kitWizards.delete(interaction.user.id);
-      return interaction.update({ content: 'A loja atingiu o limite de kits. Remova um e comece novamente.', embeds: [], components: [] });
-    }
-    if (config.kits.some(kit => kit.name.toLocaleLowerCase('pt-BR') === wizard.name.toLocaleLowerCase('pt-BR'))) {
-      return replyPrivate(interaction, 'Já existe um kit com esse nome. Cancele e use outro nome.');
-    }
-
-    const kit = {
-      id: randomUUID().slice(0, 10),
-      name: wizard.name,
-      price: wizard.price,
-      description: wizard.description,
-      imageUrl: wizard.imageUrl || ''
-    };
-    addKit(interaction.guildId, kit);
-    kitWizards.delete(interaction.user.id);
-    await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
-    return interaction.update({ content: 'Kit **' + kit.name + '** adicionado à loja.', embeds: [], components: [] });
-  }
+  removeKit(interaction.guildId, kitId);
+  await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
+  return interaction.update({
+    content: '**' + String(kit.displayName || makeKitDisplayName(kit.name)) +
+      '** foi removido do catálogo e da tabela de kits do Supabase. O arquivo do kit no Minecraft não foi apagado.',
+    embeds: [],
+    components: []
+  });
 }
 
 async function syncShopPanel(guild, config = getGuildConfig(guild.id)) {
