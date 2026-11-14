@@ -569,21 +569,78 @@ async function handleNickSubmit(interaction) {
     if (draft.revision !== requestedRevision) {
       return replyPrivate(interaction, 'Esta etapa da compra já foi atualizada. Use a revisão mais recente.');
     }
+    draft.minecraftNick = minecraftNick;
+    draft.stage = 'review';
+    draft.revision = randomUUID().slice(0, 8);
+    savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
+    return interaction.reply({
+      content: 'Nick atualizado. Confira os dados antes de continuar.',
+      embeds: [makePurchaseReviewEmbed(draft)],
+      components: [makePurchaseReviewControls(draft)],
+      ephemeral: true
+    });
+  }
+
+  const config = getGuildConfig(interaction.guildId);
+  const currentKit = config.kits.find(kit => kit.id === draft.kit?.id);
+  if (!currentKit) {
+    deletePurchaseDraft(interaction.guildId, interaction.user.id);
+    return replyPrivate(interaction, 'Este kit não está mais disponível. Escolha outro produto.');
   }
 
   draft.minecraftNick = minecraftNick;
-  draft.stage = 'review';
+  draft.stage = 'creating';
   draft.revision = randomUUID().slice(0, 8);
   savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
+  await interaction.deferReply({ ephemeral: true });
 
-  return interaction.reply({
-    content: 'Revise os dados antes de continuar.',
-    embeds: [makePurchaseReviewEmbed(draft)],
-    components: [makePurchaseReviewControls(draft)],
-    ephemeral: true
-  });
+  try {
+    const result = await createPrivateTicket({
+      guild: interaction.guild,
+      user: interaction.user,
+      type: 'shop',
+      kit: currentKit,
+      minecraftNick
+    });
+
+    if (!result.alreadyOpen) {
+      const latestConfig = getGuildConfig(interaction.guildId);
+      const orderCode = result.channel.id.slice(-6).toUpperCase();
+      const staffMention = latestConfig.staffRoleId ? '<@&' + latestConfig.staffRoleId + '>' : '';
+      const embeds = [
+        makeOrderEmbed({
+          user: interaction.user,
+          kit: currentKit,
+          minecraftNick,
+          orderCode
+        }),
+        latestConfig.pixKey ? makePixEmbed(latestConfig) : makeMissingPixEmbed()
+      ];
+
+      await result.channel.send({
+        content: (interaction.user.toString() + ' ' + staffMention).trim(),
+        embeds,
+        components: [makeOrderControls()],
+        allowedMentions: {
+          users: [interaction.user.id],
+          roles: latestConfig.staffRoleId ? [latestConfig.staffRoleId] : []
+        }
+      });
+    }
+
+    deletePurchaseDraft(interaction.guildId, interaction.user.id);
+    await interaction.editReply({
+      content: result.alreadyOpen
+        ? 'Você já tem um pedido em andamento.'
+        : 'Nick confirmado. Seu ticket privado já está aberto com a prévia do kit.',
+      components: [makeChannelLinkRow(result.channel)]
+    });
+  } catch (error) {
+    draft.stage = 'selected';
+    savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
+    throw error;
+  }
 }
-
 async function editMinecraftNick(interaction, requestedRevision) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
   if (!draft) return replyPrivate(interaction, 'Sua compra não está mais em preparação. Abra o catálogo novamente.');
