@@ -8,79 +8,44 @@ const textChannel = option => option
 export const commandDefinitions = [
   adminOnly(new SlashCommandBuilder()
     .setName('configurar')
-    .setDescription('Define os canais do suporte, loja e atendimento.')
+    .setDescription('Configura os canais e o cargo da equipe.')
     .addChannelOption(option => textChannel(option
       .setName('suporte')
-      .setDescription('Canal que receberá o painel de suporte.')))
+      .setDescription('Canal do painel de atendimento.')))
     .addChannelOption(option => textChannel(option
       .setName('loja')
-      .setDescription('Canal que receberá o painel da loja.')))
+      .setDescription('Canal do painel para escolher kits.')))
     .addChannelOption(option => textChannel(option
       .setName('logs')
-      .setDescription('Canal privado para decisões e registros dos pedidos.')))
+      .setDescription('Canal privado de registros administrativos.')))
     .addChannelOption(option => textChannel(option
       .setName('compradores')
-      .setDescription('Canal público para anunciar compras aprovadas.')))
+      .setDescription('Canal de avisos de compras confirmadas.')))
     .addRoleOption(option => option
       .setName('equipe')
-      .setDescription('Cargo autorizado a atender e revisar pedidos.')
-      .setRequired(false))),
-
-  adminOnly(new SlashCommandBuilder()
-    .setName('pix')
-    .setDescription('Configura os dados de pagamento da loja.')
-    .addStringOption(option => option
-      .setName('chave')
-      .setDescription('Chave Pix que será exibida no pedido.')
-      .setMaxLength(120)
-      .setRequired(true))
-    .addStringOption(option => option
-      .setName('instrucoes')
-      .setDescription('Orientações para o cliente após o pagamento.')
-      .setMaxLength(500)
+      .setDescription('Cargo autorizado a revisar pagamentos e fechar tickets.')
       .setRequired(false))),
 
   adminOnly(new SlashCommandBuilder()
     .setName('kit')
-    .setDescription('Gerencia os kits disponíveis na loja.')
-    .addSubcommand(subcommand => subcommand
-      .setName('adicionar')
-      .setDescription('Abre o cadastro guiado de um kit.'))
+    .setDescription('Gerencia os kits sincronizados com o Minecraft.')
     .addSubcommand(subcommand => subcommand
       .setName('listar')
-      .setDescription('Lista os kits cadastrados.'))
+      .setDescription('Lista os kits recebidos do plugin.'))
     .addSubcommand(subcommand => subcommand
-      .setName('preco')
-      .setDescription('Define ou altera o preço de um kit.')
-      .addStringOption(option => option
-        .setName('nome')
-        .setDescription('Nome exato do kit.')
-        .setMaxLength(32)
-        .setRequired(true))
-      .addStringOption(option => option
-        .setName('valor')
-        .setDescription('Novo preço. Exemplo: R$ 19,90.')
-        .setMaxLength(30)
-        .setRequired(true)))
+      .setName('editar')
+      .setDescription('Escolhe um kit e o campo que deseja alterar.'))
     .addSubcommand(subcommand => subcommand
       .setName('remover')
-      .setDescription('Remove um kit pelo nome.')
-      .addStringOption(option => option
-        .setName('nome')
-        .setDescription('Nome do kit que será removido.')
-        .setMaxLength(32)
-        .setRequired(true)))),
+      .setDescription('Remove um kit do catálogo da loja.'))),
 
   adminOnly(new SlashCommandBuilder()
     .setName('bridge')
-    .setDescription('Consulta e gerencia a integração Minecraft.')
+    .setDescription('Verifica a API de integração Minecraft.')
     .addSubcommand(subcommand => subcommand
       .setName('status')
-      .setDescription('Mostra o estado da API e a conexão do plugin.'))
+      .setDescription('Mostra o estado da API e a última sincronização.'))
     .addSubcommand(subcommand => subcommand
       .setName('chave')
-      .setDescription('Exibe em privado a chave que deve ser colada no plugin.'))
-    .addSubcommand(subcommand => subcommand
-      .setName('regenerar')
-      .setDescription('Gera uma nova chave de integração. A chave antiga deixa de funcionar.')))
+      .setDescription('Mostra a chave fixa para configurar o plugin.')))
 ];
