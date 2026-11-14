@@ -9,6 +9,16 @@ import { CONFIG, hexToInt } from './config.js';
 
 const brandColor = () => hexToInt(CONFIG.brand.color);
 
+function safeImageUrl(value) {
+  if (!value) return null;
+  try {
+    const url = new URL(String(value));
+    return url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 const supportButtonStyles = {
   bug: ButtonStyle.Secondary,
   hack: ButtonStyle.Danger,
@@ -79,6 +89,38 @@ export function makeCatalogMenu(kits = []) {
   return new ActionRowBuilder().addComponents(menu);
 }
 
+export function makeKitPreviewEmbed(kit) {
+  const embed = new EmbedBuilder()
+    .setColor(brandColor())
+    .setTitle('Prévia do kit: ' + String(kit.name))
+    .setDescription(String(kit.description || 'Este kit não possui uma descrição cadastrada.'))
+    .addFields(
+      { name: 'Preço', value: String(kit.price || 'A consultar'), inline: true },
+      { name: 'Identificador no Minecraft', value: '`' + String(kit.name) + '`', inline: true }
+    );
+  const image = safeImageUrl(kit.imageUrl);
+  if (image) embed.setImage(image);
+  return embed;
+}
+
+export function makeKitPreviewControls(draft) {
+  const revision = String(draft.revision || '0');
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('shop:switch-kit:' + revision)
+      .setLabel('Trocar kit')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('shop:kit-confirm:' + revision)
+      .setLabel('Confirmar kit')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('shop:cancel:' + revision)
+      .setLabel('Cancelar')
+      .setStyle(ButtonStyle.Danger)
+  );
+}
+
 export function makeSupportTicketEmbed(kind, user) {
   const descriptions = CONFIG.support.descriptions;
   return new EmbedBuilder()
@@ -94,16 +136,19 @@ export function makeSupportTicketEmbed(kind, user) {
 }
 
 export function makePurchaseReviewEmbed(draft) {
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(brandColor())
     .setTitle('Revise seu pedido')
     .setDescription(CONFIG.shop.reviewDescription)
     .addFields(
-      { name: 'Kit escolhido', value: draft.kit.name, inline: true },
-      { name: 'Valor', value: draft.kit.price, inline: true },
-      { name: 'Nick do Minecraft', value: draft.minecraftNick, inline: true },
+      { name: 'Kit escolhido', value: String(draft.kit.name), inline: true },
+      { name: 'Valor', value: String(draft.kit.price), inline: true },
+      { name: 'Nick do Minecraft Java', value: String(draft.minecraftNick), inline: true },
       { name: 'O que está incluído', value: String(draft.kit.description || 'Consulte a equipe.'), inline: false }
     );
+  const image = safeImageUrl(draft.kit.imageUrl);
+  if (image) embed.setImage(image);
+  return embed;
 }
 
 export function makePurchaseReviewControls(draft) {
@@ -111,12 +156,16 @@ export function makePurchaseReviewControls(draft) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('shop:confirm:' + revision)
-      .setLabel('Confirmar e ir para pagamento')
+      .setLabel('Confirmar pedido')
       .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('shop:switch-kit:' + revision)
+      .setLabel('Trocar kit')
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('shop:edit-nick:' + revision)
       .setLabel('Editar nick')
-      .setStyle(ButtonStyle.Secondary),
+      .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('shop:cancel:' + revision)
       .setLabel('Cancelar')
@@ -125,24 +174,60 @@ export function makePurchaseReviewControls(draft) {
 }
 
 export function makeOrderEmbed({ user, kit, minecraftNick, orderCode }) {
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(brandColor())
-    .setTitle('Pedido de compra')
+    .setTitle('Pedido de compra · ' + String(kit.name))
     .setDescription(
-      'Seu pedido foi aberto. Confira os dados antes de realizar o pagamento. ' +
-      'Depois de pagar, envie o comprovante neste canal para a equipe conferir. ' +
-      'A aprovação será feita manualmente após a análise.'
+      'Seu pedido foi aberto. Confira a prévia do kit abaixo. ' +
+      'Faça o pagamento usando os dados deste canal e envie o comprovante para a equipe conferir. ' +
+      'A entrega no Minecraft só será solicitada depois da confirmação manual do pagamento.'
     )
     .addFields(
       { name: 'Pedido', value: orderCode, inline: true },
       { name: 'Cliente', value: String(user), inline: true },
-      { name: 'Kit', value: kit.name, inline: true },
-      { name: 'Valor', value: kit.price, inline: true },
-      { name: 'Nick do Minecraft', value: minecraftNick, inline: true },
+      { name: 'Kit', value: String(kit.name), inline: true },
+      { name: 'Valor', value: String(kit.price), inline: true },
+      { name: 'Nick do Minecraft Java', value: String(minecraftNick), inline: true },
       { name: 'Conteúdo do kit', value: String(kit.description || 'Consulte a equipe.'), inline: false },
       { name: 'Comprovante', value: CONFIG.order.receiptInstructions, inline: false }
     )
     .setTimestamp();
+  const image = safeImageUrl(kit.imageUrl);
+  if (image) embed.setImage(image);
+  return embed;
+}
+
+export function makeDeliveryEmbed(result) {
+  const status = String(result.status || 'UNKNOWN');
+  const delivered = status === 'KIT_DELIVERED';
+  const pending = status === 'KIT_PENDING';
+  return new EmbedBuilder()
+    .setColor(delivered ? 0x3BA55D : pending ? 0xD4A72C : 0xD45B5B)
+    .setTitle(delivered ? 'Kit entregue no Minecraft' : pending ? 'Kit guardado para retirada' : 'Resultado da entrega')
+    .setDescription(String(result.message || (delivered
+      ? 'O plugin confirmou a entrega do kit.'
+      : pending
+        ? 'O inventário estava cheio. O plugin guardou o kit para o jogador retirar.'
+        : 'O plugin não confirmou a entrega. Confira o resultado e tente novamente quando necessário.')))
+    .addFields(
+      { name: 'Jogador', value: String(result.player || '—'), inline: true },
+      { name: 'Kit', value: String(result.kit || '—'), inline: true },
+      { name: 'Status', value: status, inline: true }
+    )
+    .setTimestamp();
+}
+
+export function makeDeliveryRetryControls(mode = 'same') {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('delivery:retry:' + mode)
+      .setLabel(mode === 'new' ? 'Criar nova tentativa' : 'Tentar novamente')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('ticket:close')
+      .setLabel('Fechar')
+      .setStyle(ButtonStyle.Secondary)
+  );
 }
 
 export function makePixEmbed(config) {
@@ -229,16 +314,20 @@ export function makeBuyerAnnouncement(ticket) {
 
 export function makeKitWizardEmbed(wizard) {
   const complete = [wizard.name, wizard.price, wizard.description].filter(Boolean).length;
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(brandColor())
     .setTitle('Novo kit')
-    .setDescription('Cadastro em etapas. Preencha os três campos e salve.')
+    .setDescription('Cadastre o identificador do plugin, o preço, a descrição e, se tiver, uma imagem comercial.')
     .addFields(
-      { name: 'Nome', value: wizard.name || 'Pendente', inline: true },
+      { name: 'Nome exato no plugin', value: wizard.name || 'Pendente', inline: true },
       { name: 'Preço', value: wizard.price || 'Pendente', inline: true },
       { name: 'Descrição', value: wizard.description || 'Pendente', inline: false },
+      { name: 'Imagem', value: wizard.imageUrl ? 'Imagem configurada' : 'Sem imagem (opcional)', inline: false },
       { name: 'Progresso', value: complete + '/3 etapas', inline: false }
     );
+  const image = safeImageUrl(wizard.imageUrl);
+  if (image) embed.setImage(image);
+  return embed;
 }
 
 export function makeWizardButton(customId, label, style = ButtonStyle.Primary) {
