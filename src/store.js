@@ -1,4 +1,5 @@
-import { scheduleSupabaseSync, initializeSupabaseSync } from './supabase.js';
+import { randomUUID } from 'node:crypto';
+import { scheduleSupabaseSync, scheduleSupabaseKitsSync, initializeSupabaseSync } from './supabase.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,10 +8,36 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.resolve(currentDir, '../data');
 const dataFile = path.join(dataDir, 'state.json');
 
-const demoKits = () => [];
+const LEGACY_SAMPLE_KITS = new Set([
+  'kit keep',
+  'kit ferro',
+  'kit dima',
+  'kit netherita',
+  'kit elytra',
+  'kit construcao'
+]);
 
 const emptyState = () => ({ guilds: {}, tickets: {}, purchaseDrafts: {} });
 let state = emptyState();
+
+function normalizeKitName(name) {
+  return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+export function makeKitDisplayName(name) {
+  return String(name || 'Kit')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 100);
+}
+
+function isLegacySampleKit(kit) {
+  return LEGACY_SAMPLE_KITS.has(normalizeKitName(kit?.name))
+    || LEGACY_SAMPLE_KITS.has(normalizeKitName(kit?.displayName));
+}
 
 function defaultGuildConfig() {
   return {
@@ -23,10 +50,8 @@ function defaultGuildConfig() {
     logsChannelId: null,
     buyersChannelId: null,
     staffRoleId: null,
-    pixKey: null,
-    pixInstructions: '',
-    kits: demoKits(),
-    demoKitsLoaded: true
+    kits: [],
+    hiddenPluginKits: []
   };
 }
 
@@ -35,14 +60,32 @@ function ensureGuildConfig(guildId) {
   const config = state.guilds[guildId];
   const defaults = defaultGuildConfig();
 
-  if (!('demoKitsLoaded' in config)) {
-    if (Array.isArray(config.kits) && config.kits.length === 0) config.kits = demoKits();
-    config.demoKitsLoaded = true;
-  }
-
   for (const [key, value] of Object.entries(defaults)) {
     if (!(key in config)) config[key] = value;
   }
+
+  if (!Array.isArray(config.kits)) config.kits = [];
+  if (!Array.isArray(config.hiddenPluginKits)) config.hiddenPluginKits = [];
+
+  // Remove only the six sample entries that shipped with 2.4.0.
+  // Real custom kits are preserved.
+  const before = config.kits.length;
+  config.kits = config.kits.filter(kit => !isLegacySampleKit(kit));
+  if (config.kits.length !== before) {
+    config.hiddenPluginKits = [...new Set([
+      ...config.hiddenPluginKits,
+      ...Array.from(LEGACY_SAMPLE_KITS)
+    ])];
+  }
+
+  config.kits = config.kits.map(kit => ({
+    ...kit,
+    displayName: kit.displayName || makeKitDisplayName(kit.name),
+    description: String(kit.description || ''),
+    imageUrl: String(kit.imageUrl || ''),
+    price: String(kit.price || '')
+  }));
+
   return config;
 }
 
@@ -80,7 +123,11 @@ export function saveStore({ syncRemote = true } = {}) {
       fs.closeSync(descriptor);
     }
     fs.renameSync(temporaryFile, dataFile);
-    if (syncRemote) scheduleSupabaseSync(JSON.parse(contents));
+    if (syncRemote) {
+      const snapshot = JSON.parse(contents);
+      scheduleSupabaseSync(snapshot);
+      scheduleSupabaseKitsSync(snapshot);
+    }
   } catch (error) {
     try { fs.rmSync(temporaryFile, { force: true }); } catch {}
     throw new Error('Falha ao salvar data/state.json: ' + error.message);
@@ -88,7 +135,7 @@ export function saveStore({ syncRemote = true } = {}) {
 }
 
 export async function initializeStoreSync() {
-  return initializeSupabaseSync({
+  const result = await initializeSupabaseSync({
     getSnapshot: () => JSON.parse(JSON.stringify(state)),
     applySnapshot: remote => {
       state = {
@@ -100,6 +147,9 @@ export async function initializeStoreSync() {
     },
     saveLocal: () => saveStore({ syncRemote: false })
   });
+  const snapshot = JSON.parse(JSON.stringify(state));
+  scheduleSupabaseKitsSync(snapshot);
+  return result;
 }
 
 export function getGuildConfig(guildId) {
@@ -115,17 +165,94 @@ export function updateGuildConfig(guildId, changes) {
 
 export function addKit(guildId, kit) {
   const config = ensureGuildConfig(guildId);
-  if (config.kits.length >= 25) throw new Error('A loja já tem 25 kits. Remova um antes de adicionar outro.');
-  config.kits.push(kit);
+  if (config.kits.length >= 200) throw new Error('O catálogo já atingiu o limite de 200 kits.');
+  if (config.kits.some(item => normalizeKitName(item.name) === normalizeKitName(kit.name))) {
+    throw new Error('Já existe um kit com esse identificador.');
+  }
+  config.kits.push({
+    ...kit,
+    displayName: kit.displayName || makeKitDisplayName(kit.name),
+    pluginManaged: Boolean(kit.pluginManaged)
+  });
   saveStore();
+}
+
+export function updateKit(guildId, kitId, changes) {
+  const config = ensureGuildConfig(guildId);
+  const index = config.kits.findIndex(kit => kit.id === kitId);
+  if (index < 0) return null;
+  config.kits[index] = { ...config.kits[index], ...changes };
+  saveStore();
+  return config.kits[index];
 }
 
 export function removeKit(guildId, kitId) {
   const config = ensureGuildConfig(guildId);
-  const before = config.kits.length;
+  const target = config.kits.find(kit => kit.id === kitId);
+  if (!target) return false;
+
+  // Removing a plugin-managed listing hides it until the plugin reports that
+  // the underlying kit was deleted. The next full sync will remove stale DB rows.
+  if (target.pluginManaged) {
+    config.hiddenPluginKits = [...new Set([
+      ...config.hiddenPluginKits,
+      normalizeKitName(target.name)
+    ])];
+  }
+
   config.kits = config.kits.filter(kit => kit.id !== kitId);
   saveStore();
-  return config.kits.length !== before;
+  return true;
+}
+
+/**
+ * Reconcile the plugin's complete kit list with the store catalog.
+ * New Minecraft kits appear automatically, while their shop metadata remains editable.
+ * Kits removed from the plugin disappear from the store and Supabase.
+ */
+export function syncPluginKits(guildId, pluginKits) {
+  const config = ensureGuildConfig(guildId);
+  const incoming = Array.isArray(pluginKits)
+    ? pluginKits.filter(item => item && typeof item.name === 'string'
+      && /^[A-Za-z0-9_-]{1,32}$/.test(item.name))
+    : null;
+  if (!incoming) return { changed: false, kits: config.kits };
+
+  const incomingByName = new Map();
+  for (const item of incoming) incomingByName.set(normalizeKitName(item.name), item);
+  const hidden = new Set(config.hiddenPluginKits);
+  // Once a removed plugin kit is no longer reported, clear its hidden marker.
+  config.hiddenPluginKits = [...hidden].filter(name => incomingByName.has(name));
+
+  const existingByName = new Map(config.kits.map(kit => [normalizeKitName(kit.name), kit]));
+  const manualKits = config.kits.filter(kit => !kit.pluginManaged);
+  const syncedKits = [];
+
+  for (const item of incoming) {
+    const key = normalizeKitName(item.name);
+    if (hidden.has(key)) continue;
+    const old = existingByName.get(key);
+    syncedKits.push({
+      id: old?.id || randomUUID().slice(0, 12),
+      name: item.name,
+      displayName: old?.displayName || makeKitDisplayName(item.name),
+      price: String(old?.price || ''),
+      description: String(old?.description || ''),
+      imageUrl: String(old?.imageUrl || ''),
+      enabled: item.enabled === true,
+      itemCount: Number.isFinite(Number(item.items)) ? Number(item.items) : 0,
+      pluginManaged: true
+    });
+  }
+
+  const next = [...manualKits, ...syncedKits];
+  const beforeJson = JSON.stringify({ kits: config.kits, hidden: config.hiddenPluginKits });
+  const afterJson = JSON.stringify({ kits: next, hidden: config.hiddenPluginKits });
+  if (beforeJson === afterJson) return { changed: false, kits: config.kits };
+
+  config.kits = next;
+  saveStore();
+  return { changed: true, kits: config.kits };
 }
 
 export function getTicket(channelId) {
