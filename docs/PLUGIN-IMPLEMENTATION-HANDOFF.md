@@ -57,29 +57,43 @@ O modo `poll` deve continuar como padrão.
 
 ## 3. Endereço da API e direção da conexão
 
-### Teste local no Windows
+### Teste entre dois computadores (sem VPS Minecraft)
 
-No primeiro teste, o bot Node e um servidor Paper devem estar na mesma máquina Windows:
+O dono do bot e o amigo que executa o plugin estão em computadores diferentes:
+- PC do dono: ASTHEN BOT e API local em `127.0.0.1:8787`.
+- PC do amigo: servidor Paper local e temporário, com o Plugin-ASTHEN.
+- Internet: o plugin inicia conexões HTTPS para a URL pública do túnel que encaminha para a API do dono.
 
-- Bot: `DKB_HOST=127.0.0.1`
-- Bot: `DKB_PORT=8787`
-- Plugin: `bridge.poll.url: "http://127.0.0.1:8787"`
+**Não use `127.0.0.1` na URL do plugin:** no PC do amigo, esse endereço aponta para o próprio PC dele, não para o bot.
 
-O plugin faz a conexão de saída. Não abra uma porta de entrada no servidor Minecraft para essa integração.
+No PC do dono do bot, mantenha no `.env`:
 
-**Importante:** um mundo single-player vanilla não carrega plugins Paper. Para testar no próprio PC, inicie um servidor Paper local e entre nele pelo Minecraft usando `localhost`. Isso continua sendo um teste local, sem VPS.
+```env
+DKB_HOST=127.0.0.1
+DKB_PORT=8787
+```
 
-### Futuro uso com VPS
+Configure um túnel/proxy HTTPS para encaminhar o endereço público para `http://127.0.0.1:8787`. O bot e o túnel precisam permanecer ligados durante o teste. Não abra a porta 8787 no roteador e não exponha HTTP aberto.
 
-Quando o bot for para uma VPS:
+No PC do amigo, use no `plugins/DiscordKitBridge/config.yml`:
 
-- O Node deve ficar atrás de um proxy reverso ou túnel que forneça HTTPS.
-- O plugin usa a URL HTTPS pública desse proxy como `bridge.poll.url`.
-- A URL é a base do bot, sem o sufixo `/plugin/v1`.
-- Por padrão, mantenha o Node em `127.0.0.1:8787` e faça o proxy encaminhar para essa porta local. Se a infraestrutura usar container/rede separada e exigir bind `0.0.0.0`, restrinja o acesso por firewall e mantenha HTTPS na entrada pública.
-- Não envie a chave por HTTP aberto na internet.
+```yaml
+bridge:
+  enabled: true
+  mode: "poll"
+  secret: "COLE_AQUI_A_CHAVE_GERADA_PELO_BOT"
+  poll:
+    url: "https://ENDERECO-HTTPS-DO-TUNEL"
+    interval-seconds: 3
+    max-per-poll: 5
+    http-timeout: 10
+```
 
-Não altere o modo para `server` para tentar resolver o acesso remoto. O modo correto para essa arquitetura é `poll`.
+Substitua a URL de exemplo pelo endereço HTTPS real do túnel. Use somente a URL base, sem o sufixo `/plugin/v1`.
+
+O amigo inicia Paper localmente, instala o plugin nesse servidor e entra no mundo de teste usando `localhost`. **Um mundo single-player vanilla não carrega plugins Paper**; o teste exige Paper, mas não exige host pública ou VPS Minecraft.
+
+O modo `poll` é obrigatório para este cenário: o plugin faz as requisições de saída. Não crie um servidor HTTP no plugin nem peça abertura de porta de entrada no PC do amigo.
 
 ## 4. Contrato HTTP já implementado no bot
 
@@ -200,22 +214,22 @@ A atualização deve manter:
 
 Não implementar o conteúdo dos kits no bot. O bot envia apenas a solicitação.
 
-## 8. Roteiro de teste
+## 8. Roteiro de teste entre os dois computadores
 
-Use um servidor Paper privado no Windows, sem cobrança real e sem publicar a chave:
+1. O dono inicia o ASTHEN BOT no Windows.
+2. O dono inicia o túnel HTTPS encaminhando para `http://127.0.0.1:8787`.
+3. O dono copia a chave com `/bridge chave` e compartilha com o amigo por canal privado.
+4. O amigo inicia um servidor Paper local e temporário no próprio PC e instala o plugin atualizado.
+5. O amigo configura `bridge.secret` com a chave recebida e `bridge.poll.url` com a URL HTTPS pública do túnel.
+6. O amigo reinicia o Paper e confirma no console que o plugin conectou.
+7. O amigo cria um kit de teste com `/dk create Kit_Teste`.
+8. O dono confere a sincronização com `/bridge status` e cadastra `Kit_Teste` na loja.
+9. Fazer uma compra de teste no Discord, informar o nick de um jogador conectado ao Paper e aprovar o pedido manualmente.
+10. Confirmar que o plugin entrega o kit no servidor local e devolve o resultado ao ticket.
+11. Testar chave errada, kit inexistente, jogador offline, inventário cheio, túnel desligado, bot desligado e reinicialização do Paper.
+12. Repetir de forma controlada o mesmo `request_id` para confirmar que não existe entrega duplicada.
 
-1. Inicie o bot e confirme no console que a API está ativa na porta 8787.
-2. No Discord, execute `/bridge chave` como administrador.
-3. Cole a chave no `bridge.secret` do plugin.
-4. Configure `bridge.poll.url: "http://127.0.0.1:8787"` e mantenha `mode: "poll"`.
-5. Reinicie o Paper ou execute `/dk reload`.
-6. Crie uma Shulker Box com poucos itens e registre `/dk create Kit_Teste`.
-7. No Discord, execute `/bridge status` e confirme que o kit foi recebido.
-8. Cadastre `Kit_Teste` com `/kit adicionar`, um preço de teste, uma descrição e um link HTTPS de imagem.
-9. Faça um pedido de teste, informe um nick Java conectado ao Paper e use o ticket privado.
-10. Como administrador, confirme o pedido de teste e verifique se os itens chegam ao jogador.
-11. Reinicie o Paper e repita um pedido com o mesmo `request_id` em um teste controlado para conferir que ele não duplica a entrega.
-12. Teste também: chave errada, chave vazia, kit inexistente, jogador offline, inventário cheio e bot temporariamente indisponível.
+Durante o teste, o bot, o túnel e o Paper precisam permanecer ligados. Se o PC do dono desligar ou o túnel cair, o plugin não conseguirá consultar a API até a conexão voltar.
 
 ## 9. Entrega para revisão
 
