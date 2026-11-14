@@ -54,7 +54,7 @@ async function main() {
   const guildId = process.env.GUILD_ID?.trim();
 
   if (!token || token === 'COLOQUE_SEU_TOKEN_AQUI') {
-    throw new Error('DISCORD_TOKEN não configurado. Copie .env.example para .env e informe o token do bot.');
+    throw new Error('DISCORD_TOKEN não configurado. Execute INSTALAR.bat e informe o token do bot.');
   }
   if (!clientId || clientId === 'COLOQUE_O_APPLICATION_ID_AQUI') {
     throw new Error('CLIENT_ID não configurado no arquivo .env.');
