@@ -19,9 +19,10 @@ export const CONFIG = {
   shop: {
     maxKits: 25,
     closeDelaySeconds: 3,
-    panelDescription: 'Bem-vindo à loja. Consulte os kits disponíveis e escolha o que deseja adquirir. Ao iniciar uma compra, você seleciona o produto, informa seu nick do Minecraft e revisa os dados antes de confirmar. Nenhum pedido é aberto enquanto você não confirmar as informações.',
-    catalogPrompt: 'Selecione o kit que deseja comprar. Depois, informe seu nick do Minecraft para revisar o pedido antes de seguir para o pagamento.',
-    reviewDescription: 'Confira o produto e o nick informado. O ticket de pagamento só será criado depois que você confirmar. Use “Editar nick” para corrigir alguma informação ou “Cancelar” para sair sem abrir um pedido.'
+    panelDescription: 'Escolha um kit para ver a prévia com imagem, preço e descrição. Você poderá trocar de produto antes de confirmar. Depois, informe seu nick Java e confirme o pedido para abrir o ticket privado de pagamento.',
+    catalogPrompt: 'Selecione um kit para abrir a prévia. Você poderá trocar de kit antes de continuar.',
+    previewPrompt: 'Confira a imagem, o nome, o preço e a descrição. Confirme o kit para informar seu nick do Minecraft Java.',
+    reviewDescription: 'Confira o kit e o nick Java. O ticket privado de pagamento só será criado depois da confirmação final. Você ainda pode trocar o kit, editar o nick ou cancelar sem abrir um pedido.'
   },
   order: {
     title: 'Pedido de compra',
