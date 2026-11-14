@@ -17,12 +17,34 @@ echo "Node $(node --version)"
 npm install --no-audit --no-fund
 npm run check
 npm run check:commands
+npm test
 
 if [[ ! -f .env ]]; then
-  cp .env.example .env
-  echo "Arquivo .env criado. Preencha DISCORD_TOKEN e CLIENT_ID (nano .env)."
+  echo
+  read -r -p "Token do bot Discord: " DISCORD_TOKEN
+  read -r -p "Application ID do bot: " CLIENT_ID
+  read -r -p "ID do servidor de teste (opcional): " GUILD_ID
+  if [[ -z "$DISCORD_TOKEN" || -z "$CLIENT_ID" ]]; then
+    echo "Token e Application ID são obrigatórios. Execute o instalador novamente."
+    exit 1
+  fi
+
+  {
+    printf 'DISCORD_TOKEN=%s\n' "$DISCORD_TOKEN"
+    printf 'CLIENT_ID=%s\n' "$CLIENT_ID"
+    printf 'GUILD_ID=%s\n' "$GUILD_ID"
+    printf 'DKB_HOST=127.0.0.1\n'
+    printf 'DKB_PORT=8787\n'
+    printf 'SUPABASE_URL=\n'
+    printf 'SUPABASE_SECRET_KEY=\n'
+    printf 'SUPABASE_TABLE=asthen_bot_state\n'
+  } > .env
+  chmod 600 .env
+  echo "Arquivo .env criado."
+else
+  echo "Arquivo .env existente preservado."
 fi
 
 mkdir -p data
 chmod +x linux/start-linux.sh
-echo "Instalação concluída. Edite .env e execute: bash linux/start-linux.sh"
+echo "Instalação concluída. Execute: bash linux/start-linux.sh"
