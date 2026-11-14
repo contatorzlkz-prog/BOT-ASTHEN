@@ -13,6 +13,7 @@ let server = null;
 let boundHost = null;
 let boundPort = null;
 let lastKits = [];
+let lastKitsSyncAt = null;
 
 function digest(value) {
   return crypto.createHash('sha256').update(String(value)).digest();
@@ -49,7 +50,7 @@ export function ensureBridgeSecret() {
   const generated = !token;
   if (!token) token = 'ASTHEN_' + crypto.randomBytes(32).toString('base64url');
   if (token.length < 32) {
-    throw new Error('DKB_SECRET precisa ter pelo menos 32 caracteres. Use /bridge regenerar para criar uma chave segura.');
+    throw new Error('DKB_SECRET precisa ter pelo menos 32 caracteres. O valor salvo no .env será preservado entre atualizações.');
   }
 
   persistSecret(token);
@@ -62,14 +63,6 @@ export function getBridgeSecret() {
   return activeSecret || String(process.env.DKB_SECRET || '').trim();
 }
 
-export function regenerateBridgeSecret() {
-  const token = 'ASTHEN_' + crypto.randomBytes(32).toString('base64url');
-  persistSecret(token);
-  process.env.DKB_SECRET = token;
-  activeSecret = token;
-  return token;
-}
-
 export function getBridgeStatus() {
   const address = server && server.listening ? server.address() : null;
   return {
@@ -77,7 +70,8 @@ export function getBridgeStatus() {
     host: boundHost,
     port: address && typeof address === 'object' ? address.port : boundPort,
     pending: waiting.size,
-    kits: lastKits.map(kit => ({ ...kit }))
+    kits: lastKits.map(kit => ({ ...kit })),
+    lastKitsSyncAt
   };
 }
 
@@ -190,6 +184,7 @@ export async function startBridge({
             }))
             .slice(0, 200)
           : [];
+        lastKitsSyncAt = new Date().toISOString();
         try {
           onKits(lastKits.map(item => ({ ...item })));
         } catch (error) {
