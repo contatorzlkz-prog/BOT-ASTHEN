@@ -259,7 +259,7 @@ export function makeOrderEmbed({ userId, kit, minecraftNick }) {
     .setTitle('Pagamento · ' + displayKitName(kit))
     .setDescription(
       (userId ? '**Comprador:** <@' + userId + '>\n\n' : '') +
-      'Faça o Pix no valor indicado e envie a foto ou o arquivo do comprovante aqui. ' +
+      'Faça o Pix no valor indicado; informe o valor manualmente no banco. Depois envie a foto ou o arquivo do comprovante aqui. ' +
       'A equipe confere o pagamento antes de solicitar a entrega.'
     )
     .addFields(
