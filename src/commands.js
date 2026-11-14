@@ -50,6 +50,19 @@ export const commandDefinitions = [
       .setName('listar')
       .setDescription('Lista os kits cadastrados.'))
     .addSubcommand(subcommand => subcommand
+      .setName('preco')
+      .setDescription('Define ou altera o preço de um kit.')
+      .addStringOption(option => option
+        .setName('nome')
+        .setDescription('Nome exato do kit.')
+        .setMaxLength(32)
+        .setRequired(true))
+      .addStringOption(option => option
+        .setName('valor')
+        .setDescription('Novo preço. Exemplo: R$ 19,90.')
+        .setMaxLength(30)
+        .setRequired(true)))
+    .addSubcommand(subcommand => subcommand
       .setName('remover')
       .setDescription('Remove um kit pelo nome.')
       .addStringOption(option => option
