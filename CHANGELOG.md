@@ -1,3 +1,21 @@
+## 2.6.1 — 14/11/2026
+
+### Correções e compatibilidade com a 2.4.0
+- Restaurado o menu suspenso de departamentos do suporte, com cinco opções: Dúvidas & Compras, Licenças & Suporte, Reportar Bugs, Parcerias & Comercial e Marketing & Serviços.
+- Restaurado o comando `/kit preco` para alterar o preço de um produto já cadastrado.
+- Painéis de suporte e loja agora são recriados quando a mensagem antiga foi apagada ou deixou de existir, com atualização do ID salvo.
+- A sincronização da loja também recria o painel se a mensagem desaparecer.
+- Restaurado o botão privado para copiar a chave Pix no ticket.
+- Ao fechar um pedido ainda pendente, o bot registra a decisão "fechado sem resultado" no canal de logs antes de excluir o ticket.
+- A confirmação de fechamento é publicada uma única vez no canal, sem duplicação de resposta privada.
+
+### URL de integração entre dois computadores
+- Adicionado `INICIAR-TUNEL.bat` para criar um Cloudflare Quick Tunnel direcionado à API local na porta 8787.
+- README e guias explicam como gerar, copiar e configurar a URL HTTPS temporária no plugin que está em outro computador.
+- O executável `cloudflared.exe` local é ignorado pelo Git e não é distribuído no ZIP.
+
+---
+
 # Changelog ASTHEN BOT
 
 ## 2.6.0 — 14/11/2026
