@@ -232,7 +232,6 @@ export function syncPluginKits(guildId, pluginKits) {
   config.hiddenPluginKits = [...hidden].filter(name => incomingByName.has(name));
 
   const existingByName = new Map(config.kits.map(kit => [normalizeKitName(kit.name), kit]));
-  const manualKits = config.kits.filter(kit => !kit.pluginManaged);
   const syncedKits = [];
 
   for (const item of incoming) {
@@ -252,7 +251,8 @@ export function syncPluginKits(guildId, pluginKits) {
     });
   }
 
-  const next = [...manualKits, ...syncedKits];
+  // A valid full list from the plugin is authoritative: stale manual/demo rows disappear.
+  const next = syncedKits;
   const beforeJson = JSON.stringify({ kits: config.kits, hidden: config.hiddenPluginKits });
   const afterJson = JSON.stringify({ kits: next, hidden: config.hiddenPluginKits });
   if (beforeJson === afterJson) return { changed: false, kits: config.kits };
