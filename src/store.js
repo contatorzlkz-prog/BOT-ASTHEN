@@ -35,6 +35,10 @@ export function makeKitDisplayName(name) {
 }
 
 function isLegacySampleKit(kit) {
+  // Never classify a kit reported by the Minecraft plugin as a demo product,
+  // even when its technical name matches one of the old 2.4 sample names.
+  if (kit?.pluginManaged) return false;
+
   const id = String(kit?.id || '').toLowerCase();
   const name = normalizeKitName(kit?.name);
   const displayName = normalizeKitName(kit?.displayName);
