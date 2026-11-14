@@ -95,6 +95,26 @@ test('admin removal hides plugin-managed kit until plugin reports it deleted', (
   assert.equal(recreated.kits.length, 1);
 });
 
+test('a full plugin sync removes obsolete shop products that are no longer on Minecraft', () => {
+  const guildId = testGuildId();
+  updateGuildConfig(guildId, {
+    kits: [{
+      id: 'old-manual-id',
+      name: 'Kit_Que_Nao_Existe',
+      displayName: 'Kit antigo',
+      price: 'R$ 2,00',
+      description: 'Registro antigo',
+      pluginManaged: false
+    }]
+  });
+
+  const synced = syncPluginKits(guildId, [
+    { name: 'Kit_Atual', enabled: true, items: 4 }
+  ]);
+
+  assert.deepEqual(synced.kits.map(kit => kit.name), ['Kit_Atual']);
+});
+
 test('friendly kit names remove underscores and hyphens', () => {
   assert.equal(makeKitDisplayName('Kit_Netherita-Plus'), 'Kit Netherita Plus');
 });
