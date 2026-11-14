@@ -69,14 +69,7 @@ function ensureGuildConfig(guildId) {
 
   // Remove only the six sample entries that shipped with 2.4.0.
   // Real custom kits are preserved.
-  const before = config.kits.length;
   config.kits = config.kits.filter(kit => !isLegacySampleKit(kit));
-  if (config.kits.length !== before) {
-    config.hiddenPluginKits = [...new Set([
-      ...config.hiddenPluginKits,
-      ...Array.from(LEGACY_SAMPLE_KITS)
-    ])];
-  }
 
   config.kits = config.kits.map(kit => ({
     ...kit,
