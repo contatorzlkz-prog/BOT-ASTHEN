@@ -179,7 +179,7 @@ async function pushSnapshot(snapshot) {
   } catch (error) {
     lastSyncError = error.name === 'AbortError'
       ? 'Tempo limite ao conectar ao Supabase.'
-      : (lastSyncError || 'Não foi possível sincronizar com o Supabase.');
+      : (error?.message || lastSyncError || 'Não foi possível sincronizar com o Supabase.');
     console.warn('[Asthen Supabase] ' + lastSyncError + ' O backup local continua disponível.');
     scheduleRetry();
     return false;
