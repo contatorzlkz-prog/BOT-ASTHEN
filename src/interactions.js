@@ -81,6 +81,21 @@ async function fetchTextChannel(guild, channelId) {
   return channel?.isTextBased() && typeof channel.send === 'function' ? channel : null;
 }
 
+function isMissingDiscordMessage(error) {
+  const code = Number(error?.code ?? error?.rawError?.code);
+  return code === 10008 || code === 10003 || error?.status === 404;
+}
+
+async function fetchPanelMessage(channel, messageId) {
+  if (!messageId) return null;
+  try {
+    return await channel.messages.fetch(messageId);
+  } catch (error) {
+    if (isMissingDiscordMessage(error)) return null;
+    throw error;
+  }
+}
+
 async function updatePanel(guild, config, kind, channel) {
   const isShop = kind === 'shop';
   const channelKey = isShop ? 'shopPanelChannelId' : 'supportPanelChannelId';
@@ -90,18 +105,32 @@ async function updatePanel(guild, config, kind, channel) {
   const payload = isShop ? makeShopPanel(config.kits) : makeSupportPanel();
   let message = null;
 
+  // Reaproveita o painel no canal atual, mas não deixa um ID antigo travar a configuração.
   if (oldChannelId === channel.id && oldMessageId) {
-    message = await channel.messages.fetch(oldMessageId).catch(() => null);
-    if (message) await message.edit(payload);
+    message = await fetchPanelMessage(channel, oldMessageId);
+    if (message) {
+      try {
+        message = await message.edit(payload);
+      } catch (error) {
+        if (!isMissingDiscordMessage(error)) throw error;
+        message = null;
+      }
+    }
   }
 
   if (!message) {
-    if (oldChannelId && oldMessageId) {
+    // Ao mudar de canal, tenta remover o painel anterior. A falha nessa limpeza
+    // não pode impedir a publicação no novo canal.
+    if (oldChannelId && oldMessageId && oldChannelId !== channel.id) {
       const oldChannel = await fetchTextChannel(guild, oldChannelId);
-      const oldMessage = oldChannel
-        ? await oldChannel.messages.fetch(oldMessageId).catch(() => null)
-        : null;
-      if (oldMessage) await oldMessage.delete().catch(() => {});
+      if (oldChannel) {
+        const oldMessage = await fetchPanelMessage(oldChannel, oldMessageId);
+        if (oldMessage) await oldMessage.delete().catch(error => {
+          if (!isMissingDiscordMessage(error)) {
+            console.warn('[Asthen] Não foi possível remover o painel antigo:', error.message);
+          }
+        });
+      }
     }
     message = await channel.send(payload);
   }
@@ -372,12 +401,30 @@ async function handleKitWizardButton(interaction) {
 }
 
 async function syncShopPanel(guild, config = getGuildConfig(guild.id)) {
-  if (!config.shopPanelChannelId || !config.shopPanelMessageId) return false;
+  if (!config.shopPanelChannelId) return false;
   const channel = await fetchTextChannel(guild, config.shopPanelChannelId);
-  if (!channel) return false;
-  const message = await channel.messages.fetch(config.shopPanelMessageId).catch(() => null);
-  if (!message) return false;
-  await message.edit(makeShopPanel(config.kits));
+  if (!channel) {
+    updateGuildConfig(guild.id, {
+      shopPanelChannelId: null,
+      shopPanelMessageId: null
+    });
+    return false;
+  }
+
+  const payload = makeShopPanel(config.kits);
+  let message = await fetchPanelMessage(channel, config.shopPanelMessageId);
+  if (message) {
+    try {
+      await message.edit(payload);
+      return true;
+    } catch (error) {
+      if (!isMissingDiscordMessage(error)) throw error;
+    }
+  }
+
+  // Painel apagado ou perdido: publica outro e salva o novo ID.
+  message = await channel.send(payload);
+  updateGuildConfig(guild.id, { shopPanelMessageId: message.id });
   return true;
 }
 
@@ -938,6 +985,34 @@ async function retryApprovedDelivery(interaction, mode) {
     .catch(error => console.error('[Asthen] Falha ao tentar entregar o kit:', error));
 }
 
+async function openSupportTicket(interaction, kind) {
+  await interaction.deferReply({ ephemeral: true });
+  const result = await createPrivateTicket({
+    guild: interaction.guild,
+    user: interaction.user,
+    type: kind
+  });
+
+  if (!result.alreadyOpen) {
+    const config = getGuildConfig(interaction.guildId);
+    const staffMention = config.staffRoleId ? '<@&' + config.staffRoleId + '>' : '';
+    await result.channel.send({
+      content: (interaction.user.toString() + ' ' + staffMention).trim(),
+      embeds: [makeSupportTicketEmbed(kind, interaction.user)],
+      components: [makeCloseRow()],
+      allowedMentions: {
+        users: [interaction.user.id],
+        roles: config.staffRoleId ? [config.staffRoleId] : []
+      }
+    });
+  }
+
+  return interaction.editReply({
+    content: result.alreadyOpen ? 'Você já tem um atendimento aberto.' : 'Atendimento aberto.',
+    components: [makeChannelLinkRow(result.channel)]
+  });
+}
+
 async function handleCommand(interaction) {
   if (!interaction.guild) return replyPrivate(interaction, 'Use este comando dentro de um servidor.');
 
@@ -952,32 +1027,7 @@ export async function handleInteraction(interaction) {
 
   if (interaction.isButton()) {
     if (interaction.customId.startsWith('support:open:')) {
-      const kind = interaction.customId.split(':')[2];
-      await interaction.deferReply({ ephemeral: true });
-      const result = await createPrivateTicket({
-        guild: interaction.guild,
-        user: interaction.user,
-        type: kind
-      });
-
-      if (!result.alreadyOpen) {
-        const config = getGuildConfig(interaction.guildId);
-        const staffMention = config.staffRoleId ? '<@&' + config.staffRoleId + '>' : '';
-        await result.channel.send({
-          content: (interaction.user.toString() + ' ' + staffMention).trim(),
-          embeds: [makeSupportTicketEmbed(kind, interaction.user)],
-          components: [makeCloseRow()],
-          allowedMentions: {
-            users: [interaction.user.id],
-            roles: config.staffRoleId ? [config.staffRoleId] : []
-          }
-        });
-      }
-
-      return interaction.editReply({
-        content: result.alreadyOpen ? 'Você já tem um atendimento aberto.' : 'Atendimento aberto.',
-        components: [makeChannelLinkRow(result.channel)]
-      });
+      return openSupportTicket(interaction, interaction.customId.split(':')[2]);
     }
 
     if (interaction.customId === 'shop:catalog') return openCatalog(interaction);
@@ -1007,6 +1057,10 @@ export async function handleInteraction(interaction) {
       return retryApprovedDelivery(interaction, interaction.customId.split(':')[2]);
     }
     if (interaction.customId.startsWith('kit:wizard:')) return handleKitWizardButton(interaction);
+  }
+
+  if (interaction.isStringSelectMenu() && interaction.customId === 'support:select') {
+    return openSupportTicket(interaction, interaction.values[0]);
   }
 
   if (interaction.isStringSelectMenu() && interaction.customId === 'shop:select') {
