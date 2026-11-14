@@ -55,6 +55,19 @@ export const commandDefinitions = [
       .addStringOption(option => option
         .setName('nome')
         .setDescription('Nome do kit que será removido.')
-        .setMaxLength(80)
-        .setRequired(true))))
+        .setMaxLength(32)
+        .setRequired(true)))),
+
+  adminOnly(new SlashCommandBuilder()
+    .setName('bridge')
+    .setDescription('Consulta e gerencia a integração Minecraft.')
+    .addSubcommand(subcommand => subcommand
+      .setName('status')
+      .setDescription('Mostra o estado da API e a conexão do plugin.'))
+    .addSubcommand(subcommand => subcommand
+      .setName('chave')
+      .setDescription('Exibe em privado a chave que deve ser colada no plugin.'))
+    .addSubcommand(subcommand => subcommand
+      .setName('regenerar')
+      .setDescription('Gera uma nova chave de integração. A chave antiga deixa de funcionar.')))
 ];
