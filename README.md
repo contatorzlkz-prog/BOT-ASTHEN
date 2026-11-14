@@ -135,6 +135,7 @@ O nome usado no cadastro da loja precisa ser igual ao identificador criado no pl
 | `/pix` | Configura os dados Pix |
 | `/kit adicionar` | Cadastra um produto com preço, descrição e imagem |
 | `/kit listar` | Lista produtos da loja |
+| `/kit preco` | Altera o preço de um kit já cadastrado |
 | `/kit remover` | Remove um produto da loja |
 | `/bridge status` | Mostra estado da API, kits recebidos e Supabase |
 | `/bridge chave` | Exibe em privado a chave para configurar o plugin |
