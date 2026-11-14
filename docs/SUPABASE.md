@@ -1,50 +1,56 @@
-# Supabase
+# Supabase — ASTHEN BOT 2.7.0
 
-O Supabase é opcional. O bot grava o estado primeiro em `data/state.json` e, quando a conexão estiver configurada, envia uma cópia do snapshot para a tabela `asthen_bot_state`.
+O Supabase é opcional para iniciar o bot. Quando configurado, o ASTHEN mantém um backup do estado e uma tabela normalizada para os kits da loja.
 
-## 1. Criar a tabela
+## 1. Criar as tabelas
 
-No painel do projeto Supabase, abra o SQL Editor e execute:
+No painel do Supabase, abra **SQL Editor** e execute os arquivos nesta ordem:
 
-`supabase/001_asthen_bot_state.sql`
+1. supabase/001_asthen_bot_state.sql — cria a linha de snapshot do bot.
+2. supabase/002_asthen_bot_kits.sql — cria o catálogo de kits por servidor Discord.
 
-A tabela guarda uma única linha, com `id = main`, contendo o snapshot JSON do bot.
+A tabela asthen_bot_state armazena uma linha com id = main e um JSON do estado completo.
 
-## 2. Configurar o arquivo .env
+A tabela asthen_bot_kits armazena uma linha por kit e servidor, incluindo o identificador original recebido do plugin, nome exibido ao cliente, preço, descrição, link da imagem, estado de habilitação, quantidade de itens e horário da última atualização.
 
-Use a URL base do projeto, sem `/rest/v1` nem `/v1` no final:
+## 2. Configurar o .env
 
-```env
+Use a URL base do projeto, sem /rest/v1 nem /v1 no final:
+
+~~~env
 SUPABASE_URL=https://seu-projeto.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_sua_chave
 SUPABASE_TABLE=asthen_bot_state
-```
+SUPABASE_KITS_TABLE=asthen_bot_kits
+~~~
 
-O bot também reconhece as variáveis antigas `SUPABASE_SERVICE_ROLE_KEY` e `SUPABASE_KEY`. A chave secreta nova `sb_secret_...` deve ficar somente no backend do bot.
+O bot também reconhece as variáveis antigas SUPABASE_SERVICE_ROLE_KEY e SUPABASE_KEY. A chave secreta precisa ficar somente no computador/servidor onde o bot roda.
 
 ## 3. Como a sincronização funciona
 
-- Cada alteração é salva primeiro no arquivo local.
-- Alterações próximas são agrupadas antes de enviar um snapshot ao Supabase.
-- Se o arquivo local estiver vazio e existir um snapshot remoto, o bot restaura o snapshot remoto para o arquivo local.
-- Se houver estado local e remoto ao iniciar, o estado local é mantido e enviado ao banco.
-- Quando o Supabase está indisponível, o bot continua usando o backup local e tenta sincronizar novamente com intervalo progressivo.
-- Ao encerrar com Ctrl+C ou SIGTERM, o bot tenta concluir a sincronização pendente.
-- O banco guarda o estado atual, não um histórico permanente de tickets encerrados.
+- Cada alteração é salva primeiro em data/state.json.
+- O bot envia o snapshot para asthen_bot_state e sincroniza as linhas de asthen_bot_kits.
+- Quando o plugin envia a lista completa por POST /plugin/v1/kits, o bot importa kits novos.
+- Nome de exibição, preço, descrição e imagem editados pelo Discord são preservados quando o plugin envia a mesma lista novamente.
+- Quando um kit some da lista enviada pelo plugin, sua linha normalizada é removida do catálogo e da tabela Supabase.
+- Se o administrador usar /kit remover, o produto fica oculto da loja, mesmo que o plugin continue reportando o kit.
+- Quando o Supabase está indisponível, o arquivo local é mantido e o bot tenta sincronizar novamente com intervalo progressivo.
+
+O catálogo sincronizado tem como origem os arquivos reais de kits do Plugin-ASTHEN. O bot não cria itens dentro do Minecraft.
 
 ## 4. Cabeçalhos e chaves
 
-Para uma chave atual `sb_secret_...`, o bot envia a chave no cabeçalho `apikey` e não tenta usá-la como um JWT no cabeçalho `Authorization`. Chaves antigas do tipo `service_role` continuam sendo enviadas também como Bearer JWT.
+Para uma chave sb_secret_..., o bot envia a credencial no cabeçalho apikey, sem tratá-la como JWT no cabeçalho Authorization. Chaves antigas service_role continuam sendo enviadas como Bearer JWT.
 
-A Secret API Key tem acesso administrativo e ignora as regras RLS. Use-a somente no computador/servidor onde o bot roda. Nunca a coloque no GitHub, em prints ou em mensagens.
+Uma Secret API Key tem acesso administrativo. Use-a somente no backend do bot. Nunca coloque essa chave no GitHub, prints ou mensagens.
 
 ## 5. Diagnóstico
 
-- **401/403:** confira se a chave é uma Secret API Key ou uma chave antiga `service_role`, e se foi copiada por inteiro.
-- **404 / tabela não encontrada:** execute o SQL e confira `SUPABASE_TABLE`.
-- **PGRST125 / Invalid path specified:** confira se `SUPABASE_URL` contém somente a URL base do projeto.
-- **Sem conexão:** confira a URL, a rede e o status do projeto. O backup local continua disponível.
+- 401/403: confira a URL base e se a credencial é uma Secret API Key ou uma chave antiga service_role.
+- 404 / tabela não encontrada: confira se os dois arquivos SQL foram executados e se os nomes em SUPABASE_TABLE e SUPABASE_KITS_TABLE estão corretos.
+- PGRST125 / Invalid path specified: retire /rest/v1 e /v1 do final da URL.
+- Sem conexão: confira a rede e o estado do projeto. O bot continua usando o backup local.
 
-O comando `/bridge status` mostra se o Supabase está configurado e apresenta a última sincronização ou o aviso mais recente.
+O comando /bridge status mostra se o Supabase está configurado e apresenta a última sincronização ou o aviso mais recente.
 
-Nunca compartilhe o conteúdo do `.env` ao pedir ajuda.
+Nunca compartilhe o conteúdo do .env ao pedir ajuda.
