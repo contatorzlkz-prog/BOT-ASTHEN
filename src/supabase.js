@@ -21,15 +21,16 @@ export function getSupabaseConfig() {
       || ''
   ).trim();
   const table = String(process.env.SUPABASE_TABLE || 'asthen_bot_state').trim();
+  const kitsTable = String(process.env.SUPABASE_KITS_TABLE || 'asthen_bot_kits').trim();
 
   if (!projectUrl || !secretKey) return null;
   if (!/^https:\/\//i.test(projectUrl)) {
     throw new Error('SUPABASE_URL precisa ser a URL HTTPS base do projeto.');
   }
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) {
-    throw new Error('SUPABASE_TABLE contém caracteres inválidos.');
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(kitsTable)) {
+    throw new Error('O nome de uma tabela Supabase contém caracteres inválidos.');
   }
-  return { projectUrl, secretKey, table };
+  return { projectUrl, secretKey, table, kitsTable };
 }
 
 function buildHeaders(config, extra = {}) {
@@ -47,17 +48,65 @@ function buildHeaders(config, extra = {}) {
   return headers;
 }
 
-async function supabaseRequest(config, path, options = {}) {
+async function supabaseRequest(config, path, options = {}, table = config.table) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    return await fetch(config.projectUrl + '/rest/v1/' + config.table + path, {
+    return await fetch(config.projectUrl + '/rest/v1/' + table + path, {
       ...options,
       headers: buildHeaders(config, options.headers),
       signal: controller.signal
     });
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function pushKitRows(config, snapshot) {
+  const guilds = snapshot?.guilds && typeof snapshot.guilds === 'object' ? snapshot.guilds : {};
+
+  for (const [guildId, guild] of Object.entries(guilds)) {
+    const now = new Date().toISOString();
+    const kits = Array.isArray(guild?.kits) ? guild.kits : [];
+    const rows = kits
+      .filter(kit => kit && typeof kit.id === 'string' && typeof kit.name === 'string')
+      .map(kit => ({
+        guild_id: String(guildId),
+        kit_id: kit.id,
+        plugin_name: kit.name,
+        display_name: String(kit.displayName || kit.name.replace(/[_-]+/g, ' ')),
+        description: String(kit.description || ''),
+        price: String(kit.price || ''),
+        image_url: String(kit.imageUrl || ''),
+        plugin_enabled: kit.enabled !== false,
+        item_count: Number.isFinite(Number(kit.itemCount)) ? Number(kit.itemCount) : 0,
+        updated_at: now
+      }));
+
+    if (rows.length) {
+      const upsert = await supabaseRequest(config, '?on_conflict=guild_id,kit_id', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(rows)
+      }, config.kitsTable);
+      if (!upsert.ok) {
+        throw new Error('Supabase respondeu HTTP ' + upsert.status + ' ao salvar os kits.');
+      }
+    }
+
+    const filters = new URLSearchParams({ guild_id: 'eq.' + guildId });
+    if (rows.length) {
+      const keepIds = rows.map(row => '"' + row.kit_id.replace(/"/g, '') + '"').join(',');
+      filters.set('kit_id', 'not.in.(' + keepIds + ')');
+    }
+
+    const cleanup = await supabaseRequest(config, '?' + filters.toString(), {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' }
+    }, config.kitsTable);
+    if (!cleanup.ok) {
+      throw new Error('Supabase respondeu HTTP ' + cleanup.status + ' ao remover kits antigos.');
+    }
   }
 }
 
@@ -119,6 +168,8 @@ async function pushSnapshot(snapshot) {
       throw new Error(lastSyncError);
     }
 
+    await pushKitRows(config, snapshot);
+
     retryCount = 0;
     if (retryTimer) clearTimeout(retryTimer);
     retryTimer = null;
@@ -155,6 +206,11 @@ export function scheduleSupabaseSync(snapshot) {
     void flushSupabaseSync();
   }, 500);
   syncTimer.unref?.();
+}
+
+export function scheduleSupabaseKitsSync(snapshot) {
+  // The normalized kit table is synchronized in the same debounced write as the state snapshot.
+  scheduleSupabaseSync(snapshot);
 }
 
 export async function flushSupabaseSync() {
@@ -217,6 +273,7 @@ export async function initializeSupabaseSync({
 export function getSupabaseStatus() {
   return {
     enabled: Boolean(getSupabaseConfig()),
+    kitsTable: getSupabaseConfig()?.kitsTable || null,
     lastSyncedAt,
     lastError: lastSyncError
   };
