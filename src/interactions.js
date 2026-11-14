@@ -398,36 +398,7 @@ async function syncShopPanel(guild, config = getGuildConfig(guild.id)) {
   return true;
 }
 
-async function handleKitCommand(interaction) {
-  if (!canManage(interaction)) return replyPrivate(interaction, 'Você não tem permissão para gerenciar os kits.');
-  const subcommand = interaction.options.getSubcommand();
-  const config = getGuildConfig(interaction.guildId);
 
-  if (subcommand === 'adicionar') return startKitWizard(interaction);
-
-  if (subcommand === 'listar') {
-    if (!config.kits.length) return replyPrivate(interaction, 'A loja está vazia.');
-    const lines = config.kits.map((kit, index) => (index + 1) + '. **' + kit.name + '** — ' + kit.price + '\n' + kit.description);
-    return replyPrivate(interaction, lines.join('\n\n').slice(0, 1900));
-  }
-
-  const wanted = interaction.options.getString('nome', true).trim().toLocaleLowerCase('pt-BR');
-  const kit = config.kits.find(item => item.name.toLocaleLowerCase('pt-BR') === wanted);
-  if (!kit) return replyPrivate(interaction, 'Não encontrei um kit com esse nome.');
-
-  if (subcommand === 'preco') {
-    const price = interaction.options.getString('valor', true).trim();
-    if (price.length < 2) return replyPrivate(interaction, 'Informe um preço válido. Exemplo: R$ 19,90.');
-    const kits = config.kits.map(item => item.id === kit.id ? { ...item, price } : item);
-    updateGuildConfig(interaction.guildId, { kits });
-    await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
-    return replyPrivate(interaction, 'Preço do **' + kit.name + '** atualizado para **' + price + '**.');
-  }
-
-  removeKit(interaction.guildId, kit.id);
-  await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
-  return replyPrivate(interaction, 'Kit **' + kit.name + '** removido da loja.');
-}
 
 function makeMinecraftNickModal(customId, currentNick = '') {
   const input = new TextInputBuilder()
