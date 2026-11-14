@@ -25,6 +25,10 @@ import {
   makeChannelLinkRow,
   makeCloseRow,
   makeKitWizardEmbed,
+  makeKitPreviewEmbed,
+  makeKitPreviewControls,
+  makeDeliveryEmbed,
+  makeDeliveryRetryControls,
   makeMissingPixEmbed,
   makeOrderControls,
   makeOrderEmbed,
@@ -39,8 +43,19 @@ import {
 } from './ui.js';
 import { archiveAndDeleteTicket, createPrivateTicket } from './tickets.js';
 import { CONFIG } from './config.js';
+import { deliverKit, getBridgeSecret, getBridgeStatus, regenerateBridgeSecret } from './bridge.js';
 
 const kitWizards = new Map();
+
+function normalizeImageUrl(value) {
+  if (!value) return '';
+  try {
+    const url = new URL(String(value).trim());
+    return url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 function canManage(interaction) {
   return interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)
@@ -202,9 +217,9 @@ async function configurePix(interaction) {
 
 function makeKitFieldModal(field) {
   const options = {
-    name: { title: 'Nome do kit', label: 'Nome', placeholder: 'Ex.: Kit Demo Premium', max: 60 },
+    name: { title: 'Nome do kit', label: 'Nome exato do plugin', placeholder: 'Ex.: Kit_Ferro', max: 32 },
     price: { title: 'Preço do kit', label: 'Preço', placeholder: 'Ex.: R$ 9,90', max: 30 },
-    description: { title: 'Descrição do kit', label: 'Descrição', placeholder: 'O que vem neste kit?', max: 180 }
+    description: { title: 'Descrição do kit', label: 'Descrição', placeholder: 'Explique o que vem neste kit', max: 180 }
   };
   const item = options[field];
   const input = new TextInputBuilder()
@@ -213,14 +228,28 @@ function makeKitFieldModal(field) {
     .setPlaceholder(item.placeholder)
     .setStyle(field === 'description' ? TextInputStyle.Paragraph : TextInputStyle.Short)
     .setMaxLength(item.max)
-    .setMinLength(2)
+    .setMinLength(1)
     .setRequired(true);
 
-  return new ModalBuilder()
+  const modal = new ModalBuilder()
     .setCustomId('kit:field:' + field)
     .setTitle(item.title)
     .addComponents(new ActionRowBuilder().addComponents(input));
+
+  if (field === 'description') {
+    const imageInput = new TextInputBuilder()
+      .setCustomId('imageUrl')
+      .setLabel('Link da imagem (opcional)')
+      .setPlaceholder('https://.../imagem.png')
+      .setStyle(TextInputStyle.Short)
+      .setMaxLength(500)
+      .setRequired(false);
+    modal.addComponents(new ActionRowBuilder().addComponents(imageInput));
+  }
+
+  return modal;
 }
+
 
 async function startKitWizard(interaction) {
   if (!canManage(interaction)) return replyPrivate(interaction, 'Você não tem permissão para cadastrar kits.');
@@ -234,7 +263,8 @@ async function startKitWizard(interaction) {
     userId: interaction.user.id,
     name: '',
     price: '',
-    description: ''
+    description: '',
+    imageUrl: ''
   });
   return interaction.showModal(makeKitFieldModal('name'));
 }
@@ -260,8 +290,22 @@ async function handleKitField(interaction) {
   }
 
   const value = interaction.fields.getTextInputValue(field).trim();
-  if (value.length < 2) return replyPrivate(interaction, 'O campo precisa ter pelo menos 2 caracteres.');
+  if (field === 'name' && !/^[A-Za-z0-9_-]{1,32}$/.test(value)) {
+    return replyPrivate(interaction, 'Use o nome exato do kit no plugin: de 1 a 32 caracteres, somente letras, números, _ ou -. Exemplo: Kit_Ferro.');
+  }
+  if (value.length < 2 && field !== 'name') {
+    return replyPrivate(interaction, 'O campo precisa ter pelo menos 2 caracteres.');
+  }
   wizard[field] = value;
+
+  if (field === 'description') {
+    const rawImageUrl = interaction.fields.getTextInputValue('imageUrl').trim();
+    const imageUrl = normalizeImageUrl(rawImageUrl);
+    if (rawImageUrl && !imageUrl) {
+      return replyPrivate(interaction, 'O link da imagem precisa ser um endereço HTTPS válido. Você pode deixar o campo vazio.');
+    }
+    wizard.imageUrl = imageUrl;
+  }
 
   if (field === 'name') {
     return interaction.reply({
@@ -284,6 +328,7 @@ async function handleKitField(interaction) {
     ephemeral: true
   });
 }
+
 
 async function handleKitWizardButton(interaction) {
   const action = interaction.customId.split(':')[2];
@@ -315,7 +360,8 @@ async function handleKitWizardButton(interaction) {
       id: randomUUID().slice(0, 10),
       name: wizard.name,
       price: wizard.price,
-      description: wizard.description
+      description: wizard.description,
+      imageUrl: wizard.imageUrl || ''
     };
     addKit(interaction.guildId, kit);
     kitWizards.delete(interaction.user.id);
@@ -361,8 +407,8 @@ function makeMinecraftNickModal(customId, currentNick = '') {
     .setLabel('Nick que será usado no Minecraft')
     .setPlaceholder('Digite seu nick exatamente como aparece no jogo')
     .setStyle(TextInputStyle.Short)
-    .setMinLength(2)
-    .setMaxLength(32)
+    .setMinLength(3)
+    .setMaxLength(16)
     .setRequired(true);
 
   if (currentNick) input.setValue(currentNick);
@@ -393,18 +439,25 @@ async function openCatalog(interaction) {
   if (existingDraft) {
     if (existingDraft.kit && config.kits.some(kit => kit.id === existingDraft.kit.id)) {
       if (existingDraft.stage === 'creating') {
-        existingDraft.stage = 'review';
+        existingDraft.stage = existingDraft.minecraftNick ? 'review' : 'selected';
         savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
       }
-      const hasNick = Boolean(existingDraft.minecraftNick);
+      if (existingDraft.minecraftNick) {
+        existingDraft.stage = 'review';
+        savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
+        return interaction.reply({
+          content: 'Você já iniciou uma compra. Confira os dados antes de confirmar.',
+          embeds: [makePurchaseReviewEmbed(existingDraft)],
+          components: [makePurchaseReviewControls(existingDraft)],
+          ephemeral: true
+        });
+      }
+      existingDraft.stage = 'selected';
+      savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
       return interaction.reply({
-        content: hasNick
-          ? 'Você já iniciou uma compra. Confira os dados e confirme quando estiver tudo certo.'
-          : 'Você já escolheu um kit. Continue informando o nick do Minecraft.',
-        embeds: hasNick ? [makePurchaseReviewEmbed(existingDraft)] : [],
-        components: hasNick
-          ? [makePurchaseReviewControls(existingDraft)]
-          : [new ActionRowBuilder().addComponents(makeWizardButton('shop:continue', 'Informar nick'))],
+        content: CONFIG.shop.previewPrompt,
+        embeds: [makeKitPreviewEmbed(existingDraft.kit)],
+        components: [makeKitPreviewControls(existingDraft)],
         ephemeral: true
       });
     }
@@ -417,6 +470,7 @@ async function openCatalog(interaction) {
     ephemeral: true
   });
 }
+
 
 async function continuePurchase(interaction) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
@@ -437,7 +491,7 @@ async function continuePurchase(interaction) {
   return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
 }
 
-async function beginPurchaseWithKit(interaction, kitId) {
+async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = false) {
   const config = getGuildConfig(interaction.guildId);
   const kit = config.kits.find(item => item.id === kitId);
   if (!kit) return replyPrivate(interaction, 'Este kit não está mais disponível. Abra o catálogo novamente.');
@@ -455,27 +509,59 @@ async function beginPurchaseWithKit(interaction, kitId) {
       id: kit.id,
       name: kit.name,
       price: kit.price,
-      description: kit.description
+      description: kit.description,
+      imageUrl: kit.imageUrl || ''
     },
     minecraftNick: '',
-    stage: 'nick',
+    stage: 'selected',
     revision: randomUUID().slice(0, 8)
   };
   savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
-  return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
+
+  const payload = {
+    content: CONFIG.shop.previewPrompt,
+    embeds: [makeKitPreviewEmbed(draft.kit)],
+    components: [makeKitPreviewControls(draft)]
+  };
+  return updateExistingMessage
+    ? interaction.update(payload)
+    : interaction.reply({ ...payload, ephemeral: true });
 }
 
 async function handleCatalogSelection(interaction) {
-  return beginPurchaseWithKit(interaction, interaction.values[0]);
+  return beginPurchaseWithKit(interaction, interaction.values[0], true);
 }
+
+async function confirmSelectedKit(interaction, requestedRevision) {
+  const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
+  if (!draft || draft.revision !== requestedRevision || draft.stage !== 'selected') {
+    return replyPrivate(interaction, 'Esta prévia ficou desatualizada. Abra o catálogo novamente.');
+  }
+  return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
+}
+
+async function switchPurchaseKit(interaction, requestedRevision) {
+  const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
+  if (!draft || draft.revision !== requestedRevision) {
+    return replyPrivate(interaction, 'Esta prévia ficou desatualizada. Abra o catálogo novamente.');
+  }
+  const config = getGuildConfig(interaction.guildId);
+  if (!config.kits.length) return replyPrivate(interaction, 'A loja está sem kits disponíveis no momento.');
+  return interaction.update({
+    content: CONFIG.shop.catalogPrompt,
+    embeds: [],
+    components: [makeCatalogMenu(config.kits)]
+  });
+}
+
 
 async function handleNickSubmit(interaction) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
   if (!draft) return replyPrivate(interaction, 'Sua compra não está mais em preparação. Abra o catálogo novamente.');
 
   const minecraftNick = interaction.fields.getTextInputValue('minecraft-nick').trim();
-  if (minecraftNick.length < 2 || minecraftNick.length > 32) {
-    return replyPrivate(interaction, 'Informe um nick válido, com até 32 caracteres.');
+  if (!/^[A-Za-z0-9_]{3,16}$/.test(minecraftNick)) {
+    return replyPrivate(interaction, 'Informe um nick Java válido, com 3 a 16 letras, números ou _.');
   }
 
   if (interaction.customId.startsWith('shop:nick:edit:')) {
@@ -673,9 +759,121 @@ async function decideOrder(interaction, decision) {
   const label = decision === 'approved' ? 'confirmado' : 'recusado';
   await interaction.message.edit({
     content: 'Pedido ' + label + ' por ' + interaction.user.toString() +
-      '. O canal continua aberto. Use Fechar quando o atendimento terminar.',
+      '. O canal continua aberto. ' + (decision === 'approved' ? 'A entrega do kit foi solicitada ao plugin.' : 'Use Fechar quando o atendimento terminar.'),
     components: [makeCloseRow()]
   });
+
+  if (decision === 'approved') {
+    const approvedTicket = getTicket(interaction.channelId);
+    void processApprovedDelivery(interaction.channel, approvedTicket)
+      .catch(error => console.error('[Asthen] Falha ao iniciar entrega do kit:', error));
+  }
+}
+
+async function handleBridgeCommand(interaction) {
+  if (!canManage(interaction)) {
+    return replyPrivate(interaction, 'Somente administradores ou quem tem Gerenciar servidor pode usar este comando.');
+  }
+
+  const action = interaction.options.getSubcommand();
+  if (action === 'status') {
+    const status = getBridgeStatus();
+    const kits = status.kits.length
+      ? status.kits.map(kit => (kit.enabled ? '• ' : '• [desativado] ') + kit.name + ' (' + kit.items + ' itens)').join('\n')
+      : 'Nenhum kit sincronizado ainda.';
+    return replyPrivate(interaction, [
+      '**Integração ASTHEN**',
+      'API: ' + (status.running ? 'online' : 'offline'),
+      'Endereço local: ' + (status.running ? 'http://' + status.host + ':' + status.port : 'não iniciada'),
+      'Pedidos aguardando: ' + status.pending,
+      'Kits recebidos do plugin: ' + status.kits.length,
+      '',
+      kits
+    ].join('\n'));
+  }
+
+  if (action === 'chave') {
+    const secret = getBridgeSecret();
+    if (!secret) return replyPrivate(interaction, 'A chave ainda não foi criada. Reinicie o bot para gerar automaticamente.');
+    return replyPrivate(interaction, 'Copie esta chave e cole em bridge.secret no config.yml do plugin.\n\n' + secret + '\n\nNão envie essa chave em canais públicos.');
+  }
+
+  const secret = regenerateBridgeSecret();
+  return replyPrivate(interaction, 'Uma nova chave foi criada e salva no .env. A chave anterior deixou de funcionar.\n\n' + secret + '\n\nCole a nova chave em bridge.secret no plugin e recarregue o plugin.');
+}
+
+async function processApprovedDelivery(channel, ticket, { newRequest = false } = {}) {
+  const requestId = newRequest || !ticket.deliveryRequestId
+    ? randomUUID()
+    : ticket.deliveryRequestId;
+  const current = updateTicket(ticket.channelId, {
+    deliveryRequestId: requestId,
+    deliveryStatus: 'QUEUED',
+    deliveryUpdatedAt: new Date().toISOString(),
+    deliveryError: null
+  }) || ticket;
+
+  await channel.send('Pagamento confirmado. Solicitei a entrega de **' + String(current.kitName) + '** para **' + String(current.minecraftNick) + '** no Minecraft Java.');
+  try {
+    const result = await deliverKit({
+      requestId,
+      player: current.minecraftNick,
+      platform: 'java',
+      kit: current.kitName,
+      timeoutMs: 60000
+    });
+    const status = String(result.status || 'UNKNOWN');
+    updateTicket(ticket.channelId, {
+      deliveryStatus: status,
+      deliveryResponse: String(result.message || ''),
+      deliveryUpdatedAt: new Date().toISOString(),
+      deliveryError: null
+    });
+
+    const success = status === 'KIT_DELIVERED' || status === 'KIT_PENDING';
+    await channel.send({
+      embeds: [makeDeliveryEmbed({
+        ...result,
+        player: result.player || current.minecraftNick,
+        kit: result.kit || current.kitName
+      })],
+      components: success
+        ? [makeCloseRow()]
+        : [makeDeliveryRetryControls(result.final === true ? 'new' : 'same')]
+    });
+  } catch (error) {
+    updateTicket(ticket.channelId, {
+      deliveryStatus: error.code === 'BRIDGE_TIMEOUT' ? 'TIMEOUT' : 'WAITING',
+      deliveryError: String(error.message || 'Falha ao solicitar a entrega.'),
+      deliveryUpdatedAt: new Date().toISOString()
+    });
+    await channel.send({
+      content: 'O pagamento foi confirmado, mas o plugin ainda não respondeu. O pedido foi preservado. Quando o plugin estiver online, a equipe pode tentar novamente usando o mesmo identificador para evitar uma entrega duplicada.',
+      components: [makeDeliveryRetryControls('same')]
+    });
+  }
+}
+
+async function retryApprovedDelivery(interaction, mode) {
+  const ticket = getTicket(interaction.channelId);
+  if (!ticket || ticket.type !== 'shop' || ticket.orderStatus !== 'approved') {
+    return replyPrivate(interaction, 'Este canal não possui um pedido pago aguardando entrega.');
+  }
+  if (!isStaff(interaction, getGuildConfig(interaction.guildId))) {
+    return replyPrivate(interaction, 'Somente a equipe pode solicitar outra tentativa de entrega.');
+  }
+  if (mode === 'same' && !ticket.deliveryRequestId) {
+    return replyPrivate(interaction, 'Não encontrei o identificador da entrega anterior. Use uma nova tentativa.');
+  }
+
+  await interaction.reply({
+    content: mode === 'new'
+      ? 'Uma nova tentativa de entrega foi criada.'
+      : 'A tentativa anterior foi reenviada com o mesmo identificador.',
+    ephemeral: true
+  });
+  void processApprovedDelivery(interaction.channel, ticket, { newRequest: mode === 'new' })
+    .catch(error => console.error('[Asthen] Falha ao tentar entregar o kit:', error));
 }
 
 async function handleCommand(interaction) {
@@ -684,6 +882,7 @@ async function handleCommand(interaction) {
   if (interaction.commandName === 'configurar') return configureChannels(interaction);
   if (interaction.commandName === 'pix') return configurePix(interaction);
   if (interaction.commandName === 'kit') return handleKitCommand(interaction);
+  if (interaction.commandName === 'bridge') return handleBridgeCommand(interaction);
 }
 
 export async function handleInteraction(interaction) {
@@ -724,6 +923,12 @@ export async function handleInteraction(interaction) {
       return beginPurchaseWithKit(interaction, interaction.customId.split(':')[2]);
     }
     if (interaction.customId === 'shop:continue') return continuePurchase(interaction);
+    if (interaction.customId.startsWith('shop:switch-kit:')) {
+      return switchPurchaseKit(interaction, interaction.customId.split(':')[2]);
+    }
+    if (interaction.customId.startsWith('shop:kit-confirm:')) {
+      return confirmSelectedKit(interaction, interaction.customId.split(':')[2]);
+    }
     if (interaction.customId.startsWith('shop:edit-nick:')) {
       return editMinecraftNick(interaction, interaction.customId.split(':')[2]);
     }
@@ -736,6 +941,9 @@ export async function handleInteraction(interaction) {
     if (interaction.customId === 'ticket:close') return closeTicket(interaction);
     if (interaction.customId === 'order:approve') return decideOrder(interaction, 'approved');
     if (interaction.customId === 'order:reject') return decideOrder(interaction, 'rejected');
+    if (interaction.customId.startsWith('delivery:retry:')) {
+      return retryApprovedDelivery(interaction, interaction.customId.split(':')[2]);
+    }
     if (interaction.customId.startsWith('kit:wizard:')) return handleKitWizardButton(interaction);
   }
 
