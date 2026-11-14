@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { Client, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
 import { commandDefinitions } from './commands.js';
-import { getGuildConfig, loadStore, initializeStoreSync, updateGuildConfig } from './store.js';
+import { getGuildConfig, loadStore, initializeStoreSync, updateGuildConfig, syncPluginKits } from './store.js';
 import { flushSupabaseSync } from './supabase.js';
 import { makeShopPanel, makeSupportPanel } from './ui.js';
 import { handleInteraction } from './interactions.js';
@@ -170,7 +170,27 @@ async function main() {
       port: Number(process.env.DKB_PORT || 8787),
       onKits: kits => {
         const enabled = kits.filter(kit => kit.enabled).map(kit => kit.name);
-        console.log('[Asthen Bridge] Plugin sincronizou ' + kits.length + ' kit(s): ' + (enabled.join(', ') || 'nenhum ativo'));
+        let changedGuilds = 0;
+
+        for (const guild of client.guilds.cache.values()) {
+          const result = syncPluginKits(guild.id, kits);
+          if (result.changed) {
+            changedGuilds += 1;
+            const config = getGuildConfig(guild.id);
+            void refreshPanelMessage(
+              guild,
+              config.shopPanelChannelId,
+              config.shopPanelMessageId,
+              makeShopPanel(config.kits),
+              'loja',
+              { channel: 'shopPanelChannelId', message: 'shopPanelMessageId' }
+            );
+          }
+        }
+
+        console.log('[Asthen API] Plugin sincronizou ' + kits.length + ' kit(s): ' +
+          (enabled.join(', ') || 'nenhum ativo') +
+          '. Catálogos atualizados: ' + changedGuilds + '.');
       }
     });
     console.log('[Asthen Bridge] API ativa em http://' + bridge.host + ':' + bridge.port + '.');
