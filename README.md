@@ -4,6 +4,16 @@ Bot de Discord para suporte, pedidos privados e venda de kits de Minecraft Java 
 
 **Versão do bot: 2.6.0**
 
+<p align="center">
+  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip">
+    <img src="https://raw.githubusercontent.com/contatorzlkz-prog/BOT-ASTHEN/main/assets/download-zip.svg" alt="Baixar ASTHEN BOT 2.6.0 em ZIP" width="264" height="58">
+  </a>
+</p>
+
+<p align="center">
+  <sub>Baixe, extraia a pasta e execute <code>INSTALAR.bat</code>.</sub>
+</p>
+
 ## Loja: como a compra funciona
 
 1. O cliente abre o catálogo e escolhe um kit.
@@ -40,7 +50,7 @@ O Message Content Intent não é necessário.
 
 ## Instalação no Windows
 
-1. Baixe o projeto pelo botão **Code > Download ZIP** e extraia a pasta.
+1. Clique no botão **BAIXAR ZIP** no início deste README e extraia a pasta.
 2. Execute `INSTALAR.bat` uma vez e informe o token Discord e o Application ID quando o instalador pedir.
 3. O instalador cria o `.env` automaticamente e preserva esse arquivo nas próximas execuções.
 4. Execute `INICIAR.bat` para ligar o bot.
