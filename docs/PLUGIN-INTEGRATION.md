@@ -15,34 +15,55 @@ Para trocar a chave, use `/bridge regenerar`. Isso invalida imediatamente o valo
 
 A chave da integração não é o token Discord nem a chave Supabase.
 
-## 2. Teste local no Windows
+## 2. Teste inicial com computadores diferentes
 
-Para o primeiro teste, deixe o bot e o servidor Paper na mesma máquina.
+Não é necessário colocar o plugin em uma host pública do Minecraft. O bot roda no Windows do dono, enquanto o amigo inicia um servidor Paper local e temporário no próprio Windows dele.
 
-No arquivo `.env` do bot:
+Um mundo single-player vanilla não carrega plugins Paper. O teste precisa usar Paper local, mas não é necessário contratar host nem publicar esse servidor.
+
+### No PC do dono do bot
+
+No `.env`:
 
 ```env
 DKB_HOST=127.0.0.1
 DKB_PORT=8787
 ```
 
-No `plugins/DiscordKitBridge/config.yml` do servidor Paper:
+Inicie o bot. A API fica em `http://127.0.0.1:8787`. Configure um túnel/proxy HTTPS que encaminhe o endereço público para esse endereço local. Mantenha o bot e o túnel ligados durante o teste.
+
+Não abra a porta 8787 diretamente no roteador e não exponha HTTP sem HTTPS.
+
+### No PC do amigo
+
+Instale o plugin no servidor Paper local e configure `plugins/DiscordKitBridge/config.yml`:
 
 ```yaml
 bridge:
   enabled: true
   mode: "poll"
-  secret: "COLE_AQUI_A_CHAVE_EXIBIDA_POR_bridge_chave"
+  secret: "COLE_AQUI_A_CHAVE_GERADA_PELO_BOT"
   poll:
-    url: "http://127.0.0.1:8787"
+    url: "https://ENDERECO-HTTPS-DO-TUNEL"
     interval-seconds: 3
     max-per-poll: 5
     http-timeout: 10
 ```
 
-O formato final da configuração depende do ajuste de chave solicitado no documento de handoff. Depois de salvar, reinicie o servidor ou use `/dk reload`.
+Troque a URL de exemplo pelo endereço HTTPS real do túnel. Use somente a URL base, sem o caminho `/plugin/v1`.
 
-**Atenção:** plugins Paper não são carregados em um mundo single-player vanilla. Para testar localmente, rode um servidor Paper no Windows e entre nele pelo Minecraft com o endereço `localhost`. Não é necessário VPS para esse teste.
+**Não use `127.0.0.1` ou `localhost` no plugin para apontar ao PC do dono do bot.** Esses endereços apontam para o PC do amigo. O plugin deve usar o endereço HTTPS público do túnel.
+
+## 3. Gerar e compartilhar a chave
+
+1. Um administrador executa `/bridge chave` no Discord.
+2. O bot exibe a chave em uma resposta privada.
+3. O dono do bot compartilha a chave com o amigo por um canal privado.
+4. O amigo cola o valor em `bridge.secret` no `config.yml` do plugin.
+
+A chave é gerada e guardada pelo bot em `DKB_SECRET`. O plugin não deve gerar uma chave diferente. A chave não é o token Discord nem a chave Supabase.
+
+A versão atual do plugin ainda precisa ser ajustada para aceitar a chave gerada pelo bot. Consulte o documento de implementação para esse trabalho.
 
 ## 3. Criar o kit no Minecraft
 
