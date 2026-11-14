@@ -880,7 +880,7 @@ async function decideOrder(interaction, decision) {
 
   if (decision === 'approved') {
     const approvedTicket = getTicket(interaction.channelId);
-    void processApprovedDelivery(interaction.channel, approvedTicket)
+    void processApprovedDelivery(interaction.channel, approvedTicket, { interaction })
       .catch(error => console.error('[Asthen] Falha ao iniciar entrega do kit:', error));
   }
 }
@@ -903,25 +903,38 @@ async function handleBridgeCommand(interaction) {
       'Endereço local: ' + (status.running ? 'http://' + status.host + ':' + status.port : 'não iniciada'),
       'Pedidos aguardando: ' + status.pending,
       'Kits recebidos do plugin: ' + status.kits.length,
+      status.lastKitsSyncAt ? 'Última lista recebida: ' + status.lastKitsSyncAt : 'Aguardando primeira sincronização do plugin.',
       'Supabase: ' + (database.enabled ? 'configurado' : 'desativado'),
-      database.lastSyncedAt ? 'Última sincronização: ' + database.lastSyncedAt : '',
+      database.lastSyncedAt ? 'Última sincronização do banco: ' + database.lastSyncedAt : '',
       database.lastError ? 'Aviso Supabase: ' + database.lastError : '',
       '',
       kits
     ].filter(Boolean).join('\n'));
   }
 
-  if (action === 'chave') {
-    const secret = getBridgeSecret();
-    if (!secret) return replyPrivate(interaction, 'A chave ainda não foi criada. Reinicie o bot para gerar automaticamente.');
-    return replyPrivate(interaction, 'Copie esta chave e cole em bridge.secret no config.yml do plugin.\n\n' + secret + '\n\nNão envie essa chave em canais públicos.');
-  }
-
-  const secret = regenerateBridgeSecret();
-  return replyPrivate(interaction, 'Uma nova chave foi criada e salva no .env. A chave anterior deixou de funcionar.\n\n' + secret + '\n\nCole a nova chave em bridge.secret no plugin e recarregue o plugin.');
+  const secret = getBridgeSecret();
+  if (!secret) return replyPrivate(interaction, 'A chave fixa ainda não foi criada. Inicie o bot uma vez para salvá-la no .env.');
+  return replyPrivate(
+    interaction,
+    'Esta é a chave fixa da integração. Ela é mantida no .env e não muda ao atualizar o bot. Cole o mesmo valor em bridge.secret no plugin.\n\n' +
+    secret + '\n\nNão compartilhe em canais públicos.'
+  );
 }
 
-async function processApprovedDelivery(channel, ticket, { newRequest = false } = {}) {
+async function notifyStaffPrivately(interaction, content) {
+  if (!interaction) return;
+  try {
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp({ content, ephemeral: true });
+    } else {
+      await interaction.reply({ content, ephemeral: true });
+    }
+  } catch (error) {
+    console.warn('[Asthen] Não foi possível enviar o aviso privado à equipe:', error.message);
+  }
+}
+
+async function processApprovedDelivery(channel, ticket, { newRequest = false, interaction = null } = {}) {
   const requestId = newRequest || !ticket.deliveryRequestId
     ? randomUUID()
     : ticket.deliveryRequestId;
@@ -932,7 +945,7 @@ async function processApprovedDelivery(channel, ticket, { newRequest = false } =
     deliveryError: null
   }) || ticket;
 
-  await channel.send('Pagamento confirmado. Solicitei a entrega de **' + String(current.kitName) + '** para **' + String(current.minecraftNick) + '** no Minecraft Java.');
+  await channel.send('Pagamento confirmado. A entrega do kit está sendo solicitada ao Minecraft.');
   try {
     const result = await deliverKit({
       requestId,
@@ -950,16 +963,28 @@ async function processApprovedDelivery(channel, ticket, { newRequest = false } =
     });
 
     const success = status === 'KIT_DELIVERED' || status === 'KIT_PENDING';
+    if (success) {
+      await channel.send({
+        embeds: [makeDeliveryEmbed({
+          ...result,
+          player: result.player || current.minecraftNick,
+          kit: current.kitDisplayName || current.kitName
+        })],
+        components: [makeCloseRow()]
+      });
+      return;
+    }
+
     await channel.send({
-      embeds: [makeDeliveryEmbed({
-        ...result,
-        player: result.player || current.minecraftNick,
-        kit: result.kit || current.kitName
-      })],
-      components: success
-        ? [makeCloseRow()]
-        : [makeDeliveryRetryControls(result.final === true ? 'new' : 'same')]
+      content: 'Pagamento confirmado. A equipe está verificando a entrega do kit.',
+      components: [makeDeliveryRetryControls(result.final === true ? 'new' : 'same')]
     });
+    await notifyStaffPrivately(
+      interaction,
+      'A entrega não foi concluída. Status: ' + status + '. ' +
+      String(result.message || 'Verifique a configuração do plugin e tente novamente.') +
+      '\nO pedido foi preservado. A equipe pode solicitar outra tentativa pelo mesmo identificador quando apropriado.'
+    );
   } catch (error) {
     updateTicket(ticket.channelId, {
       deliveryStatus: error.code === 'BRIDGE_TIMEOUT' ? 'TIMEOUT' : 'WAITING',
@@ -967,9 +992,15 @@ async function processApprovedDelivery(channel, ticket, { newRequest = false } =
       deliveryUpdatedAt: new Date().toISOString()
     });
     await channel.send({
-      content: 'O pagamento foi confirmado, mas o plugin ainda não respondeu. O pedido foi preservado. Quando o plugin estiver online, a equipe pode tentar novamente usando o mesmo identificador para evitar uma entrega duplicada.',
+      content: 'Pagamento confirmado. A entrega está aguardando a conexão com o Minecraft; a equipe está acompanhando.',
       components: [makeDeliveryRetryControls('same')]
     });
+    await notifyStaffPrivately(
+      interaction,
+      'O plugin ainda não respondeu à solicitação de entrega. O pedido foi preservado. ' +
+      'Quando o plugin estiver online, tente novamente usando o mesmo identificador para evitar duplicidade. ' +
+      'Detalhe técnico: ' + String(error.message || 'Sem resposta.')
+    );
   }
 }
 
@@ -991,7 +1022,7 @@ async function retryApprovedDelivery(interaction, mode) {
       : 'A tentativa anterior foi reenviada com o mesmo identificador.',
     ephemeral: true
   });
-  void processApprovedDelivery(interaction.channel, ticket, { newRequest: mode === 'new' })
+  void processApprovedDelivery(interaction.channel, ticket, { newRequest: mode === 'new', interaction })
     .catch(error => console.error('[Asthen] Falha ao tentar entregar o kit:', error));
 }
 
@@ -1027,7 +1058,6 @@ async function handleCommand(interaction) {
   if (!interaction.guild) return replyPrivate(interaction, 'Use este comando dentro de um servidor.');
 
   if (interaction.commandName === 'configurar') return configureChannels(interaction);
-  if (interaction.commandName === 'pix') return configurePix(interaction);
   if (interaction.commandName === 'kit') return handleKitCommand(interaction);
   if (interaction.commandName === 'bridge') return handleBridgeCommand(interaction);
 }
