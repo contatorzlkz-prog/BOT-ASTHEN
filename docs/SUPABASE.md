@@ -1,39 +1,50 @@
 # Supabase
 
-O Supabase é opcional. O bot sempre salva o estado atual em `data/state.json` antes de tentar sincronizar a cópia remota.
+O Supabase é opcional. O bot grava o estado primeiro em `data/state.json` e, quando a conexão estiver configurada, envia uma cópia do snapshot para a tabela `asthen_bot_state`.
 
-## Configurar
+## 1. Criar a tabela
 
-1. Abra o projeto no painel do Supabase.
-2. Entre em SQL Editor.
-3. Execute o arquivo `supabase/001_asthen_bot_state.sql` deste repositório.
-4. Na configuração inicial do bot, informe:
-   - **Project URL:** URL base do projeto, por exemplo `https://seu-projeto.supabase.co`.
-   - **Secret API Key:** chave do tipo `sb_secret_...`.
+No painel do projeto Supabase, abra o SQL Editor e execute:
 
-O bot também remove automaticamente os sufixos `/rest/v1` e `/v1` caso tenham sido copiados junto com a URL. Não inclua caminhos REST no valor salvo no `.env`.
+`supabase/001_asthen_bot_state.sql`
 
-## Segurança
+A tabela guarda uma única linha, com `id = main`, contendo o snapshot JSON do bot.
 
-- Use a Secret API Key somente no computador/servidor onde o bot é executado.
-- Não use a chave Publishable/anon para operações administrativas de gravação.
-- Não publique, envie por print ou versione o arquivo `.env`.
-- O SQL habilita RLS, revoga acesso de `anon` e `authenticated` e concede acesso à tabela para `service_role`.
+## 2. Configurar o arquivo .env
 
-## Como a sincronização funciona
+Use a URL base do projeto, sem `/rest/v1` nem `/v1` no final:
+
+```env
+SUPABASE_URL=https://seu-projeto.supabase.co
+SUPABASE_SECRET_KEY=sb_secret_sua_chave
+SUPABASE_TABLE=asthen_bot_state
+```
+
+O bot também reconhece as variáveis antigas `SUPABASE_SERVICE_ROLE_KEY` e `SUPABASE_KEY`. A chave secreta nova `sb_secret_...` deve ficar somente no backend do bot.
+
+## 3. Como a sincronização funciona
 
 - Cada alteração é salva primeiro no arquivo local.
-- Alterações próximas são agrupadas em um snapshot, reduzindo requisições repetidas.
-- Se a API ficar indisponível, o estado local continua valendo e uma nova tentativa é agendada com intervalo progressivo.
-- O banco guarda o snapshot atual, não um histórico de tickets encerrados.
-- Tickets abertos são mantidos no estado. Quando o canal é excluído, seu registro é removido na próxima sincronização.
-- Ao iniciar, o bot compara os registros locais com os canais existentes e reconcilia registros órfãos.
+- Alterações próximas são agrupadas antes de enviar um snapshot ao Supabase.
+- Se o arquivo local estiver vazio e existir um snapshot remoto, o bot restaura o snapshot remoto para o arquivo local.
+- Se houver estado local e remoto ao iniciar, o estado local é mantido e enviado ao banco.
+- Quando o Supabase está indisponível, o bot continua usando o backup local e tenta sincronizar novamente com intervalo progressivo.
+- Ao encerrar com Ctrl+C ou SIGTERM, o bot tenta concluir a sincronização pendente.
+- O banco guarda o estado atual, não um histórico permanente de tickets encerrados.
 
-## Diagnóstico
+## 4. Cabeçalhos e chaves
 
-- **PGRST125 / Invalid path specified:** confira se a Project URL não contém um caminho incorreto. Use a URL base; o bot normaliza os sufixos mais comuns.
-- **401/403:** confira se a chave é uma Secret API Key válida e se foi copiada por inteiro.
-- **404 / tabela não encontrada:** execute novamente o SQL e confirme o nome `public.asthen_bot_state`.
-- **Sem conexão:** confira a URL, a rede e o status do projeto. O backup local continua sendo usado.
+Para uma chave atual `sb_secret_...`, o bot envia a chave no cabeçalho `apikey` e não tenta usá-la como um JWT no cabeçalho `Authorization`. Chaves antigas do tipo `service_role` continuam sendo enviadas também como Bearer JWT.
+
+A Secret API Key tem acesso administrativo e ignora as regras RLS. Use-a somente no computador/servidor onde o bot roda. Nunca a coloque no GitHub, em prints ou em mensagens.
+
+## 5. Diagnóstico
+
+- **401/403:** confira se a chave é uma Secret API Key ou uma chave antiga `service_role`, e se foi copiada por inteiro.
+- **404 / tabela não encontrada:** execute o SQL e confira `SUPABASE_TABLE`.
+- **PGRST125 / Invalid path specified:** confira se `SUPABASE_URL` contém somente a URL base do projeto.
+- **Sem conexão:** confira a URL, a rede e o status do projeto. O backup local continua disponível.
+
+O comando `/bridge status` mostra se o Supabase está configurado e apresenta a última sincronização ou o aviso mais recente.
 
 Nunca compartilhe o conteúdo do `.env` ao pedir ajuda.
