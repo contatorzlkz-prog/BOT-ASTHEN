@@ -370,7 +370,7 @@ export function makeBuyerAnnouncement(ticket) {
     .setColor(brandColor())
     .setTitle('Compra confirmada')
     .setDescription(
-      '<@' + ticket.userId + '> comprou **' + String(ticket.kitDisplayName || ticket.kitName || 'Kit') + '**.'
+      '<@' + ticket.userId + '> comprou **' + displayKitName({ displayName: ticket.kitDisplayName, name: ticket.kitName || 'Kit' }) + '**.'
     )
     .addFields(
       { name: 'Valor', value: String(ticket.kitPrice || '—'), inline: true },
