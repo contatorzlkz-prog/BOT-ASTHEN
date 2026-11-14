@@ -449,7 +449,7 @@ function makeMinecraftNickModal(customId, currentNick = '') {
 
 async function openCatalog(interaction) {
   const config = getGuildConfig(interaction.guildId);
-  if (!config.kits.length) return replyPrivate(interaction, 'A loja está sem kits disponíveis no momento.');
+  if (!purchasableKits(config).length) return replyPrivate(interaction, 'A loja ainda não tem kits ativos com preço definido.');
 
   const existing = findOpenTicket(interaction.guildId, interaction.user.id, 'shop');
   if (existing) {
@@ -494,7 +494,7 @@ async function openCatalog(interaction) {
 
   return interaction.reply({
     content: CONFIG.shop.catalogPrompt,
-    components: [makeCatalogMenu(config.kits)],
+    components: [makeCatalogMenu(purchasableKits(config))],
     ephemeral: true
   });
 }
@@ -522,7 +522,7 @@ async function continuePurchase(interaction) {
 async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = false) {
   const config = getGuildConfig(interaction.guildId);
   const kit = config.kits.find(item => item.id === kitId);
-  if (!kit) return replyPrivate(interaction, 'Este kit não está mais disponível. Abra o catálogo novamente.');
+  if (!kit || kit.enabled === false || !String(kit.price || '').trim()) return replyPrivate(interaction, 'Este kit não está disponível para compra. Abra o catálogo novamente.');
 
   const existing = findOpenTicket(interaction.guildId, interaction.user.id, 'shop');
   if (existing) {
@@ -536,6 +536,7 @@ async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = 
     kit: {
       id: kit.id,
       name: kit.name,
+      displayName: kit.displayName || makeKitDisplayName(kit.name),
       price: kit.price,
       description: kit.description,
       imageUrl: kit.imageUrl || ''
@@ -574,14 +575,32 @@ async function switchPurchaseKit(interaction, requestedRevision) {
     return replyPrivate(interaction, 'Esta prévia ficou desatualizada. Abra o catálogo novamente.');
   }
   const config = getGuildConfig(interaction.guildId);
-  if (!config.kits.length) return replyPrivate(interaction, 'A loja está sem kits disponíveis no momento.');
+  if (!purchasableKits(config).length) return replyPrivate(interaction, 'A loja ainda não tem kits ativos com preço definido.');
   return interaction.update({
     content: CONFIG.shop.catalogPrompt,
     embeds: [],
-    components: [makeCatalogMenu(config.kits)]
+    components: [makeCatalogMenu(purchasableKits(config))]
   });
 }
 
+
+function purchasableKits(config) {
+  return config.kits.filter(kit => kit.enabled !== false && Boolean(String(kit.price || '').trim()));
+}
+
+async function sendOrderTicketMessage(channel, user, kit, minecraftNick, guildConfig) {
+  const staffMention = guildConfig.staffRoleId ? '<@&' + guildConfig.staffRoleId + '>' : '';
+  await channel.send({
+    content: staffMention || undefined,
+    embeds: [makeOrderEmbed({ userId: user.id, kit, minecraftNick })],
+    files: [{ attachment: PIX_QR_IMAGE_PATH, name: PIX_QR_FILENAME }],
+    components: [makeOrderControls()],
+    allowedMentions: {
+      users: [user.id],
+      roles: guildConfig.staffRoleId ? [guildConfig.staffRoleId] : []
+    }
+  });
+}
 
 async function handleNickSubmit(interaction) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
@@ -589,7 +608,7 @@ async function handleNickSubmit(interaction) {
 
   const minecraftNick = interaction.fields.getTextInputValue('minecraft-nick').trim();
   if (!/^[A-Za-z0-9_]{3,16}$/.test(minecraftNick)) {
-    return replyPrivate(interaction, 'Informe um nick Java válido, com 3 a 16 letras, números ou _.');
+    return replyPrivate(interaction, 'Informe um nick válido do Minecraft, com 3 a 16 letras, números ou _.');
   }
 
   if (interaction.customId.startsWith('shop:nick:edit:')) {
@@ -611,9 +630,9 @@ async function handleNickSubmit(interaction) {
 
   const config = getGuildConfig(interaction.guildId);
   const currentKit = config.kits.find(kit => kit.id === draft.kit?.id);
-  if (!currentKit) {
+  if (!currentKit || currentKit.enabled === false || !String(currentKit.price || '').trim()) {
     deletePurchaseDraft(interaction.guildId, interaction.user.id);
-    return replyPrivate(interaction, 'Este kit não está mais disponível. Escolha outro produto.');
+    return replyPrivate(interaction, 'Este kit não está disponível para compra no momento. Escolha outro produto.');
   }
 
   draft.minecraftNick = minecraftNick;
@@ -633,34 +652,14 @@ async function handleNickSubmit(interaction) {
 
     if (!result.alreadyOpen) {
       const latestConfig = getGuildConfig(interaction.guildId);
-      const orderCode = result.channel.id.slice(-6).toUpperCase();
-      const staffMention = latestConfig.staffRoleId ? '<@&' + latestConfig.staffRoleId + '>' : '';
-      const embeds = [
-        makeOrderEmbed({
-          user: interaction.user,
-          kit: currentKit,
-          minecraftNick,
-          orderCode
-        }),
-        latestConfig.pixKey ? makePixEmbed(latestConfig) : makeMissingPixEmbed()
-      ];
-
-      await result.channel.send({
-        content: (interaction.user.toString() + ' ' + staffMention).trim(),
-        embeds,
-        components: [makeOrderControls()],
-        allowedMentions: {
-          users: [interaction.user.id],
-          roles: latestConfig.staffRoleId ? [latestConfig.staffRoleId] : []
-        }
-      });
+      await sendOrderTicketMessage(result.channel, interaction.user, currentKit, minecraftNick, latestConfig);
     }
 
     deletePurchaseDraft(interaction.guildId, interaction.user.id);
     await interaction.editReply({
       content: result.alreadyOpen
         ? 'Você já tem um pedido em andamento.'
-        : 'Nick confirmado. Seu ticket privado já está aberto com a prévia do kit.',
+        : 'Ticket de pagamento criado. Envie o comprovante no canal.',
       components: [makeChannelLinkRow(result.channel)]
     });
   } catch (error) {
@@ -708,9 +707,9 @@ async function confirmPurchase(interaction, requestedRevision) {
 
   const config = getGuildConfig(interaction.guildId);
   const currentKit = config.kits.find(kit => kit.id === draft.kit.id);
-  if (!currentKit) {
+  if (!currentKit || currentKit.enabled === false || !String(currentKit.price || '').trim()) {
     deletePurchaseDraft(interaction.guildId, interaction.user.id);
-    return replyPrivate(interaction, 'Este kit foi removido da loja. Escolha outro produto.');
+    return replyPrivate(interaction, 'Este kit foi removido ou está indisponível para compra.');
   }
 
   const existing = findOpenTicket(interaction.guildId, interaction.user.id, 'shop');
@@ -740,35 +739,20 @@ async function confirmPurchase(interaction, requestedRevision) {
     });
 
     if (!result.alreadyOpen) {
-      const latestConfig = getGuildConfig(interaction.guildId);
-      const orderCode = result.channel.id.slice(-6).toUpperCase();
-      const staffMention = latestConfig.staffRoleId ? '<@&' + latestConfig.staffRoleId + '>' : '';
-      const embeds = [
-        makeOrderEmbed({
-          user: interaction.user,
-          kit: currentKit,
-          minecraftNick: draft.minecraftNick,
-          orderCode
-        }),
-        latestConfig.pixKey ? makePixEmbed(latestConfig) : makeMissingPixEmbed()
-      ];
-
-      await result.channel.send({
-        content: (interaction.user.toString() + ' ' + staffMention).trim(),
-        embeds,
-        components: [makeOrderControls()],
-        allowedMentions: {
-          users: [interaction.user.id],
-          roles: latestConfig.staffRoleId ? [latestConfig.staffRoleId] : []
-        }
-      });
+      await sendOrderTicketMessage(
+        result.channel,
+        interaction.user,
+        currentKit,
+        draft.minecraftNick,
+        getGuildConfig(interaction.guildId)
+      );
     }
 
     deletePurchaseDraft(interaction.guildId, interaction.user.id);
     await interaction.editReply({
       content: result.alreadyOpen
         ? 'Você já tem um pedido em andamento.'
-        : 'Pedido confirmado. O canal de pagamento já está pronto.',
+        : 'Ticket de pagamento criado. Envie o comprovante no canal.',
       embeds: [],
       components: [makeChannelLinkRow(result.channel)]
     });
@@ -784,13 +768,9 @@ async function showPixKey(interaction) {
   if (!ticket || ticket.type !== 'shop') {
     return replyPrivate(interaction, 'Este botão só funciona em tickets de compra.');
   }
-
-  const config = getGuildConfig(interaction.guildId);
-  if (!config.pixKey) return replyPrivate(interaction, 'A chave Pix ainda não foi configurada pela loja.');
-
   return replyPrivate(
     interaction,
-    'Chave Pix para copiar:\n```' + String(config.pixKey).slice(0, 900) + '```\nToque e segure a chave para copiá-la no celular.'
+    'Chave Pix da loja:\n```' + PIX_KEY_DEFAULT + '```\nToque e segure para copiar.'
   );
 }
 
@@ -799,9 +779,8 @@ async function closeTicket(interaction) {
   if (!ticket) return replyPrivate(interaction, 'Este canal não está registrado como ticket.');
 
   const config = getGuildConfig(interaction.guildId);
-  const isOwner = interaction.user.id === ticket.userId;
-  if (!isOwner && !isStaff(interaction, config)) {
-    return replyPrivate(interaction, 'Somente quem abriu o ticket ou a equipe pode fechá-lo.');
+  if (!isStaff(interaction, config)) {
+    return replyPrivate(interaction, 'Somente a equipe autorizada pode fechar este canal.');
   }
   if (ticket.status !== 'open' || closingTickets.has(interaction.channelId)) {
     return replyPrivate(interaction, 'Este ticket já está sendo fechado.');
@@ -1028,7 +1007,7 @@ async function openSupportTicket(interaction, kind) {
     const config = getGuildConfig(interaction.guildId);
     const staffMention = config.staffRoleId ? '<@&' + config.staffRoleId + '>' : '';
     await result.channel.send({
-      content: (interaction.user.toString() + ' ' + staffMention).trim(),
+      content: staffMention || undefined,
       embeds: [makeSupportTicketEmbed(kind, interaction.user)],
       components: [makeCloseRow()],
       allowedMentions: {
