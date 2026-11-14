@@ -1,3 +1,4 @@
+import { scheduleSupabaseSync, initializeSupabaseSync } from './supabase.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,10 +64,10 @@ export function loadStore() {
     }
     state = emptyState();
   }
-  saveStore();
+  saveStore({ syncRemote: false });
 }
 
-export function saveStore() {
+export function saveStore({ syncRemote = true } = {}) {
   fs.mkdirSync(dataDir, { recursive: true });
   const temporaryFile = dataFile + '.tmp';
   const contents = JSON.stringify(state, null, 2) + '\n';
@@ -79,10 +80,26 @@ export function saveStore() {
       fs.closeSync(descriptor);
     }
     fs.renameSync(temporaryFile, dataFile);
+    if (syncRemote) scheduleSupabaseSync(JSON.parse(contents));
   } catch (error) {
     try { fs.rmSync(temporaryFile, { force: true }); } catch {}
     throw new Error('Falha ao salvar data/state.json: ' + error.message);
   }
+}
+
+export async function initializeStoreSync() {
+  return initializeSupabaseSync({
+    getSnapshot: () => JSON.parse(JSON.stringify(state)),
+    applySnapshot: remote => {
+      state = {
+        guilds: remote.guilds || {},
+        tickets: remote.tickets || {},
+        purchaseDrafts: remote.purchaseDrafts || {}
+      };
+      for (const guildId of Object.keys(state.guilds)) ensureGuildConfig(guildId);
+    },
+    saveLocal: () => saveStore({ syncRemote: false })
+  });
 }
 
 export function getGuildConfig(guildId) {
