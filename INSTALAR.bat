@@ -66,20 +66,27 @@ set "GUILDID="
 set /p "TOKEN=Cole o TOKEN do bot: "
 set /p "CLIENTID=Cole o APPLICATION ID: "
 set /p "GUILDID=ID do servidor de teste (opcional): "
-if "%TOKEN%"=="" goto env_template
-if "%CLIENTID%"=="" goto env_template
+if "%TOKEN%"=="" goto env_missing
+if "%CLIENTID%"=="" goto env_missing
+
 > ".env" echo DISCORD_TOKEN=%TOKEN%
 >> ".env" echo CLIENT_ID=%CLIENTID%
 >> ".env" echo GUILD_ID=%GUILDID%
+>> ".env" echo DKB_HOST=127.0.0.1
+>> ".env" echo DKB_PORT=8787
+>> ".env" echo SUPABASE_URL=
+>> ".env" echo SUPABASE_SECRET_KEY=
+>> ".env" echo SUPABASE_TABLE=asthen_bot_state
 goto done
 
-:env_template
-copy ".env.example" ".env" >nul
-echo Abra o arquivo .env e preencha DISCORD_TOKEN e CLIENT_ID.
-goto done
+:env_missing
+echo.
+echo A configuracao nao foi concluida. Execute INSTALAR.bat novamente e informe TOKEN e APPLICATION ID.
+pause
+exit /b 1
 
 :env_exists
-echo O arquivo .env ja existe; foi mantido.
+echo O arquivo .env ja existe; foi mantido sem alteracoes.
 
 :done
 echo.
