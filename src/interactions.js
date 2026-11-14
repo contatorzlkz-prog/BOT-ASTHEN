@@ -1097,7 +1097,12 @@ export async function handleInteraction(interaction) {
     if (interaction.customId.startsWith('delivery:retry:')) {
       return retryApprovedDelivery(interaction, interaction.customId.split(':')[2]);
     }
-    if (interaction.customId.startsWith('kit:wizard:')) return handleKitWizardButton(interaction);
+    if (interaction.customId.startsWith('kit:remove:confirm:')) {
+      return confirmKitRemoval(interaction, interaction.customId.split(':')[3]);
+    }
+    if (interaction.customId === 'kit:remove:cancel') {
+      return interaction.update({ content: 'Remoção cancelada.', embeds: [], components: [] });
+    }
   }
 
   if (interaction.isStringSelectMenu() && interaction.customId === 'support:select') {
@@ -1107,9 +1112,18 @@ export async function handleInteraction(interaction) {
   if (interaction.isStringSelectMenu() && interaction.customId === 'shop:select') {
     return handleCatalogSelection(interaction);
   }
+  if (interaction.isStringSelectMenu() && interaction.customId === 'kit:edit-select') {
+    return handleKitAdminSelection(interaction, 'edit');
+  }
+  if (interaction.isStringSelectMenu() && interaction.customId === 'kit:remove-select') {
+    return handleKitAdminSelection(interaction, 'remove');
+  }
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('kit:edit-field:')) {
+    return handleKitEditFieldSelection(interaction);
+  }
 
   if (interaction.isModalSubmit()) {
-    if (interaction.customId.startsWith('kit:field:')) return handleKitField(interaction);
+    if (interaction.customId.startsWith('kit:edit-modal:')) return handleKitEditModal(interaction);
     if (interaction.customId === 'shop:nick:submit' || interaction.customId.startsWith('shop:nick:edit:')) {
       return handleNickSubmit(interaction);
     }
