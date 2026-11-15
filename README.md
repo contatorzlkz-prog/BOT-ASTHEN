@@ -2,11 +2,11 @@
 
 Bot de Discord para atendimento, catálogo de kits de Minecraft, tickets de pagamento e entrega pelo Plugin-ASTHEN.
 
-**Versão 2.7.0**
+**Versão 2.8.0**
 
 <p align="center">
   <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip">
-    <img src="https://raw.githubusercontent.com/contatorzlkz-prog/BOT-ASTHEN/main/assets/download-zip.svg" alt="Baixar ASTHEN BOT 2.7.0 em ZIP" width="264" height="58">
+    <img src="https://raw.githubusercontent.com/contatorzlkz-prog/BOT-ASTHEN/main/assets/download-zip.svg" alt="Baixar ASTHEN BOT 2.8.0 em ZIP" width="264" height="58">
   </a>
 </p>
 
@@ -19,11 +19,11 @@ Bot de Discord para atendimento, catálogo de kits de Minecraft, tickets de paga
 1. O cliente abre a loja e escolhe um kit no menu.
 2. O bot mostra uma prévia compacta com nome de exibição, preço, descrição e imagem.
 3. O cliente pode trocar de kit ou confirmar.
-4. O bot pede o nick do Minecraft, sem pedir para escolher Java ou Bedrock.
+4. O bot pede o nick do Minecraft e pergunta se o jogador usa Java ou Bedrock.
 5. O bot cria um ticket privado com o pedido resumido, a chave Pix fixa e o QR Code.
 6. O cliente envia a imagem ou PDF do comprovante.
 7. Um membro autorizado da equipe confirma ou recusa o pagamento.
-8. Depois da aprovação, o bot solicita a entrega ao plugin e atualiza o ticket com o resultado.
+8. Depois da aprovação, o bot solicita a entrega ao plugin na plataforma escolhida. Se houver timeout, repete uma vez usando o mesmo identificador da compra.
 
 O ticket não mostra identificador interno do pedido nem a lista de itens do kit. A confirmação do pagamento é manual.
 
@@ -39,7 +39,7 @@ O plugin envia sua lista ao bot. O bot importa os kits novos e salva o catálogo
 
 O administrador usa /kit editar no Discord para selecionar o kit e escolher o campo que deseja alterar: nome exibido, preço, descrição ou imagem HTTPS. O identificador original do plugin não muda. Por exemplo, Kit_Ferro pode aparecer para o cliente como **Kit Ferro**.
 
-Kits novos entram sem preço e não aparecem como compráveis até que o preço seja definido. Quando um kit é excluído no plugin, a próxima sincronização remove sua entrada do catálogo e da tabela de kits do Supabase. /kit remover apenas oculta o produto da loja; não apaga os itens dentro do Minecraft.
+Kits novos entram sem preço e não aparecem como compráveis até que o preço seja definido. Quando um kit é desativado ou removido do servidor, ele continua visível como indisponível. O produto, o preço, a descrição e os pedidos antigos são preservados. /kit remover apenas oculta o produto da loja; não apaga os itens dentro do Minecraft.
 
 Não existem kits de demonstração cadastrados por padrão.
 
@@ -83,7 +83,7 @@ O token do Discord, a chave DKB_SECRET e a chave do Supabase são credenciais di
 | /kit editar | Seleciona um kit e o campo comercial que será alterado |
 | /kit remover | Remove um kit do catálogo da loja |
 | /bridge status | Mostra o estado da API, a última sincronização de kits e o Supabase |
-| /bridge chave | Mostra em privado a chave estável que deve ser usada no plugin |
+| — | A chave fica somente nos arquivos locais `.env` e `config.yml`; ela não é exibida no Discord. |
 
 Os comandos administrativos exigem **Gerenciar servidor**. Nos tickets, somente administradores ou membros com o cargo configurado em /configurar equipe podem confirmar, recusar e fechar pedidos.
 
@@ -178,3 +178,7 @@ O GitHub Actions executa essas verificações nas atualizações da branch princ
 - A API local deve ficar em 127.0.0.1; use HTTPS para disponibilizar o endereço ao computador do plugin.
 - O bot não verifica comprovantes bancários automaticamente.
 - A entrega real no Minecraft depende de o plugin estar atualizado e conectado.
+
+### Plataforma e preço dos kits
+
+O pedido salva a plataforma Java ou Bedrock. A versão publicada do plugin atualmente envia `name`, `enabled` e `items`, mas não envia `price`; por isso, enquanto o plugin não passar esse campo, configure o preço no Discord com `/kit editar`. Quando o plugin enviar `price`, o bot poderá atualizar esse valor e preservará o preço existente quando o campo não vier.
