@@ -1,4 +1,4 @@
-# Integração do ASTHEN BOT 2.9.0 com o Plugin-ASTHEN
+# Integração do ASTHEN BOT 2.10.0 com o Plugin-ASTHEN 1.2.0
 
 A integração usa o modo poll: o plugin faz as conexões de saída para buscar pedidos e devolver resultados. O servidor Minecraft não precisa aceitar conexões de entrada.
 
@@ -65,14 +65,17 @@ Use a URL HTTPS gerada pelo túnel, sem acrescentar /plugin/v1. Não use localho
 O administrador cria o kit real no Minecraft usando o comando do Plugin-ASTHEN (por exemplo, `/dk create Kit_Ferro`, conforme a versão instalada). O plugin envia a lista completa em `POST /plugin/v1/kits` e o bot importa os novos identificadores.
 
 Depois, um administrador do Discord pode:
-- `/kit criar`: selecionar um kit novo recebido do Minecraft e preencher nome comercial, preço, descrição e imagem HTTPS em uma só janela.
-- `/kit listar`: ver o estado de cada kit no Minecraft e na loja.
-- `/kit editar`: alterar qualquer campo comercial individualmente.
-- `/kit remover`: marcar o produto como indisponível sem apagar seu cadastro, histórico ou o arquivo do Minecraft.
+- `/dk price <nome> <valor>` no Minecraft: definir o preço em reais. Use vírgula ou ponto, por exemplo `29,90`.
+- `/dk price <nome> remover`: tirar o kit da venda sem apagar o kit nem seus itens.
+- `/dk enable <nome>` e `/dk disable <nome>`: ativar/desativar o kit no servidor.
+- `/kit criar` no Discord: cadastrar nome exibido, descrição e imagem HTTPS. O preço não é editado no bot.
+- `/kit listar`: ver o estado, preço e disponibilidade sincronizados do Minecraft.
+- `/kit editar`: alterar nome comercial, descrição, imagem ou bloqueio manual da loja.
+- `/kit remover`: marcar o produto como indisponível no Discord sem apagar seu cadastro, histórico ou o arquivo do Minecraft.
 
 Todos os comandos `/kit` exigem a permissão **Administrador** no Discord.
 
-**Separação importante:** a criação dos itens e do inventário acontece no plugin Minecraft. `/kit criar` apenas configura a apresentação comercial no Discord; ele não inventa nem altera os itens do Minecraft.
+**Separação importante:** o plugin é a fonte oficial dos itens, preço e estado de venda. `/kit criar` apenas configura a apresentação comercial no Discord; ele não altera os itens nem o preço do Minecraft.
 
 Para apagar o kit real, use a função de exclusão do plugin. Quando a lista seguinte não contiver mais esse identificador, o bot mantém o produto no catálogo e marca como indisponível. Produtos antigos e pedidos não são apagados.
 
@@ -86,7 +89,7 @@ Authorization: Bearer <DKB_SECRET>
 
 - GET /plugin/v1/pull?limit=5: busca pedidos. Sem pedidos, responde HTTP 204.
 - POST /plugin/v1/result: recebe resultado final de entrega.
-- POST /plugin/v1/kits: recebe a lista completa dos kits do plugin.
+- POST /plugin/v1/kits: recebe a lista completa dos kits do plugin, incluindo preço e disponibilidade.
 
 A API do bot envia request_id, player, a plataforma escolhida pelo cliente (java ou bedrock) e o identificador exato do kit. O plugin continua responsável por entregar os itens.
 
@@ -105,6 +108,33 @@ O mesmo request_id deve ser reutilizado em uma repetição de entrega para evita
 
 Em uma instalação nova, execute todo o arquivo [supabase/SETUP.sql](../supabase/SETUP.sql). Para projeto que já tinha as tabelas antigas, execute [supabase/003_asthen_bot_kit_catalog_status.sql](../supabase/003_asthen_bot_kit_catalog_status.sql). Consulte [SUPABASE.md](SUPABASE.md).
 
-### Preço dos kits
+### Preço e disponibilidade — contrato do Plugin-ASTHEN 1.2.0
 
-O bot aceita `price` como campo opcional na sincronização. O plugin publicado ainda envia somente `name`, `enabled` e `items`, então configure o cadastro comercial com `/kit criar` e use `/kit editar` para ajustes posteriores. Se `price` não vier na sincronização, o bot preserva o valor já cadastrado.
+O plugin envia a lista completa com estes campos por kit:
+
+~~~json
+{
+  "name": "Kit_Ferro",
+  "enabled": true,
+  "items": 12,
+  "price": 29.9,
+  "price_cents": 2990,
+  "for_sale": true
+}
+~~~
+
+- `price`: preço em reais, apenas para exibição/compatibilidade.
+- `price_cents`: preço inteiro em centavos. O bot usa este campo para calcular o valor exato, sem depender de arredondamento de ponto flutuante.
+- `for_sale`: verdadeiro somente quando o kit está ativo e tem preço.
+- Sem preço: `price` e `price_cents` vêm como `null`, e `for_sale` vem como `false`.
+- Desativado: `enabled` e `for_sale` vêm como `false`.
+
+O bot atualiza o preço quando recebe a lista do plugin. Se o plugin retirar o preço ou enviar `for_sale: false`, o produto fica indisponível e o preço antigo não é mantido como preço de venda. Descrição, nome comercial e imagem definidos no Discord são preservados.
+
+### Entrega em Shulker Box
+
+O Plugin-ASTHEN 1.2.0 monta uma única Shulker Box na mesma cor da caixa usada para cadastrar o kit, com o nome técnico do kit e os itens nos mesmos slots do original. Kits antigos que não guardavam a cor usam a caixa roxa padrão.
+
+A Shulker Box ocupa um único slot do inventário. Se não houver espaço, o plugin guarda o kit completo como pendente, sem entregar só parte dos itens. O jogador pode usar `/dk claim` ou receber a pendência ao entrar, conforme a configuração do plugin. O bot informa essa condição no ticket.
+
+A compilação do plugin no GitHub Actions passou contra a dependência Paper configurada no projeto. A montagem e a retirada da Shulker Box ainda precisam de teste dentro de um servidor Paper real.
