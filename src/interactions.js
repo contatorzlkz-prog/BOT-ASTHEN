@@ -368,7 +368,7 @@ async function handleKitCommand(interaction) {
       return replyPrivate(interaction, 'Todos os kits ativos recebidos do plugin já têm cadastro comercial. Use /kit editar para alterar um produto existente.');
     }
     return interaction.reply({
-      content: 'Selecione um kit que já existe no Minecraft. O preço é definido no jogo com /dk price <nome> <valor>. Esta etapa cadastra apenas nome exibido, descrição e imagem no Discord.'
+      content: 'Selecione um kit que já existe no Minecraft. O preço é definido no jogo com /dk price <nome> <valor>. Esta etapa cadastra apenas nome exibido, descrição e imagem no Discord.',
       components: [makeKitAdminMenu(pending, 'kit:create-select')],
       ephemeral: true
     });
@@ -428,7 +428,7 @@ async function handleKitCreateModal(interaction) {
   });
   await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
   return interaction.reply({
-    content: 'Cadastro comercial salvo. O preço e a disponibilidade de venda continuam sendo controlados pelo Plugin-ASTHEN.'
+    content: 'Cadastro comercial salvo. O preço e a disponibilidade de venda continuam sendo controlados pelo Plugin-ASTHEN.',
     embeds: updated ? [makeKitPreviewEmbed(updated)] : [],
     ephemeral: true
   });
