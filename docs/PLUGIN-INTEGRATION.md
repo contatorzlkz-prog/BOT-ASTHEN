@@ -106,7 +106,7 @@ O mesmo request_id deve ser reutilizado em uma repetição de entrega para evita
 
 ## 7. Supabase
 
-Em uma instalação nova, execute todo o arquivo [supabase/SETUP.sql](../supabase/SETUP.sql). Para projeto que já tinha as tabelas antigas, execute [supabase/003_asthen_bot_kit_catalog_status.sql](../supabase/003_asthen_bot_kit_catalog_status.sql). Consulte [SUPABASE.md](SUPABASE.md).
+Em uma instalação nova, execute todo o arquivo [supabase/SETUP.sql](../supabase/SETUP.sql). Para quem atualizou o bot 2.9.0, execute [supabase/004_asthen_bot_plugin_sale_contract.sql](../supabase/004_asthen_bot_plugin_sale_contract.sql). Em bancos mais antigos que ainda não têm os campos da migração 003, execute 003 e depois 004. Consulte [SUPABASE.md](SUPABASE.md).
 
 ### Preço e disponibilidade — contrato do Plugin-ASTHEN 1.2.0
 
@@ -137,4 +137,6 @@ O Plugin-ASTHEN 1.2.0 monta uma única Shulker Box na mesma cor da caixa usada p
 
 A Shulker Box ocupa um único slot do inventário. Se não houver espaço, o plugin guarda o kit completo como pendente, sem entregar só parte dos itens. O jogador pode usar `/dk claim` ou receber a pendência ao entrar, conforme a configuração do plugin. O bot informa essa condição no ticket.
 
-A compilação do plugin no GitHub Actions passou contra a dependência Paper configurada no projeto. A montagem e a retirada da Shulker Box ainda precisam de teste dentro de um servidor Paper real.
+**Verificação do Plugin-ASTHEN 1.2.0 em 15/11/2026:** o GitHub Actions executou os 67 testes JDK-only (67 passaram, 0 falharam) e concluiu `mvn package` com `BUILD SUCCESS` contra a dependência Paper configurada. Consulte [o build 43659388395](https://github.com/ElbsxS1/Plugin-ASTHEN/actions/runs/43659388395).
+
+Isso confirma os testes automatizados e a compilação, mas não executa um servidor Minecraft. A montagem, abertura, cor, slots e retirada da Shulker Box ainda precisam de teste dentro de um servidor Paper real.
