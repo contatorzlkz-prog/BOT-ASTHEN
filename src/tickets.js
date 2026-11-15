@@ -15,7 +15,7 @@ function slug(value) {
     .slice(0, 30) || 'membro';
 }
 
-export async function createPrivateTicket({ guild, user, type, kit = null, minecraftNick = null }) {
+export async function createPrivateTicket({ guild, user, type, kit = null, minecraftNick = null, platform = null }) {
   const config = getGuildConfig(guild.id);
   const isShop = type === 'shop';
   const panelId = isShop ? config.shopPanelChannelId : config.supportPanelChannelId;
@@ -114,6 +114,7 @@ export async function createPrivateTicket({ guild, user, type, kit = null, minec
     kitDescription: kit?.description ?? null,
     kitImageUrl: kit?.imageUrl ?? null,
     minecraftNick,
+    platform,
     orderStatus: isShop ? 'pending' : null,
     status: 'open',
     createdAt: new Date().toISOString()
