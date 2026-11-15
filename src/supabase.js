@@ -78,7 +78,10 @@ async function pushKitRows(config, snapshot) {
         description: String(kit.description || ''),
         price: String(kit.price || ''),
         image_url: String(kit.imageUrl || ''),
-        plugin_enabled: kit.enabled !== false,
+        plugin_enabled: kit.pluginEnabled !== false,
+        store_configured: kit.storeConfigured === true,
+        manually_unavailable: kit.manuallyUnavailable === true,
+        missing_from_plugin: kit.missingFromPlugin === true,
         item_count: Number.isFinite(Number(kit.itemCount)) ? Number(kit.itemCount) : 0,
         updated_at: now
       }));
