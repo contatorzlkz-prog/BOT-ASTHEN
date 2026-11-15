@@ -67,7 +67,9 @@ function ensureGuildConfig(guildId) {
     price: String(kit.price || ''),
     manuallyUnavailable: kit.manuallyUnavailable === true,
     missingFromPlugin: kit.missingFromPlugin === true,
-    pluginEnabled: typeof kit.pluginEnabled === 'boolean' ? kit.pluginEnabled : kit.enabled !== false,
+    pluginEnabled: typeof kit.pluginEnabled === 'boolean'
+      ? kit.pluginEnabled
+      : kit.missingFromPlugin === true ? false : kit.manuallyUnavailable === true ? true : kit.enabled !== false,
     storeConfigured: typeof kit.storeConfigured === 'boolean'
       ? kit.storeConfigured
       : Boolean(String(kit.price || '').trim() || String(kit.description || '').trim() || String(kit.imageUrl || '').trim()),
@@ -213,7 +215,8 @@ export function syncPluginKits(guildId, pluginKits) {
     const pluginEnabled = item.enabled === true;
     const manuallyUnavailable = old?.manuallyUnavailable === true;
     const hasPluginPrice = Object.prototype.hasOwnProperty.call(item, 'price') && item.price !== null;
-    const price = hasPluginPrice ? String(item.price).trim() : String(old?.price || '');
+    const incomingPrice = hasPluginPrice ? String(item.price).trim() : '';
+    const price = incomingPrice || String(old?.price || '');
     const wasConfigured = typeof old?.storeConfigured === 'boolean'
       ? old.storeConfigured
       : Boolean(old && (String(old.price || '').trim()
