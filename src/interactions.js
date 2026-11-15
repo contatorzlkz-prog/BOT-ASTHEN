@@ -35,6 +35,8 @@ import {
   makeOrderControls,
   makeOrderEmbed,
   makeOrderLogEmbed,
+  makePlatformControls,
+  makeDeliveryPlatformControls,
   makePurchaseReviewControls,
   makePurchaseReviewEmbed,
   makeShopPanel,
@@ -43,7 +45,7 @@ import {
 } from './ui.js';
 import { archiveAndDeleteTicket, createPrivateTicket } from './tickets.js';
 import { CONFIG } from './config.js';
-import { deliverKit, getBridgeSecret, getBridgeStatus } from './bridge.js';
+import { deliverKit, getBridgeStatus } from './bridge.js';
 import { PIX_KEY_DEFAULT, PIX_QR_FILENAME, PIX_QR_IMAGE_PATH } from './pix.js';
 import { getSupabaseStatus } from './supabase.js';
 
@@ -67,6 +69,14 @@ function canManage(interaction) {
 function isStaff(interaction, config = getGuildConfig(interaction.guildId)) {
   if (canManage(interaction)) return true;
   return Boolean(config.staffRoleId && interaction.member?.roles?.cache?.has?.(config.staffRoleId));
+}
+
+function isKitPurchasable(kit) {
+  return Boolean(kit)
+    && kit.enabled !== false
+    && kit.manuallyUnavailable !== true
+    && kit.missingFromPlugin !== true
+    && Boolean(String(kit.price || '').trim());
 }
 
 function replyPrivate(interaction, content, components = [], embeds = []) {
@@ -319,6 +329,14 @@ async function handleKitEditFieldSelection(interaction) {
   const field = interaction.values[0];
   const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
   if (!kit) return replyPrivate(interaction, 'Este kit não está mais no catálogo.');
+  if (field === 'availability') {
+    if (kit.missingFromPlugin || kit.pluginEnabled === false) {
+      return replyPrivate(interaction, 'Não é possível ativar: o kit foi removido ou está desativado no Minecraft.');
+    }
+    updateKit(interaction.guildId, kit.id, { manuallyUnavailable: false, enabled: true });
+    await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
+    return interaction.update({ content: 'O kit voltou a ficar disponível na loja.', embeds: [], components: [] });
+  }
   return interaction.showModal(makeKitEditModal(kit, field));
 }
 
@@ -365,7 +383,7 @@ async function confirmKitRemoval(interaction, kitId) {
   await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
   return interaction.update({
     content: '**' + String(kit.displayName || makeKitDisplayName(kit.name)) +
-      '** foi removido do catálogo e da tabela de kits do Supabase. O arquivo do kit no Minecraft não foi apagado.',
+      '** agora está marcado como indisponível. O produto, o preço e o histórico foram preservados.',
     embeds: [],
     components: []
   });
@@ -405,10 +423,10 @@ function makeMinecraftNickModal(customId, currentNick = '') {
   const input = new TextInputBuilder()
     .setCustomId('minecraft-nick')
     .setLabel('Nick que será usado no Minecraft')
-    .setPlaceholder('Digite seu nick exatamente como aparece no jogo')
+    .setPlaceholder('Java ou gamertag Bedrock, igual aparece no jogo')
     .setStyle(TextInputStyle.Short)
-    .setMinLength(3)
-    .setMaxLength(16)
+    .setMinLength(1)
+    .setMaxLength(32)
     .setRequired(true);
 
   if (currentNick) input.setValue(currentNick);
@@ -421,7 +439,7 @@ function makeMinecraftNickModal(customId, currentNick = '') {
 
 async function openCatalog(interaction) {
   const config = getGuildConfig(interaction.guildId);
-  if (!purchasableKits(config).length) return replyPrivate(interaction, 'A loja ainda não tem kits ativos com preço definido.');
+  if (!config.kits.length) return replyPrivate(interaction, 'A loja ainda não recebeu kits do servidor.');
 
   const existing = findOpenTicket(interaction.guildId, interaction.user.id, 'shop');
   if (existing) {
@@ -439,16 +457,27 @@ async function openCatalog(interaction) {
   if (existingDraft) {
     if (existingDraft.kit && config.kits.some(kit => kit.id === existingDraft.kit.id)) {
       if (existingDraft.stage === 'creating') {
-        existingDraft.stage = existingDraft.minecraftNick ? 'review' : 'selected';
+        existingDraft.stage = existingDraft.minecraftNick
+          ? (existingDraft.platform ? 'review' : 'platform')
+          : 'selected';
         savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
       }
-      if (existingDraft.minecraftNick) {
+      if (existingDraft.minecraftNick && existingDraft.platform) {
         existingDraft.stage = 'review';
         savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
         return interaction.reply({
           content: 'Você já iniciou uma compra. Confira os dados antes de confirmar.',
           embeds: [makePurchaseReviewEmbed(existingDraft)],
           components: [makePurchaseReviewControls(existingDraft)],
+          ephemeral: true
+        });
+      }
+      if (existingDraft.minecraftNick) {
+        existingDraft.stage = 'platform';
+        savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
+        return interaction.reply({
+          content: 'Escolha se você joga na edição Java ou Bedrock.',
+          components: [makePlatformControls(existingDraft)],
           ephemeral: true
         });
       }
@@ -466,11 +495,10 @@ async function openCatalog(interaction) {
 
   return interaction.reply({
     content: CONFIG.shop.catalogPrompt,
-    components: [makeCatalogMenu(purchasableKits(config))],
+    components: [makeCatalogMenu(config.kits)],
     ephemeral: true
   });
 }
-
 
 async function continuePurchase(interaction) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
@@ -478,15 +506,15 @@ async function continuePurchase(interaction) {
   if (draft.stage === 'creating') {
     return replyPrivate(interaction, 'Seu pedido está sendo criado. Aguarde a confirmação.');
   }
-  if (draft.minecraftNick) {
+  if (draft.minecraftNick && draft.platform) {
     draft.stage = 'review';
     savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
-    return replyPrivate(
-      interaction,
-      'Confira os dados antes de continuar.',
-      [makePurchaseReviewControls(draft)],
-      [makePurchaseReviewEmbed(draft)]
-    );
+    return replyPrivate(interaction, 'Confira os dados antes de continuar.', [makePurchaseReviewControls(draft)], [makePurchaseReviewEmbed(draft)]);
+  }
+  if (draft.minecraftNick) {
+    draft.stage = 'platform';
+    savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
+    return replyPrivate(interaction, 'Escolha se você joga na edição Java ou Bedrock.', [makePlatformControls(draft)]);
   }
   return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
 }
@@ -494,7 +522,7 @@ async function continuePurchase(interaction) {
 async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = false) {
   const config = getGuildConfig(interaction.guildId);
   const kit = config.kits.find(item => item.id === kitId);
-  if (!kit || kit.enabled === false || !String(kit.price || '').trim()) return replyPrivate(interaction, 'Este kit não está disponível para compra. Abra o catálogo novamente.');
+  if (!isKitPurchasable(kit)) return replyPrivate(interaction, 'Este kit está indisponível para compra. Ele continua no catálogo para consulta.');
 
   const existing = findOpenTicket(interaction.guildId, interaction.user.id, 'shop');
   if (existing) {
@@ -514,6 +542,7 @@ async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = 
       imageUrl: kit.imageUrl || ''
     },
     minecraftNick: '',
+    platform: '',
     stage: 'selected',
     revision: randomUUID().slice(0, 8)
   };
@@ -547,24 +576,20 @@ async function switchPurchaseKit(interaction, requestedRevision) {
     return replyPrivate(interaction, 'Esta prévia ficou desatualizada. Abra o catálogo novamente.');
   }
   const config = getGuildConfig(interaction.guildId);
-  if (!purchasableKits(config).length) return replyPrivate(interaction, 'A loja ainda não tem kits ativos com preço definido.');
-  return interaction.update({
-    content: CONFIG.shop.catalogPrompt,
-    embeds: [],
-    components: [makeCatalogMenu(purchasableKits(config))]
-  });
+  if (!config.kits.length) return replyPrivate(interaction, 'A loja ainda não recebeu kits do servidor.');
+  return interaction.update({ content: CONFIG.shop.catalogPrompt, embeds: [], components: [makeCatalogMenu(config.kits)] });
 }
 
 
 function purchasableKits(config) {
-  return config.kits.filter(kit => kit.enabled !== false && Boolean(String(kit.price || '').trim()));
+  return config.kits.filter(isKitPurchasable);
 }
 
-async function sendOrderTicketMessage(channel, user, kit, minecraftNick, guildConfig) {
+async function sendOrderTicketMessage(channel, user, kit, minecraftNick, platform, guildConfig) {
   const staffMention = guildConfig.staffRoleId ? '<@&' + guildConfig.staffRoleId + '>' : '';
   await channel.send({
     content: staffMention || undefined,
-    embeds: [makeOrderEmbed({ userId: user.id, kit, minecraftNick })],
+    embeds: [makeOrderEmbed({ userId: user.id, kit, minecraftNick, platform })],
     files: [{ attachment: PIX_QR_IMAGE_PATH, name: PIX_QR_FILENAME }],
     components: [makeOrderControls()],
     allowedMentions: {
@@ -579,67 +604,68 @@ async function handleNickSubmit(interaction) {
   if (!draft) return replyPrivate(interaction, 'Sua compra não está mais em preparação. Abra o catálogo novamente.');
 
   const minecraftNick = interaction.fields.getTextInputValue('minecraft-nick').trim();
-  if (!/^[A-Za-z0-9_]{3,16}$/.test(minecraftNick)) {
-    return replyPrivate(interaction, 'Informe um nick válido do Minecraft, com 3 a 16 letras, números ou _.');
+  if (!/^[A-Za-z0-9_. ]{1,32}$/.test(minecraftNick) || minecraftNick.startsWith(' ') || minecraftNick.endsWith(' ')) {
+    return replyPrivate(interaction, 'Informe um nick válido, sem espaços no começo ou no fim e com até 32 caracteres.');
   }
-
   if (interaction.customId.startsWith('shop:nick:edit:')) {
     const requestedRevision = interaction.customId.split(':')[3];
     if (draft.revision !== requestedRevision) {
       return replyPrivate(interaction, 'Esta etapa da compra já foi atualizada. Use a revisão mais recente.');
     }
-    draft.minecraftNick = minecraftNick;
-    draft.stage = 'review';
-    draft.revision = randomUUID().slice(0, 8);
-    savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
-    return interaction.reply({
-      content: 'Nick atualizado. Confira os dados antes de continuar.',
-      embeds: [makePurchaseReviewEmbed(draft)],
-      components: [makePurchaseReviewControls(draft)],
-      ephemeral: true
-    });
+  }
+
+  draft.minecraftNick = minecraftNick;
+  draft.platform = '';
+  draft.stage = 'platform';
+  draft.revision = randomUUID().slice(0, 8);
+  savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
+  return replyPrivate(interaction, 'Agora escolha a edição do Minecraft em que você joga.', [makePlatformControls(draft)]);
+}
+
+async function selectPurchasePlatform(interaction, platform, requestedRevision) {
+  const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
+  if (!draft || draft.revision !== requestedRevision || draft.stage !== 'platform') {
+    return replyPrivate(interaction, 'Esta etapa da compra ficou desatualizada. Abra o catálogo novamente.');
+  }
+  if (platform !== 'java' && platform !== 'bedrock') return replyPrivate(interaction, 'Escolha Java ou Bedrock.');
+  if (platform === 'java' && !/^[A-Za-z0-9_]{3,16}$/.test(draft.minecraftNick || '')) {
+    return replyPrivate(interaction, 'Esse nick não parece válido para Java. Java aceita de 3 a 16 letras, números ou _. Edite o nick ou escolha Bedrock.');
   }
 
   const config = getGuildConfig(interaction.guildId);
   const currentKit = config.kits.find(kit => kit.id === draft.kit?.id);
-  if (!currentKit || currentKit.enabled === false || !String(currentKit.price || '').trim()) {
+  if (!isKitPurchasable(currentKit)) {
     deletePurchaseDraft(interaction.guildId, interaction.user.id);
-    return replyPrivate(interaction, 'Este kit não está disponível para compra no momento. Escolha outro produto.');
+    return replyPrivate(interaction, 'Este kit ficou indisponível. Escolha outro produto na loja.');
   }
 
-  draft.minecraftNick = minecraftNick;
-  draft.stage = 'creating';
+  draft.platform = platform;
+  draft.stage = 'review';
   draft.revision = randomUUID().slice(0, 8);
   savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
-  await interaction.deferReply({ ephemeral: true });
-
-  try {
-    const result = await createPrivateTicket({
-      guild: interaction.guild,
-      user: interaction.user,
-      type: 'shop',
-      kit: currentKit,
-      minecraftNick
-    });
-
-    if (!result.alreadyOpen) {
-      const latestConfig = getGuildConfig(interaction.guildId);
-      await sendOrderTicketMessage(result.channel, interaction.user, currentKit, minecraftNick, latestConfig);
-    }
-
-    deletePurchaseDraft(interaction.guildId, interaction.user.id);
-    await interaction.editReply({
-      content: result.alreadyOpen
-        ? 'Você já tem um pedido em andamento.'
-        : 'Ticket de pagamento criado. Envie o comprovante no canal.',
-      components: [makeChannelLinkRow(result.channel)]
-    });
-  } catch (error) {
-    draft.stage = 'selected';
-    savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
-    throw error;
-  }
+  return interaction.update({
+    content: 'Confira os dados antes de continuar.',
+    embeds: [makePurchaseReviewEmbed(draft)],
+    components: [makePurchaseReviewControls(draft)]
+  });
 }
+
+async function editMinecraftPlatform(interaction, requestedRevision) {
+  const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
+  if (!draft || draft.revision !== requestedRevision || draft.stage !== 'review') {
+    return replyPrivate(interaction, 'Esta revisão da compra ficou desatualizada.');
+  }
+  draft.platform = '';
+  draft.stage = 'platform';
+  draft.revision = randomUUID().slice(0, 8);
+  savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
+  return interaction.update({
+    content: 'Escolha se você joga na edição Java ou Bedrock.',
+    embeds: [],
+    components: [makePlatformControls(draft)]
+  });
+}
+
 async function editMinecraftNick(interaction, requestedRevision) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
   if (!draft) return replyPrivate(interaction, 'Sua compra não está mais em preparação. Abra o catálogo novamente.');
@@ -667,7 +693,7 @@ async function confirmPurchase(interaction, requestedRevision) {
   if (draft && draft.revision !== requestedRevision) {
     return replyPrivate(interaction, 'Esta revisão do pedido ficou desatualizada. Confira a mensagem mais recente.');
   }
-  if (!draft || !draft.kit || !draft.minecraftNick) {
+  if (!draft || !draft.kit || !draft.minecraftNick || !draft.platform) {
     return replyPrivate(interaction, 'Não encontrei uma compra pronta para confirmar. Abra o catálogo e tente novamente.');
   }
   if (draft.stage === 'creating') {
@@ -679,7 +705,7 @@ async function confirmPurchase(interaction, requestedRevision) {
 
   const config = getGuildConfig(interaction.guildId);
   const currentKit = config.kits.find(kit => kit.id === draft.kit.id);
-  if (!currentKit || currentKit.enabled === false || !String(currentKit.price || '').trim()) {
+  if (!isKitPurchasable(currentKit)) {
     deletePurchaseDraft(interaction.guildId, interaction.user.id);
     return replyPrivate(interaction, 'Este kit foi removido ou está indisponível para compra.');
   }
@@ -707,7 +733,8 @@ async function confirmPurchase(interaction, requestedRevision) {
       user: interaction.user,
       type: 'shop',
       kit: currentKit,
-      minecraftNick: draft.minecraftNick
+      minecraftNick: draft.minecraftNick,
+      platform: draft.platform
     });
 
     if (!result.alreadyOpen) {
@@ -716,6 +743,7 @@ async function confirmPurchase(interaction, requestedRevision) {
         interaction.user,
         currentKit,
         draft.minecraftNick,
+        draft.platform,
         getGuildConfig(interaction.guildId)
       );
     }
@@ -861,36 +889,29 @@ async function handleBridgeCommand(interaction) {
   if (!canManage(interaction)) {
     return replyPrivate(interaction, 'Somente administradores ou quem tem Gerenciar servidor pode usar este comando.');
   }
-
   const action = interaction.options.getSubcommand();
-  if (action === 'status') {
-    const status = getBridgeStatus();
-    const database = getSupabaseStatus();
-    const kits = status.kits.length
-      ? status.kits.map(kit => (kit.enabled ? '• ' : '• [desativado] ') + kit.name + ' (' + kit.items + ' itens)').join('\n')
-      : 'Nenhum kit sincronizado ainda.';
-    return replyPrivate(interaction, [
-      '**Integração ASTHEN**',
-      'API: ' + (status.running ? 'online' : 'offline'),
-      'Endereço local: ' + (status.running ? 'http://' + status.host + ':' + status.port : 'não iniciada'),
-      'Pedidos aguardando: ' + status.pending,
-      'Kits recebidos do plugin: ' + status.kits.length,
-      status.lastKitsSyncAt ? 'Última lista recebida: ' + status.lastKitsSyncAt : 'Aguardando primeira sincronização do plugin.',
-      'Supabase: ' + (database.enabled ? 'configurado' : 'desativado'),
-      database.lastSyncedAt ? 'Última sincronização do banco: ' + database.lastSyncedAt : '',
-      database.lastError ? 'Aviso Supabase: ' + database.lastError : '',
-      '',
-      kits
-    ].filter(Boolean).join('\n'));
+  if (action !== 'status') {
+    return replyPrivate(interaction, 'A chave não é exibida no Discord. Copie DKB_SECRET diretamente do .env local e configure o mesmo valor em bridge.secret no config.yml do plugin.');
   }
 
-  const secret = getBridgeSecret();
-  if (!secret) return replyPrivate(interaction, 'A chave fixa ainda não foi criada. Inicie o bot uma vez para salvá-la no .env.');
-  return replyPrivate(
-    interaction,
-    'Esta é a chave fixa da integração. Ela é mantida no .env e não muda ao atualizar o bot. Cole o mesmo valor em bridge.secret no plugin.\n\n' +
-    secret + '\n\nNão compartilhe em canais públicos.'
-  );
+  const status = getBridgeStatus();
+  const database = getSupabaseStatus();
+  const kits = status.kits.length
+    ? status.kits.map(kit => (kit.enabled ? '• ' : '• [desativado] ') + kit.name + ' (' + kit.items + ' itens)').join('\n')
+    : 'Nenhum kit sincronizado ainda.';
+  return replyPrivate(interaction, [
+    '**Integração ASTHEN**',
+    'API: ' + (status.running ? 'online' : 'offline'),
+    'Endereço local: ' + (status.running ? 'http://' + status.host + ':' + status.port : 'não iniciada'),
+    'Pedidos aguardando: ' + status.pending,
+    'Kits recebidos do plugin: ' + status.kits.length,
+    status.lastKitsSyncAt ? 'Última lista recebida: ' + status.lastKitsSyncAt : 'Aguardando primeira sincronização do plugin.',
+    'Supabase: ' + (database.enabled ? 'configurado' : 'desativado'),
+    database.lastSyncedAt ? 'Última sincronização do banco: ' + database.lastSyncedAt : '',
+    database.lastError ? 'Aviso Supabase: ' + database.lastError : '',
+    '',
+    kits
+  ].filter(Boolean).join('\n'));
 }
 
 async function notifyStaffPrivately(interaction, content) {
@@ -906,10 +927,54 @@ async function notifyStaffPrivately(interaction, content) {
   }
 }
 
+async function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function friendlyDeliveryMessage(status, originalMessage = '') {
+  const messages = {
+    KIT_DELIVERED: 'O plugin confirmou que o kit foi entregue ao jogador.',
+    KIT_PENDING: 'O inventário não tinha espaço. O plugin guardou o kit para retirada no Minecraft.',
+    PLAYER_OFFLINE: 'O jogador não está online. Entre no servidor e peça à equipe para tentar novamente.',
+    KIT_NOT_FOUND: 'O kit não foi encontrado no servidor. A equipe precisa conferir se ele ainda existe no plugin.',
+    PLATFORM_MISMATCH: 'A plataforma informada não corresponde à plataforma detectada pelo servidor. A equipe precisa conferir Java/Bedrock e o nick.',
+    PLATFORM_UNVERIFIABLE: 'O servidor não conseguiu verificar a conta Bedrock. A equipe precisa conferir Geyser e Floodgate.',
+    KIT_DISABLED: 'Este kit está desativado no servidor e não pode ser entregue no momento.',
+    KIT_CORRUPT: 'O plugin encontrou um problema nos dados deste kit. A equipe foi avisada.',
+    INVENTORY_FULL: 'O inventário está cheio e o plugin não conseguiu guardar o kit como pendente. A equipe foi avisada.',
+    DELIVERY_DISABLED: 'A entrega pelo Discord está desativada na configuração do plugin. A equipe foi avisada.'
+  };
+  return messages[status] || originalMessage || 'O plugin não confirmou a entrega. A equipe foi avisada e vai verificar o pedido.';
+}
+
+async function deliverWithTimeoutRetry(payload) {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      return await deliverKit(payload);
+    } catch (error) {
+      if (error.code !== 'BRIDGE_TIMEOUT' || attempt === 2) throw error;
+      await wait(1500);
+    }
+  }
+  throw new Error('Não foi possível concluir a entrega.');
+}
+
 async function processApprovedDelivery(channel, ticket, { newRequest = false, interaction = null } = {}) {
-  const requestId = newRequest || !ticket.deliveryRequestId
-    ? randomUUID()
-    : ticket.deliveryRequestId;
+  if (!ticket.platform) {
+    updateTicket(ticket.channelId, {
+      deliveryStatus: 'PLATFORM_REQUIRED',
+      deliveryUpdatedAt: new Date().toISOString()
+    });
+    await channel.send({
+      content: 'Este pedido é antigo e ainda não tem Java/Bedrock registrado. A equipe precisa confirmar a plataforma antes de entregar o kit.',
+      components: [makeDeliveryPlatformControls()]
+    });
+    return;
+  }
+
+  const requestId = newRequest
+    ? 'ticket-' + ticket.channelId + '-' + randomUUID().slice(0, 8)
+    : (ticket.deliveryRequestId || 'ticket-' + ticket.channelId);
   const current = updateTicket(ticket.channelId, {
     deliveryRequestId: requestId,
     deliveryStatus: 'QUEUED',
@@ -919,10 +984,10 @@ async function processApprovedDelivery(channel, ticket, { newRequest = false, in
 
   await channel.send('Pagamento confirmado. A entrega do kit está sendo solicitada ao Minecraft.');
   try {
-    const result = await deliverKit({
+    const result = await deliverWithTimeoutRetry({
       requestId,
       player: current.minecraftNick,
-      platform: 'java',
+      platform: current.platform,
       kit: current.kitName,
       timeoutMs: 60000
     });
@@ -935,45 +1000,59 @@ async function processApprovedDelivery(channel, ticket, { newRequest = false, in
     });
 
     const success = status === 'KIT_DELIVERED' || status === 'KIT_PENDING';
-    if (success) {
-      await channel.send({
-        embeds: [makeDeliveryEmbed({
-          ...result,
-          player: result.player || current.minecraftNick,
-          kit: current.kitDisplayName || current.kitName
-        })],
-        components: [makeCloseRow()]
-      });
-      return;
-    }
-
     await channel.send({
-      content: 'Pagamento confirmado. A equipe está verificando a entrega do kit.',
-      components: [makeDeliveryRetryControls(result.final === true ? 'new' : 'same')]
+      embeds: [makeDeliveryEmbed({
+        ...result,
+        message: friendlyDeliveryMessage(status, result.message),
+        player: result.player || current.minecraftNick,
+        platform: result.platform || current.platform,
+        kit: current.kitDisplayName || current.kitName
+      })],
+      components: success ? [makeCloseRow()] : [makeDeliveryRetryControls(result.final === true ? 'new' : 'same')]
     });
-    await notifyStaffPrivately(
-      interaction,
-      'A entrega não foi concluída. Status: ' + status + '. ' +
-      String(result.message || 'Verifique a configuração do plugin e tente novamente.') +
-      '\nO pedido foi preservado. A equipe pode solicitar outra tentativa pelo mesmo identificador quando apropriado.'
-    );
+
+    if (!success) {
+      await notifyStaffPrivately(
+        interaction,
+        'A entrega não foi concluída. Status: ' + status + '. ' +
+        String(result.message || 'Confira a configuração do plugin.') +
+        '\nO pedido foi preservado.'
+      );
+    }
   } catch (error) {
+    const timedOut = error.code === 'BRIDGE_TIMEOUT';
     updateTicket(ticket.channelId, {
-      deliveryStatus: error.code === 'BRIDGE_TIMEOUT' ? 'TIMEOUT' : 'WAITING',
+      deliveryStatus: timedOut ? 'TIMEOUT' : 'WAITING',
       deliveryError: String(error.message || 'Falha ao solicitar a entrega.'),
       deliveryUpdatedAt: new Date().toISOString()
     });
     await channel.send({
-      content: 'Pagamento confirmado. A entrega está aguardando a conexão com o Minecraft; a equipe está acompanhando.',
+      content: timedOut
+        ? 'O Minecraft não respondeu nas duas tentativas automáticas. O mesmo identificador da compra foi mantido. A equipe pode tentar novamente sem criar outra compra.'
+        : 'Pagamento confirmado, mas a conexão com o Minecraft está indisponível. O pedido foi preservado e a equipe está acompanhando.',
       components: [makeDeliveryRetryControls('same')]
     });
     await notifyStaffPrivately(
       interaction,
-      'O plugin ainda não respondeu à solicitação de entrega. O pedido foi preservado. ' +
-      'Quando o plugin estiver online, tente novamente usando o mesmo identificador para evitar duplicidade. ' +
-      'Detalhe técnico: ' + String(error.message || 'Sem resposta.')
+      (timedOut ? 'A entrega excedeu o tempo limite nas duas tentativas automáticas.' : 'Não foi possível alcançar a bridge do Minecraft.') +
+      ' O mesmo identificador foi preservado. Detalhe técnico: ' + String(error.message || 'Sem resposta.')
     );
   }
+}
+
+async function setLegacyTicketPlatform(interaction, platform) {
+  const ticket = getTicket(interaction.channelId);
+  if (!ticket || ticket.type !== 'shop' || ticket.orderStatus !== 'approved') {
+    return replyPrivate(interaction, 'Este canal não contém um pedido aprovado que precise da plataforma.');
+  }
+  if (!isStaff(interaction, getGuildConfig(interaction.guildId))) {
+    return replyPrivate(interaction, 'Somente a equipe autorizada pode definir a plataforma deste pedido.');
+  }
+  if (platform !== 'java' && platform !== 'bedrock') return replyPrivate(interaction, 'Escolha Java ou Bedrock.');
+  updateTicket(interaction.channelId, { platform });
+  await interaction.reply({ content: 'Plataforma salva. A entrega será solicitada agora.', ephemeral: true });
+  void processApprovedDelivery(interaction.channel, getTicket(interaction.channelId), { interaction })
+    .catch(error => console.error('[Asthen] Falha na entrega de pedido antigo:', error));
 }
 
 async function retryApprovedDelivery(interaction, mode) {
@@ -1055,6 +1134,16 @@ export async function handleInteraction(interaction) {
     }
     if (interaction.customId.startsWith('shop:edit-nick:')) {
       return editMinecraftNick(interaction, interaction.customId.split(':')[2]);
+    }
+    if (interaction.customId.startsWith('shop:edit-platform:')) {
+      return editMinecraftPlatform(interaction, interaction.customId.split(':')[2]);
+    }
+    if (interaction.customId.startsWith('shop:platform:')) {
+      const [, , platform, revision] = interaction.customId.split(':');
+      return selectPurchasePlatform(interaction, platform, revision);
+    }
+    if (interaction.customId.startsWith('delivery:set-platform:')) {
+      return setLegacyTicketPlatform(interaction, interaction.customId.split(':')[2]);
     }
     if (interaction.customId.startsWith('shop:confirm:')) {
       return confirmPurchase(interaction, interaction.customId.split(':')[2]);
