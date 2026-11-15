@@ -89,7 +89,7 @@ Authorization: Bearer <DKB_SECRET>
 
 - GET /plugin/v1/pull?limit=5: busca pedidos. Sem pedidos, responde HTTP 204.
 - POST /plugin/v1/result: recebe resultado final de entrega.
-- POST /plugin/v1/kits: recebe a lista completa dos kits do plugin, incluindo preço e disponibilidade.
+- POST /plugin/v1/kits: recebe a lista completa dos kits do plugin, incluindo `name`, `enabled`, `items`, `price`, `price_cents` e `for_sale`.
 
 A API do bot envia request_id, player, a plataforma escolhida pelo cliente (java ou bedrock) e o identificador exato do kit. O plugin continua responsável por entregar os itens.
 
