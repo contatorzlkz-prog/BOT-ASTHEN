@@ -477,7 +477,11 @@ async function handleKitEditFieldSelection(interaction) {
     if (shopChannel) {
       updateGuildConfig(interaction.guildId, await updatePanel(interaction.guild, freshConfig, 'shop', shopChannel));
     }
-    return interaction.update({ content: 'O kit voltou a ficar disponível na loja.', embeds: [], components: [] });
+    return interaction.update({
+      content: 'O bloqueio manual foi removido. A venda só será reaberta se o Plugin-ASTHEN mantiver o kit ativo, com preço e com for_sale=true.',
+      embeds: [],
+      components: []
+    });
   }
   return interaction.showModal(makeKitEditModal(kit, field));
 }
@@ -1038,7 +1042,14 @@ async function handleBridgeCommand(interaction) {
   const status = getBridgeStatus();
   const database = getSupabaseStatus();
   const kits = status.kits.length
-    ? status.kits.map(kit => (kit.enabled ? '• ' : '• [desativado] ') + kit.name + ' (' + kit.items + ' itens)').join('\n')
+    ? status.kits.map(kit => {
+      const price = Number.isSafeInteger(kit.price_cents) && kit.price_cents > 0
+        ? 'R$ ' + (kit.price_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : 'sem preço';
+      const sale = kit.for_sale === true ? 'à venda' : 'indisponível';
+      return (kit.enabled ? '• ' : '• [desativado] ') + kit.name +
+        ' (' + kit.items + ' itens) · ' + price + ' · ' + sale;
+    }).join('\n')
     : 'Nenhum kit sincronizado ainda.';
   return replyPrivate(interaction, [
     '**Integração ASTHEN**',
@@ -1074,8 +1085,8 @@ async function wait(ms) {
 
 function friendlyDeliveryMessage(status, originalMessage = '') {
   const messages = {
-    KIT_DELIVERED: 'O plugin confirmou que o kit foi entregue ao jogador.',
-    KIT_PENDING: 'O inventário não tinha espaço. O plugin guardou o kit para retirada no Minecraft.',
+    KIT_DELIVERED: 'O plugin confirmou que uma Shulker Box com o kit foi entregue ao jogador.',
+    KIT_PENDING: 'O inventário estava cheio. O plugin guardou o kit completo como pendente; o jogador poderá retirar a Shulker Box com /dk claim.',
     PLAYER_OFFLINE: 'O jogador não está online. Entre no servidor e peça à equipe para tentar novamente.',
     KIT_NOT_FOUND: 'O kit não foi encontrado no servidor. A equipe precisa conferir se ele ainda existe no plugin.',
     PLATFORM_MISMATCH: 'A plataforma informada não corresponde à plataforma detectada pelo servidor. A equipe precisa conferir Java/Bedrock e o nick.',
