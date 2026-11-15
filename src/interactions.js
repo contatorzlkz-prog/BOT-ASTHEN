@@ -61,8 +61,12 @@ function normalizeImageUrl(value) {
   }
 }
 
+function isAdministrator(interaction) {
+  return Boolean(interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator));
+}
+
 function canManage(interaction) {
-  return interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)
+  return isAdministrator(interaction)
     || interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageGuild);
 }
 
@@ -273,28 +277,113 @@ function makeKitEditModal(kit, field) {
     .addComponents(new ActionRowBuilder().addComponents(input));
 }
 
+function makeKitCreateModal(kit) {
+  const shortName = String(kit.name || 'Kit').slice(0, 32);
+  const displayName = new TextInputBuilder()
+    .setCustomId('displayName')
+    .setLabel('Nome que aparecerá na loja')
+    .setPlaceholder('Ex.: Kit do Guerreiro')
+    .setStyle(TextInputStyle.Short)
+    .setMaxLength(80)
+    .setRequired(true)
+    .setValue(String(kit.displayName || makeKitDisplayName(kit.name)).slice(0, 80));
+
+  const price = new TextInputBuilder()
+    .setCustomId('price')
+    .setLabel('Preço em reais')
+    .setPlaceholder('Ex.: 19,90')
+    .setStyle(TextInputStyle.Short)
+    .setMaxLength(20)
+    .setRequired(true);
+
+  const description = new TextInputBuilder()
+    .setCustomId('description')
+    .setLabel('Descrição para o comprador')
+    .setPlaceholder('Explique o que o kit oferece.')
+    .setStyle(TextInputStyle.Paragraph)
+    .setMaxLength(800)
+    .setRequired(false);
+
+  const imageUrl = new TextInputBuilder()
+    .setCustomId('imageUrl')
+    .setLabel('Link HTTPS da imagem (opcional)')
+    .setPlaceholder('https://site.com/imagem.png')
+    .setStyle(TextInputStyle.Short)
+    .setMaxLength(500)
+    .setRequired(false);
+
+  return new ModalBuilder()
+    .setCustomId('kit:create-modal:' + kit.id)
+    .setTitle(('Cadastrar ' + shortName).slice(0, 45))
+    .addComponents(
+      new ActionRowBuilder().addComponents(displayName),
+      new ActionRowBuilder().addComponents(price),
+      new ActionRowBuilder().addComponents(description),
+      new ActionRowBuilder().addComponents(imageUrl)
+    );
+}
+
+function normalizeBrlPrice(value) {
+  const raw = String(value || '').trim().replace(/^R\$\s*/i, '').replace(/\s/g, '');
+  if (!/^(?:\d{1,3}(?:\.\d{3})*|\d+)(?:,\d{1,2})?$/.test(raw)) return null;
+  const amount = Number(raw.replace(/\./g, '').replace(',', '.'));
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 99999999) return null;
+  return 'R$ ' + amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 async function handleKitCommand(interaction) {
-  if (!canManage(interaction)) return replyPrivate(interaction, 'Somente administradores podem gerenciar os kits.');
+  if (!isAdministrator(interaction)) {
+    return replyPrivate(interaction, 'Somente membros com a permissão Administrador podem usar os comandos /kit.');
+  }
+
   const subcommand = interaction.options.getSubcommand();
   const config = getGuildConfig(interaction.guildId);
 
   if (subcommand === 'listar') {
-    if (!config.kits.length) return replyPrivate(interaction, 'Nenhum kit foi recebido do plugin ainda.');
-    const lines = config.kits.map((kit, index) => {
-      const state = kit.enabled === false ? ' · desativado no Minecraft' : '';
-      const price = kit.price ? kit.price : 'preço não definido';
-      return (index + 1) + '. **' + String(kit.displayName || makeKitDisplayName(kit.name)) + '** — ' + price +
-        state + '\nIdentificador do plugin: `' + kit.name + '`';
+    if (!config.kits.length) {
+      return replyPrivate(interaction, 'Nenhum kit foi recebido do Minecraft ainda. Crie o kit pelo plugin e confira /bridge status.');
+    }
+    const lines = config.kits.slice(0, 22).map((kit, index) => {
+      const pluginState = kit.missingFromPlugin
+        ? 'removido do Minecraft'
+        : kit.pluginEnabled === false ? 'desativado no Minecraft'
+          : kit.manuallyUnavailable ? 'indisponível na loja'
+            : kit.enabled === false ? 'indisponível' : 'ativo';
+      const shopState = kit.storeConfigured ? 'cadastro comercial pronto' : 'falta cadastrar na loja';
+      return (index + 1) + '. **' + String(kit.displayName || makeKitDisplayName(kit.name)) + '** — ' +
+        String(kit.price || 'preço pendente') + '\nMinecraft: ' + pluginState +
+        ' · Loja: ' + shopState + '\nID do plugin: `' + kit.name + '`';
     });
-    return replyPrivate(interaction, lines.join('\n\n').slice(0, 1900));
+    const remaining = config.kits.length > 22 ? '\n... e mais ' + (config.kits.length - 22) + ' kit(s).' : '';
+    return replyPrivate(interaction, lines.join('\n\n').slice(0, 1850) + remaining);
   }
 
-  if (!config.kits.length) return replyPrivate(interaction, 'Nenhum kit foi sincronizado do plugin. Crie o kit no Minecraft e aguarde a sincronização.');
+  if (!config.kits.length) {
+    return replyPrivate(interaction, 'Nenhum kit foi sincronizado. Primeiro crie o kit real no Minecraft pelo Plugin-ASTHEN e aguarde a lista aparecer em /bridge status. Depois use /kit criar para cadastrar o produto na loja.');
+  }
+
+  if (subcommand === 'criar') {
+    const pending = config.kits.filter(kit =>
+      kit.pluginManaged === true
+      && kit.pluginEnabled !== false
+      && kit.enabled !== false
+      && kit.missingFromPlugin !== true
+      && kit.storeConfigured !== true
+    );
+    if (!pending.length) {
+      return replyPrivate(interaction, 'Todos os kits ativos recebidos do plugin já têm cadastro comercial. Use /kit editar para alterar um produto existente.');
+    }
+    return interaction.reply({
+      content: 'Selecione um kit que já existe no Minecraft. Esta etapa cadastra apenas nome, preço, descrição e imagem na loja; os itens reais continuam sendo criados no plugin.',
+      components: [makeKitAdminMenu(pending, 'kit:create-select')],
+      ephemeral: true
+    });
+  }
 
   const customId = subcommand === 'editar' ? 'kit:edit-select' : 'kit:remove-select';
   const prompt = subcommand === 'editar'
-    ? 'Selecione o kit e depois escolha qual informação deseja alterar.'
-    : 'Selecione o kit que deseja remover do catálogo da loja.';
+    ? 'Selecione o kit e depois escolha qual informação comercial deseja alterar.'
+    : 'Selecione o kit que deseja marcar como indisponível na loja.';
   return interaction.reply({
     content: prompt,
     components: [makeKitAdminMenu(config.kits, customId)],
@@ -302,7 +391,59 @@ async function handleKitCommand(interaction) {
   });
 }
 
+async function handleKitCreateSelection(interaction) {
+  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem cadastrar kits na loja.');
+  const kitId = interaction.values[0];
+  const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
+  if (!kit || kit.pluginManaged !== true || kit.pluginEnabled === false || kit.missingFromPlugin) {
+    return replyPrivate(interaction, 'Esse kit não está ativo no Minecraft. Crie ou ative o kit no plugin e aguarde a sincronização.');
+  }
+  if (kit.storeConfigured === true) {
+    return replyPrivate(interaction, 'Esse kit já tem cadastro na loja. Use /kit editar para alterar seus dados.');
+  }
+  return interaction.showModal(makeKitCreateModal(kit));
+}
+
+async function handleKitCreateModal(interaction) {
+  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem cadastrar kits na loja.');
+  const kitId = interaction.customId.split(':')[2];
+  const current = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
+  if (!current || current.pluginManaged !== true || current.pluginEnabled === false || current.missingFromPlugin) {
+    return replyPrivate(interaction, 'O kit deixou de existir ou foi desativado no Minecraft. Sincronize o plugin novamente antes de cadastrar.');
+  }
+  if (current.storeConfigured === true) {
+    return replyPrivate(interaction, 'Esse kit já foi cadastrado. Use /kit editar para atualizar os dados.');
+  }
+
+  const displayName = interaction.fields.getTextInputValue('displayName').trim();
+  const price = normalizeBrlPrice(interaction.fields.getTextInputValue('price'));
+  const description = interaction.fields.getTextInputValue('description').trim();
+  const rawImageUrl = interaction.fields.getTextInputValue('imageUrl').trim();
+  const imageUrl = normalizeImageUrl(rawImageUrl);
+
+  if (displayName.length < 2) return replyPrivate(interaction, 'O nome exibido precisa ter pelo menos 2 caracteres.');
+  if (!price) return replyPrivate(interaction, 'Preço inválido. Use o formato brasileiro, por exemplo 19,90.');
+  if (rawImageUrl && !imageUrl) return replyPrivate(interaction, 'A imagem precisa ser um link HTTPS válido.');
+
+  const updated = updateKit(interaction.guildId, kitId, {
+    displayName,
+    price,
+    description,
+    imageUrl: imageUrl || '',
+    storeConfigured: true,
+    enabled: true,
+    manuallyUnavailable: false
+  });
+  await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
+  return interaction.reply({
+    content: 'Kit cadastrado na loja. O kit real continua sendo gerenciado pelo Plugin-ASTHEN.',
+    embeds: updated ? [makeKitPreviewEmbed(updated)] : [],
+    ephemeral: true
+  });
+}
+
 async function handleKitAdminSelection(interaction, action) {
+  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem gerenciar kits.');
   const kitId = interaction.values[0];
   const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
   if (!kit) return replyPrivate(interaction, 'Este kit não está mais no catálogo. Atualize a lista e tente novamente.');
@@ -325,6 +466,7 @@ async function handleKitAdminSelection(interaction, action) {
 }
 
 async function handleKitEditFieldSelection(interaction) {
+  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem editar kits.');
   const kitId = interaction.customId.split(':')[2];
   const field = interaction.values[0];
   const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
@@ -345,6 +487,7 @@ async function handleKitEditFieldSelection(interaction) {
 }
 
 async function handleKitEditModal(interaction) {
+  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem editar kits.');
   const [, , field, kitId] = interaction.customId.split(':');
   const current = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
   if (!current) return replyPrivate(interaction, 'Este kit não está mais no catálogo.');
@@ -356,8 +499,10 @@ async function handleKitEditModal(interaction) {
     if (value.length < 2) return replyPrivate(interaction, 'O nome exibido precisa ter pelo menos 2 caracteres.');
     changes.displayName = value;
   } else if (field === 'price') {
-    if (value.length < 2) return replyPrivate(interaction, 'Informe um preço válido, por exemplo R$ 19,90.');
-    changes.price = value;
+    const price = normalizeBrlPrice(value);
+    if (!price) return replyPrivate(interaction, 'Preço inválido. Use o formato brasileiro, por exemplo 19,90.');
+    changes.price = price;
+    changes.storeConfigured = true;
   } else if (field === 'description') {
     changes.description = value;
   } else if (field === 'imageUrl') {
@@ -379,6 +524,7 @@ async function handleKitEditModal(interaction) {
 }
 
 async function confirmKitRemoval(interaction, kitId) {
+  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem marcar kits como indisponíveis.');
   const config = getGuildConfig(interaction.guildId);
   const kit = config.kits.find(item => item.id === kitId);
   if (!kit) return interaction.update({ content: 'Este kit já foi removido.', embeds: [], components: [] });
@@ -1177,6 +1323,9 @@ export async function handleInteraction(interaction) {
   if (interaction.isStringSelectMenu() && interaction.customId === 'shop:select') {
     return handleCatalogSelection(interaction);
   }
+  if (interaction.isStringSelectMenu() && interaction.customId === 'kit:create-select') {
+    return handleKitCreateSelection(interaction);
+  }
   if (interaction.isStringSelectMenu() && interaction.customId === 'kit:edit-select') {
     return handleKitAdminSelection(interaction, 'edit');
   }
@@ -1188,6 +1337,7 @@ export async function handleInteraction(interaction) {
   }
 
   if (interaction.isModalSubmit()) {
+    if (interaction.customId.startsWith('kit:create-modal:')) return handleKitCreateModal(interaction);
     if (interaction.customId.startsWith('kit:edit-modal:')) return handleKitEditModal(interaction);
     if (interaction.customId === 'shop:nick:submit' || interaction.customId.startsWith('shop:nick:edit:')) {
       return handleNickSubmit(interaction);
