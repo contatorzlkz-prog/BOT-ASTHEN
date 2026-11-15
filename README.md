@@ -106,7 +106,9 @@ A chave deve ser copiada diretamente entre arquivos locais: `DKB_SECRET` no `.en
 
 Consulte [Integração com o Plugin-ASTHEN](docs/PLUGIN-INTEGRATION.md) e [handoff técnico para o plugin](docs/PLUGIN-IMPLEMENTATION-HANDOFF.md).
 
-A entrega real só pode ser considerada testada depois que o Paper e o plugin estiverem online e concluírem uma compra de teste.
+**Verificação do Plugin-ASTHEN 1.2.0:** no [build do GitHub Actions de 15/11/2026](https://github.com/ElbsxS1/Plugin-ASTHEN/actions/runs/43659388395), os 67 testes JDK-only passaram e o `mvn package` terminou com `BUILD SUCCESS` usando a dependência Paper configurada.
+
+Isso não substitui o teste dentro do jogo. A entrega em Shulker Box ainda precisa ser validada em um servidor Paper real, incluindo cor, nome, slots e retirada com inventário cheio.
 
 ## Supabase
 
