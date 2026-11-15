@@ -149,7 +149,7 @@ function startBridge(opts) {
     if (!PLAYER_RE.test(player || '') || player.trim() !== player) return Promise.reject(new Error('Nick Minecraft inválido.'));
     if (platform === 'java' && !JAVA_PLAYER_RE.test(player)) return Promise.reject(new Error('Nick Java inválido. Use de 3 a 16 letras, números ou _.'));
     if (platform !== 'bedrock' && platform !== 'java') return Promise.reject(new Error('platform deve ser "bedrock" ou "java"'));
-    if (!KIT_RE.test(kit || '')) return Promise.reject(new Error('kit inválido'));
+    if (!KIT_RE.test(kit || '')) return Promise.reject(new Error('Nome do kit inválido.'));
 
     const existing = waiting.get(requestId);
     if (existing) return existing.promise;
