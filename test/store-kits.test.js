@@ -104,6 +104,15 @@ test('for_sale=false blocks purchases even when a price remains in cents', () =>
   assert.equal(kit.forSale, false);
 });
 
+test('price_cents is authoritative even if the decimal price field disagrees', () => {
+  const guildId = testGuildId();
+  const kit = syncPluginKits(guildId, [
+    { name: 'Kit_Ferro', enabled: true, items: 1, price: 999.99, price_cents: 2990, for_sale: true }
+  ]).kits[0];
+  assert.equal(kit.price, 'R$ 29,90');
+  assert.equal(kit.priceCents, 2990);
+});
+
 test('legacy payloads without price_cents preserve compatibility while 1.2.0 null price clears sale', () => {
   const guildId = testGuildId();
   const legacy = syncPluginKits(guildId, [
