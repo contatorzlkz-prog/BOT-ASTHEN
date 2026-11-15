@@ -7,6 +7,8 @@ Obrigado por ajudar a melhorar o ASTHEN BOT.
 2. Mantenha as dependências essenciais e evite incluir APIs pagas.
 3. Não envie tokens, chaves Pix, comprovantes ou dados privados.
 4. Preserve compatibilidade com Windows 10/11 e Linux quando possível.
+5. Os comandos `/kit` devem continuar restritos à permissão Administrador.
+6. O plugin é a origem dos itens Minecraft; o bot não deve simular a criação de itens.
 
 ## Verificações
 - Execute npm install.
