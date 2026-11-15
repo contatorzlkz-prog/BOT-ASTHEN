@@ -25,6 +25,23 @@ export function makeKitDisplayName(name) {
     .slice(0, 100);
 }
 
+function formatBrlCents(cents) {
+  const value = Number(cents);
+  if (!Number.isSafeInteger(value) || value <= 0 || value > 99999999) return '';
+  return 'R$ ' + (value / 100).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function legacyPriceToCents(value) {
+  const raw = String(value ?? '').trim().replace(/^R\\$\\s*/i, '').replace(/\\./g, '').replace(',', '.');
+  if (!/^\\d+(?:\\.\\d{1,2})?$/.test(raw)) return null;
+  const amount = Number(raw);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 999999.99) return null;
+  return Math.round(amount * 100);
+}
+
 function defaultGuildConfig() {
   return {
     supportPanelChannelId: null,
@@ -65,6 +82,10 @@ function ensureGuildConfig(guildId) {
     description: String(kit.description || ''),
     imageUrl: String(kit.imageUrl || ''),
     price: String(kit.price || ''),
+    priceCents: Number.isSafeInteger(Number(kit.priceCents)) && Number(kit.priceCents) > 0
+      ? Number(kit.priceCents) : null,
+    pluginForSale: kit.pluginForSale === true,
+    forSale: kit.forSale === true,
     manuallyUnavailable: kit.manuallyUnavailable === true,
     missingFromPlugin: kit.missingFromPlugin === true,
     pluginEnabled: typeof kit.pluginEnabled === 'boolean'
@@ -185,6 +206,7 @@ export function removeKit(guildId, kitId) {
   config.kits[index] = {
     ...config.kits[index],
     enabled: false,
+    forSale: false,
     manuallyUnavailable: true
   };
   saveStore();
@@ -214,26 +236,48 @@ export function syncPluginKits(guildId, pluginKits) {
     const old = existingByName.get(key);
     const pluginEnabled = item.enabled === true;
     const manuallyUnavailable = old?.manuallyUnavailable === true;
-    const hasPluginPrice = Object.prototype.hasOwnProperty.call(item, 'price') && item.price !== null;
-    const incomingPrice = hasPluginPrice ? String(item.price).trim() : '';
-    const price = incomingPrice || String(old?.price || '');
+    const hasSaleContract = Object.prototype.hasOwnProperty.call(item, 'for_sale')
+      || Object.prototype.hasOwnProperty.call(item, 'price_cents');
+
+    // Plugin 1.2.0 is authoritative: null price_cents / for_sale=false must clear
+    // an old Discord-entered price instead of silently keeping a stale sale.
+    const incomingCents = Number.isSafeInteger(item.price_cents) && item.price_cents > 0
+      && item.price_cents <= 99999999
+      ? item.price_cents
+      : null;
+    const priceCents = hasSaleContract
+      ? incomingCents
+      : Object.prototype.hasOwnProperty.call(item, 'price')
+        ? legacyPriceToCents(item.price)
+        : (Number.isSafeInteger(old?.priceCents) ? old.priceCents : legacyPriceToCents(old?.price));
+    const pluginForSale = hasSaleContract
+      ? item.for_sale === true && pluginEnabled && priceCents !== null
+      : pluginEnabled && Number.isSafeInteger(priceCents) && priceCents > 0;
+    const price = formatBrlCents(priceCents);
+    const forSale = pluginForSale && !manuallyUnavailable;
     const wasConfigured = typeof old?.storeConfigured === 'boolean'
       ? old.storeConfigured
-      : Boolean(old && (String(old.price || '').trim()
-        || String(old.description || '').trim()
-        || String(old.imageUrl || '').trim()));
+      : Boolean(old && (
+        String(old.description || '').trim()
+        || String(old.imageUrl || '').trim()
+        || (String(old.displayName || '').trim()
+          && old.displayName !== makeKitDisplayName(old.name))
+      ));
     syncedKits.push({
       id: old?.id || randomUUID().slice(0, 12),
       name: item.name,
       displayName: old?.displayName || makeKitDisplayName(item.name),
       price,
+      priceCents,
+      pluginForSale,
+      forSale,
       description: String(old?.description || ''),
       imageUrl: String(old?.imageUrl || ''),
       enabled: pluginEnabled && !manuallyUnavailable,
       pluginEnabled,
       manuallyUnavailable,
       missingFromPlugin: false,
-      storeConfigured: wasConfigured || Boolean(hasPluginPrice && price),
+      storeConfigured: wasConfigured,
       itemCount: Number.isFinite(Number(item.items)) ? Number(item.items) : (old?.itemCount || 0),
       pluginManaged: true
     });
@@ -244,6 +288,8 @@ export function syncPluginKits(guildId, pluginKits) {
     .map(kit => ({
       ...kit,
       enabled: false,
+      forSale: false,
+      pluginForSale: false,
       pluginEnabled: false,
       missingFromPlugin: true
     }));
