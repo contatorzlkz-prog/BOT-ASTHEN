@@ -44,8 +44,5 @@ export const commandDefinitions = [
     .setDescription('Verifica a API de integração Minecraft.')
     .addSubcommand(subcommand => subcommand
       .setName('status')
-      .setDescription('Mostra o estado da API e a última sincronização.'))
-    .addSubcommand(subcommand => subcommand
-      .setName('chave')
-      .setDescription('Mostra a chave fixa para configurar o plugin.')))
+      .setDescription('Mostra o estado da API e a última sincronização.')))
 ];
