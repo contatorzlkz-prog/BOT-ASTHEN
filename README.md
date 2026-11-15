@@ -39,7 +39,7 @@ O plugin envia sua lista ao bot. O bot importa os kits novos e salva o catálogo
 
 O administrador usa /kit editar no Discord para selecionar o kit e escolher o campo que deseja alterar: nome exibido, preço, descrição ou imagem HTTPS. O identificador original do plugin não muda. Por exemplo, Kit_Ferro pode aparecer para o cliente como **Kit Ferro**.
 
-Kits novos entram sem preço e não aparecem como compráveis até que o preço seja definido. Quando um kit é desativado ou removido do servidor, ele continua visível como indisponível. O produto, o preço, a descrição e os pedidos antigos são preservados. /kit remover apenas oculta o produto da loja; não apaga os itens dentro do Minecraft.
+Kits novos entram sem preço e não aparecem como compráveis até que o preço seja definido. Quando um kit é desativado ou removido do servidor, ele continua visível como indisponível. O produto, o preço, a descrição e os pedidos antigos são preservados. /kit remover marca o produto como indisponível; não apaga o registro nem os itens dentro do Minecraft.
 
 Não existem kits de demonstração cadastrados por padrão.
 
@@ -81,7 +81,7 @@ O token do Discord, a chave DKB_SECRET e a chave do Supabase são credenciais di
 | /configurar | Configura suporte, loja, logs, compradores e cargo da equipe |
 | /kit listar | Lista os kits sincronizados do plugin |
 | /kit editar | Seleciona um kit e o campo comercial que será alterado |
-| /kit remover | Remove um kit do catálogo da loja |
+| /kit remover | Marca o kit como indisponível sem apagar o registro |
 | /bridge status | Mostra o estado da API, a última sincronização de kits e o Supabase |
 | — | A chave fica somente nos arquivos locais `.env` e `config.yml`; ela não é exibida no Discord. |
 
@@ -174,7 +174,7 @@ O GitHub Actions executa essas verificações nas atualizações da branch princ
 
 - Nunca publique .env, tokens ou chaves.
 - A chave DKB_SECRET fica salva na instalação do bot e não deve mudar durante uma atualização normal.
-- /bridge chave é uma resposta privada para administradores.
+- Não existe comando para exibir a chave. Configure `DKB_SECRET` e `bridge.secret` diretamente nos arquivos locais.
 - A API local deve ficar em 127.0.0.1; use HTTPS para disponibilizar o endereço ao computador do plugin.
 - O bot não verifica comprovantes bancários automaticamente.
 - A entrega real no Minecraft depende de o plugin estar atualizado e conectado.
