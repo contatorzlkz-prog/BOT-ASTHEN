@@ -183,7 +183,7 @@ export function makeKitRemoveControls(kitId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('kit:remove:confirm:' + kitId)
-      .setLabel('Remover da loja')
+      .setLabel('Marcar indisponível')
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
       .setCustomId('kit:remove:cancel')
