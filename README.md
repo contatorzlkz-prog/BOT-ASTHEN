@@ -1,154 +1,122 @@
 # ASTHEN BOT
 
-Bot de Discord para atendimento, catálogo de kits de Minecraft, tickets de pagamento e entrega pelo Plugin-ASTHEN.
+Bot de Discord para o servidor Minecraft ASTHEN: atendimento privado, loja de kits, confirmação manual de pagamentos e entrega automática pelo Plugin-ASTHEN.
 
-**Versão 2.8.0**
+![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)
+![Discord.js](https://img.shields.io/badge/discord.js-14-5865F2?logo=discord&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-opcional-3ECF8E?logo=supabase&logoColor=white)
+[![Checks](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml)
+![Version](https://img.shields.io/badge/vers%C3%A3o-2.9.0-7C5CFC)
 
 <p align="center">
   <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip">
-    <img src="https://raw.githubusercontent.com/contatorzlkz-prog/BOT-ASTHEN/main/assets/download-zip.svg" alt="Baixar ASTHEN BOT 2.8.0 em ZIP" width="264" height="58">
+    <img src="assets/download-zip.svg" alt="Baixar ASTHEN BOT em ZIP" width="264" height="58">
   </a>
 </p>
 
 <p align="center">
-  <sub>Extraia o ZIP e execute <code>INSTALAR.bat</code>.</sub>
+  <strong>Windows 10/11 · Node.js 22 ou mais recente · Paper + Plugin-ASTHEN</strong>
 </p>
 
-## Loja e compra
-
-1. O cliente abre a loja e escolhe um kit no menu.
-2. O bot mostra uma prévia compacta com nome de exibição, preço, descrição e imagem.
-3. O cliente pode trocar de kit ou confirmar.
-4. O bot pede o nick do Minecraft e pergunta se o jogador usa Java ou Bedrock.
-5. O bot cria um ticket privado com o pedido resumido, a chave Pix fixa e o QR Code.
-6. O cliente envia a imagem ou PDF do comprovante.
-7. Um membro autorizado da equipe confirma ou recusa o pagamento.
-8. Depois da aprovação, o bot solicita a entrega ao plugin na plataforma escolhida. Se houver timeout, repete uma vez usando o mesmo identificador da compra.
-
-O ticket não mostra identificador interno do pedido nem a lista de itens do kit. A confirmação do pagamento é manual.
-
-## Como os kits entram na loja
-
-O **plugin Minecraft é a origem dos kits reais**. O administrador cria o kit dentro do Paper:
-
-~~~text
-/dk create Kit_Ferro
-~~~
-
-O plugin envia sua lista ao bot. O bot importa os kits novos e salva o catálogo no Supabase quando a sincronização está configurada.
-
-O administrador usa /kit editar no Discord para selecionar o kit e escolher o campo que deseja alterar: nome exibido, preço, descrição ou imagem HTTPS. O identificador original do plugin não muda. Por exemplo, Kit_Ferro pode aparecer para o cliente como **Kit Ferro**.
-
-Kits novos entram sem preço e não aparecem como compráveis até que o preço seja definido. Quando um kit é desativado ou removido do servidor, ele continua visível como indisponível. O produto, o preço, a descrição e os pedidos antigos são preservados. /kit remover marca o produto como indisponível; não apaga o registro nem os itens dentro do Minecraft.
-
-Não existem kits de demonstração cadastrados por padrão.
-
-## Recursos
-
-- Painel de suporte com departamentos relacionados ao servidor Minecraft.
-- Painel da loja com um botão para abrir o catálogo.
-- Prévia individual dos kits, com troca de produto antes da confirmação.
-- Tickets privados de pagamento e envio de comprovante.
-- QR Code Pix fixo da loja e botão de cópia da chave na mesma mensagem do pedido.
-- Confirmação manual do pagamento por membros autorizados.
-- API HTTP autenticada para o Plugin-ASTHEN, usando o modo poll.
-- Sincronização do catálogo de kits com Supabase.
-- Salvamento local em data/state.json, além do snapshot asthen_bot_state.
-
-## Instalação no Windows
+## Começar
 
 1. Baixe o ZIP pelo botão acima e extraia a pasta.
-2. Execute INSTALAR.bat.
-3. Informe o token do bot e o Application ID quando solicitado.
-4. Execute INICIAR.bat.
+2. Execute `INSTALAR.bat`.
+3. Informe o token do bot e o Application ID.
+4. Execute `INICIAR.bat`.
+5. No servidor Discord, use `/configurar` para definir os canais e o cargo da equipe.
 
-Requisitos: Windows 10/11 e Node.js 22 ou mais recente.
+O instalador verifica o Node.js, instala as dependências e executa as verificações antes de finalizar.
 
-### Atualizar sem perder a chave da API nem os dados
+## Como funciona a loja
 
-A chave de integração é gerada uma vez e guardada em DKB_SECRET dentro do .env. Ela **não é regenerada quando o bot recebe uma nova versão**.
+O **Plugin-ASTHEN é a origem dos kits reais e dos itens entregues no Minecraft**. O bot cuida da apresentação comercial no Discord.
 
-- Se atualizar na mesma pasta, mantenha o arquivo .env e a pasta data.
-- Se extrair a nova versão em outra pasta, copie o .env e a pasta data da instalação antiga para a nova antes de iniciar.
-- Não coloque o .env no GitHub e não o envie para outras pessoas.
+1. Um administrador cria o kit real dentro do Minecraft pelo Plugin-ASTHEN.
+2. O plugin envia a lista de kits para a API do bot.
+3. O administrador usa `/kit criar` e seleciona um kit recebido do Minecraft.
+4. O Discord abre uma janela para preencher nome exibido, preço, descrição e imagem HTTPS.
+5. O kit aparece na loja. O comprador escolhe, confere a prévia, informa o nick e seleciona Java ou Bedrock.
+6. O bot abre o ticket privado com o QR Pix, a chave e o valor.
+7. A equipe confere o comprovante e confirma ou recusa o pagamento.
+8. Após a aprovação, o bot solicita ao plugin a entrega do kit na plataforma escolhida.
 
-O token do Discord, a chave DKB_SECRET e a chave do Supabase são credenciais diferentes.
+**Importante:** `/kit criar` cadastra o produto na loja do Discord. Ele não cria espadas, armaduras ou outros itens dentro do Minecraft. Os itens reais continuam sendo configurados no plugin.
 
-## Comandos administrativos
+## Administrar kits no Discord
 
-| Comando | Função |
+Todos os comandos `/kit` exigem a permissão **Administrador**.
+
+| Comando | O que faz |
 |---|---|
-| /configurar | Configura suporte, loja, logs, compradores e cargo da equipe |
-| /kit listar | Lista os kits sincronizados do plugin |
-| /kit editar | Seleciona um kit e o campo comercial que será alterado |
-| /kit remover | Marca o kit como indisponível sem apagar o registro |
-| /bridge status | Mostra o estado da API, a última sincronização de kits e o Supabase |
-| — | A chave fica somente nos arquivos locais `.env` e `config.yml`; ela não é exibida no Discord. |
+| `/kit criar` | Cadastra na loja um kit que já chegou do plugin. Preenche nome, preço, descrição e imagem de uma vez. |
+| `/kit listar` | Mostra os kits, o estado no Minecraft e se o cadastro comercial está pronto. |
+| `/kit editar` | Altera individualmente nome exibido, preço, descrição, imagem ou disponibilidade. |
+| `/kit remover` | Marca o produto como indisponível na loja sem apagar o cadastro ou o kit no Minecraft. |
 
-Os comandos administrativos exigem **Gerenciar servidor**. Nos tickets, somente administradores ou membros com o cargo configurado em /configurar equipe podem confirmar, recusar e fechar pedidos.
+O identificador técnico do plugin não muda. Por exemplo, o Minecraft pode continuar usando `Kit_Ferro`, enquanto o cliente vê **Kit Ferro**.
 
-## Pix
+Kits novos aparecem no catálogo como indisponíveis até terem preço. Quando um kit é desativado ou removido do plugin, ele permanece visível como indisponível. Os dados comerciais antigos e os pedidos não são apagados.
 
-O bot já vem com a chave Pix fixa keybytes.a@gmail.com e o QR Code correspondente. Não existe mais comando /pix. O botão para copiar a chave fica na própria mensagem do pedido.
+A versão atual do plugin envia nome, estado e quantidade de itens, mas ainda não envia preço. Por enquanto, configure o preço usando `/kit criar` ou `/kit editar`. O bot aceita o campo opcional `price` para quando o plugin passar a enviá-lo.
 
-A imagem QR incluída corresponde somente a essa chave. Para alterar os dados Pix da loja, será necessário atualizar em conjunto src/pix.js e assets/pix-keybytes.png.
+## Outros recursos
 
-## Integração com o Plugin-ASTHEN
+- Painel de suporte com departamentos de compras, servidor, bugs, denúncias e outros assuntos.
+- Tickets privados com acesso do comprador e da equipe.
+- Confirmação e recusa de pagamentos por membros autorizados.
+- Registro privado das decisões e avisos de falha de entrega para a equipe.
+- Anúncio de compra com nome e valor do produto.
+- Escolha de Minecraft Java ou Bedrock antes de abrir o ticket.
+- API HTTP autenticada para o Plugin-ASTHEN usando o modo poll.
+- Tentativa automática adicional quando a entrega expira, reutilizando o mesmo identificador para evitar duplicidade.
+- Backup local em `data/state.json` e sincronização opcional com Supabase.
 
-O bot e o plugin rodam em computadores diferentes:
+## Instalação e atualização
 
-- **Seu PC:** ASTHEN BOT e API local em 127.0.0.1:8787.
-- **PC/host Minecraft:** servidor Paper e Plugin-ASTHEN.
-- **Conexão:** o plugin inicia as requisições HTTPS para o endereço público que encaminha até a API do bot.
+### Requisitos
 
-A configuração detalhada está em [PLUGIN-INTEGRATION.md](docs/PLUGIN-INTEGRATION.md). A especificação para a IA que vai atualizar o plugin está em [PLUGIN-IMPLEMENTATION-HANDOFF.md](docs/PLUGIN-IMPLEMENTATION-HANDOFF.md).
+- Windows 10 ou Windows 11.
+- Node.js 22 ou mais recente.
+- Um bot criado no Discord Developer Portal.
+- Servidor Paper com o Plugin-ASTHEN para testar a entrega real.
 
-### Teste entre dois computadores sem contratar host Minecraft
+### Atualizar sem perder os dados
 
-Seu amigo pode iniciar um servidor Paper local no Windows dele. Um mundo single-player vanilla não carrega plugins Paper; é necessário iniciar Paper localmente, mas não é preciso publicar o servidor nem contratar hospedagem.
+A chave de integração é gerada uma vez e guardada em `DKB_SECRET` dentro do arquivo `.env`.
 
-No seu PC:
+- Na mesma pasta, mantenha o arquivo `.env` e a pasta `data`.
+- Em uma pasta nova, copie o `.env` e a pasta `data` da instalação anterior antes de iniciar.
+- Nunca publique o `.env` no GitHub ou envie tokens e chaves em canais do Discord.
 
-1. Inicie o bot com INICIAR.bat.
-2. Confira no console: [Asthen Bridge] API ativa em http://127.0.0.1:8787.
-3. Baixe o cloudflared para Windows 64-bit pela [página oficial da Cloudflare](https://developers.cloudflare.com/tunnel/downloads/).
-4. Renomeie o executável para cloudflared.exe e coloque-o na pasta do bot.
-5. Abra INICIAR-TUNEL.bat.
-6. Copie a URL https://....trycloudflare.com mostrada pelo terminal e envie ao amigo em particular.
+O token do Discord, o segredo `DKB_SECRET` e a chave do Supabase são credenciais diferentes.
 
-O Quick Tunnel é temporário. A URL muda quando um novo túnel é criado e só funciona enquanto a janela do túnel e o bot estiverem abertos. É uma solução para testes, não para produção. [Documentação oficial](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/).
+## Configuração da integração Minecraft
 
-No plugins/DiscordKitBridge/config.yml do amigo:
+O bot e o servidor Minecraft podem ficar em computadores diferentes.
 
-~~~yaml
-bridge:
-  enabled: true
-  mode: "poll"
-  secret: "COLE_A_CHAVE_MOSTRADA_POR_bridge_chave"
-  poll:
-    url: "https://ENDERECO-HTTPS-DO-TUNEL"
-    interval-seconds: 3
-    max-per-poll: 5
-    http-timeout: 10
-~~~
+- No PC do bot: a API local usa `127.0.0.1:8787`.
+- No PC do Minecraft: o plugin consulta um endereço HTTPS que encaminha até a API do bot.
+- Para testes, o repositório inclui `INICIAR-TUNEL.bat`, que usa Cloudflare Quick Tunnel.
 
-O endereço no plugin deve ser a URL HTTPS do túnel, sem /plugin/v1. Não use localhost ou 127.0.0.1 no PC do amigo para tentar chegar ao seu bot.
+A chave deve ser copiada diretamente entre arquivos locais: `DKB_SECRET` no `.env` do bot e `bridge.secret` no `config.yml` do plugin. O bot não mostra esse segredo no Discord.
 
-**Atenção:** o código publicado atualmente no Plugin-ASTHEN ainda precisa ser ajustado para aceitar a chave gerada pelo bot. O documento de implementação descreve essa mudança. Não considere a entrega automática pronta até o teste entre os dois computadores passar.
+Consulte [Integração com o Plugin-ASTHEN](docs/PLUGIN-INTEGRATION.md) e [handoff técnico para o plugin](docs/PLUGIN-IMPLEMENTATION-HANDOFF.md).
+
+A entrega real só pode ser considerada testada depois que o Paper e o plugin estiverem online e concluírem uma compra de teste.
 
 ## Supabase
 
-O Supabase é opcional para iniciar o bot. Quando configurado, o projeto mantém:
+O Supabase é opcional. Ele guarda um snapshot do estado e uma tabela organizada de kits por servidor Discord.
 
-- asthen_bot_state: snapshot do estado do bot.
-- asthen_bot_kits: catálogo normalizado de kits por servidor Discord.
+**Instalação nova:** abra o SQL Editor do Supabase e execute o arquivo completo [`supabase/SETUP.sql`](supabase/SETUP.sql). Ele cria as tabelas:
 
-Abra o SQL Editor do Supabase e execute, nesta ordem:
+- `asthen_bot_state`: snapshot do estado do bot.
+- `asthen_bot_kits`: catálogo comercial e estado de cada kit por servidor Discord.
 
-1. supabase/001_asthen_bot_state.sql
-2. supabase/002_asthen_bot_kits.sql
+**Projeto que já tinha as tabelas:** execute [`supabase/003_asthen_bot_kit_catalog_status.sql`](supabase/003_asthen_bot_kit_catalog_status.sql) para adicionar os novos campos. A migração pode ser executada mais de uma vez.
 
-Configure no .env a URL base do projeto e uma Secret API Key no backend:
+Depois configure no `.env`:
 
 ~~~env
 SUPABASE_URL=https://seu-projeto.supabase.co
@@ -157,9 +125,29 @@ SUPABASE_TABLE=asthen_bot_state
 SUPABASE_KITS_TABLE=asthen_bot_kits
 ~~~
 
-Consulte [SUPABASE.md](docs/SUPABASE.md) para detalhes de sincronização e diagnóstico.
+Use uma Secret API Key somente no backend do bot. Não a coloque no cliente, em páginas públicas ou no GitHub. Veja [configuração e diagnóstico do Supabase](docs/SUPABASE.md).
 
-## Verificação
+## Estrutura do projeto
+
+~~~text
+BOT-ASTHEN/
+├── assets/                  # QR Pix e imagens do projeto
+├── bot-integration/         # API HTTP copiada/adaptada para o bot
+├── data/                    # Estado local (não versionar dados reais)
+├── docs/                    # Instalação, comandos e integrações
+├── linux/                   # Scripts para Linux
+├── src/                     # Código do bot Discord
+├── supabase/                # SQL de criação e migração das tabelas
+├── test/                    # Testes automatizados
+├── .github/                 # CI e modelos de contribuição
+├── INSTALAR.bat             # Instalação no Windows
+├── INICIAR.bat              # Inicialização no Windows
+└── package.json             # Dependências, versão e scripts
+~~~
+
+## Verificações
+
+Para executar localmente:
 
 ~~~bash
 npm install
@@ -168,17 +156,28 @@ npm run check:commands
 npm test
 ~~~
 
-O GitHub Actions executa essas verificações nas atualizações da branch principal.
+O GitHub Actions executa as mesmas verificações em pull requests e atualizações da branch principal.
 
-## Segurança e limites
+## Documentação
 
-- Nunca publique .env, tokens ou chaves.
-- A chave DKB_SECRET fica salva na instalação do bot e não deve mudar durante uma atualização normal.
-- Não existe comando para exibir a chave. Configure `DKB_SECRET` e `bridge.secret` diretamente nos arquivos locais.
-- A API local deve ficar em 127.0.0.1; use HTTPS para disponibilizar o endereço ao computador do plugin.
-- O bot não verifica comprovantes bancários automaticamente.
-- A entrega real no Minecraft depende de o plugin estar atualizado e conectado.
+- [Instalação detalhada](docs/INSTALLATION.md)
+- [Lista de comandos](docs/COMMANDS.md)
+- [Integração com o Minecraft](docs/PLUGIN-INTEGRATION.md)
+- [SQL e Supabase](docs/SUPABASE.md)
+- [Arquitetura e fluxo do projeto](docs/ARCHITECTURE.md)
+- [Como contribuir](CONTRIBUTING.md)
+- [Segurança](SECURITY.md)
 
-### Plataforma e preço dos kits
+## Pix
 
-O pedido salva a plataforma Java ou Bedrock. A versão publicada do plugin atualmente envia `name`, `enabled` e `items`, mas não envia `price`; por isso, enquanto o plugin não passar esse campo, configure o preço no Discord com `/kit editar`. Quando o plugin enviar `price`, o bot poderá atualizar esse valor e preservará o preço existente quando o campo não vier.
+A chave Pix e o QR Code são fixos nesta versão da loja. Não existe comando `/pix`. A mensagem de pagamento contém o QR Code, a chave e o botão para copiar.
+
+Para trocar os dados Pix no futuro, é necessário atualizar em conjunto `src/pix.js` e `assets/pix-keybytes.png`.
+
+## Segurança
+
+- Nunca publique arquivos `.env`, tokens, chaves ou comprovantes.
+- Não compartilhe `DKB_SECRET` em mensagens, prints ou canais do Discord.
+- A API deve ficar vinculada a `127.0.0.1`; use HTTPS para conectar outro computador.
+- A equipe confere os comprovantes manualmente.
+- A entrega depende do Plugin-ASTHEN estar atualizado e conectado.
