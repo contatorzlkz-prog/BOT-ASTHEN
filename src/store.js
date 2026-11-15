@@ -35,8 +35,19 @@ function formatBrlCents(cents) {
 }
 
 function legacyPriceToCents(value) {
-  const raw = String(value ?? '').trim().replace(/^R\$\s*/i, '').replace(/\./g, '').replace(',', '.');
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0 || value > 999999.99) return null;
+    return Math.round(value * 100);
+  }
+
+  let raw = String(value ?? '').trim().replace(/^R\$\s*/i, '').replace(/\s/g, '');
+  if (raw.includes(',')) {
+    raw = raw.replace(/\./g, '').replace(',', '.');
+  } else if (/^\d{1,3}(?:\.\d{3})+$/.test(raw)) {
+    raw = raw.replace(/\./g, '');
+  }
   if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) return null;
+
   const amount = Number(raw);
   if (!Number.isFinite(amount) || amount <= 0 || amount > 999999.99) return null;
   return Math.round(amount * 100);
@@ -93,7 +104,10 @@ function ensureGuildConfig(guildId) {
       : kit.missingFromPlugin === true ? false : kit.manuallyUnavailable === true ? true : kit.enabled !== false,
     storeConfigured: typeof kit.storeConfigured === 'boolean'
       ? kit.storeConfigured
-      : Boolean(String(kit.price || '').trim() || String(kit.description || '').trim() || String(kit.imageUrl || '').trim()),
+      : Boolean(String(kit.description || '').trim()
+        || String(kit.imageUrl || '').trim()
+        || (String(kit.displayName || '').trim()
+          && kit.displayName !== makeKitDisplayName(kit.name))),
     enabled: kit.enabled !== false && kit.manuallyUnavailable !== true
   }));
 
@@ -215,7 +229,7 @@ export function removeKit(guildId, kitId) {
 
 /**
  * Reconcile the plugin's complete list without deleting historical products.
- * Missing products remain in the store as unavailable. Optional plugin prices are supported.
+ * Missing products remain in the store as unavailable. Plugin 1.2.0 is authoritative for price and sale status.
  */
 export function syncPluginKits(guildId, pluginKits) {
   const config = ensureGuildConfig(guildId);
