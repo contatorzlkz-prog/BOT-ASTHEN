@@ -1,6 +1,6 @@
 {
   "name": "asthen-discord-bot",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "private": false,
   "type": "module",
   "description": "Bot de Discord com atendimento privado e loja de kits.",
