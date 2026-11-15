@@ -8,6 +8,9 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.resolve(currentDir, '../data');
 const dataFile = path.join(dataDir, 'state.json');
 
+const emptyState = () => ({ guilds: {}, tickets: {}, purchaseDrafts: {} });
+let state = emptyState();
+
 function normalizeKitName(name) {
   return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
