@@ -68,6 +68,9 @@ function ensureGuildConfig(guildId) {
     manuallyUnavailable: kit.manuallyUnavailable === true,
     missingFromPlugin: kit.missingFromPlugin === true,
     pluginEnabled: typeof kit.pluginEnabled === 'boolean' ? kit.pluginEnabled : kit.enabled !== false,
+    storeConfigured: typeof kit.storeConfigured === 'boolean'
+      ? kit.storeConfigured
+      : Boolean(String(kit.price || '').trim() || String(kit.description || '').trim() || String(kit.imageUrl || '').trim()),
     enabled: kit.enabled !== false && kit.manuallyUnavailable !== true
   }));
 
@@ -210,17 +213,24 @@ export function syncPluginKits(guildId, pluginKits) {
     const pluginEnabled = item.enabled === true;
     const manuallyUnavailable = old?.manuallyUnavailable === true;
     const hasPluginPrice = Object.prototype.hasOwnProperty.call(item, 'price') && item.price !== null;
+    const price = hasPluginPrice ? String(item.price).trim() : String(old?.price || '');
+    const wasConfigured = typeof old?.storeConfigured === 'boolean'
+      ? old.storeConfigured
+      : Boolean(old && (String(old.price || '').trim()
+        || String(old.description || '').trim()
+        || String(old.imageUrl || '').trim()));
     syncedKits.push({
       id: old?.id || randomUUID().slice(0, 12),
       name: item.name,
       displayName: old?.displayName || makeKitDisplayName(item.name),
-      price: hasPluginPrice ? String(item.price).trim() : String(old?.price || ''),
+      price,
       description: String(old?.description || ''),
       imageUrl: String(old?.imageUrl || ''),
       enabled: pluginEnabled && !manuallyUnavailable,
       pluginEnabled,
       manuallyUnavailable,
       missingFromPlugin: false,
+      storeConfigured: wasConfigured || Boolean(hasPluginPrice && price),
       itemCount: Number.isFinite(Number(item.items)) ? Number(item.items) : (old?.itemCount || 0),
       pluginManaged: true
     });
