@@ -10,7 +10,7 @@ alter table public.asthen_bot_kits
   add column if not exists plugin_for_sale boolean not null default false,
   add column if not exists for_sale boolean not null default false;
 
-do $
+do $asthen$
 begin
   if not exists (
     select 1
@@ -23,6 +23,6 @@ begin
       check (price_cents is null or price_cents > 0);
   end if;
 end
-$;
+$asthen$;
 
 commit;
