@@ -35,8 +35,8 @@ function formatBrlCents(cents) {
 }
 
 function legacyPriceToCents(value) {
-  const raw = String(value ?? '').trim().replace(/^R\\$\\s*/i, '').replace(/\\./g, '').replace(',', '.');
-  if (!/^\\d+(?:\\.\\d{1,2})?$/.test(raw)) return null;
+  const raw = String(value ?? '').trim().replace(/^R\$\s*/i, '').replace(/\./g, '').replace(',', '.');
+  if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) return null;
   const amount = Number(raw);
   if (!Number.isFinite(amount) || amount <= 0 || amount > 999999.99) return null;
   return Math.round(amount * 100);
