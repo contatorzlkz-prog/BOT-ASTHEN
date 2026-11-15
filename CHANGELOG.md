@@ -1,3 +1,25 @@
+## 2.9.0 — 14/11/2026
+
+### Kits e loja
+- Novo comando administrativo `/kit criar` para cadastrar na loja kits que já foram criados no Minecraft pelo Plugin-ASTHEN.
+- Cadastro comercial em uma janela: nome exibido, preço em reais, descrição e URL HTTPS da imagem.
+- `/kit editar` continua permitindo ajustes individuais.
+- `/kit listar` mostra o estado no Minecraft e o estado do cadastro comercial.
+- A família `/kit` agora exige a permissão **Administrador**.
+- A sincronização guarda separadamente o estado do plugin, a configuração comercial e a disponibilidade manual.
+
+### Supabase
+- Adicionados os campos `store_configured`, `manually_unavailable` e `missing_from_plugin` à tabela `asthen_bot_kits`.
+- Novo script completo `supabase/SETUP.sql` para criar as duas tabelas com uma única execução.
+- Nova migração `003_asthen_bot_kit_catalog_status.sql` para projetos que já tinham a tabela de kits.
+
+### GitHub e documentação
+- README reorganizado com fluxo de kits, comandos, estrutura do projeto e instalação.
+- Documentação de comandos, integração e Supabase alinhada ao comportamento atual.
+- Adicionados modelo de pull request e modelo para sugestões de recursos.
+
+---
+
 ## 2.8.0 — 14/11/2026
 
 ### Loja
