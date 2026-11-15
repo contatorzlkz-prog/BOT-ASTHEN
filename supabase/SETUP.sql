@@ -1,4 +1,4 @@
--- ASTHEN BOT 2.9.0 — complete Supabase setup
+-- ASTHEN BOT 2.10.0 — complete Supabase setup
 -- Paste this entire file into Supabase > SQL Editor and run it once.
 -- Safe to run again: tables and columns use IF NOT EXISTS.
 -- The bot uses its Secret API Key only on the backend. Do not expose it to the browser or Discord.
