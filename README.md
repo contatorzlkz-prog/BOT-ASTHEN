@@ -6,7 +6,7 @@ Bot de Discord para o servidor Minecraft ASTHEN: atendimento privado, loja de ki
 ![Discord.js](https://img.shields.io/badge/discord.js-14-5865F2?logo=discord&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-opcional-3ECF8E?logo=supabase&logoColor=white)
 [![Checks](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/vers%C3%A3o-2.9.0-7C5CFC)
+![Version](https://img.shields.io/badge/vers%C3%A3o-2.10.0-7C5CFC)
 
 <p align="center">
   <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip">
@@ -34,12 +34,12 @@ O **Plugin-ASTHEN é a origem dos kits reais e dos itens entregues no Minecraft*
 
 1. Um administrador cria o kit real dentro do Minecraft pelo Plugin-ASTHEN.
 2. O plugin envia a lista de kits para a API do bot.
-3. O administrador usa `/kit criar` e seleciona um kit recebido do Minecraft.
-4. O Discord abre uma janela para preencher nome exibido, preço, descrição e imagem HTTPS.
-5. O kit aparece na loja. O comprador escolhe, confere a prévia, informa o nick e seleciona Java ou Bedrock.
-6. O bot abre o ticket privado com o QR Pix, a chave e o valor.
-7. A equipe confere o comprovante e confirma ou recusa o pagamento.
-8. Após a aprovação, o bot solicita ao plugin a entrega do kit na plataforma escolhida.
+3. No Minecraft, o administrador define o preço com `/dk price Kit_Ferro 29,90` e ativa o kit.
+4. No Discord, usa `/kit criar` para cadastrar nome exibido, descrição e imagem HTTPS. O preço não é preenchido no bot.
+5. O bot recebe `price_cents` e `for_sale` do plugin; só oferece kits autorizados para venda.
+6. O comprador confere a prévia, informa o nick e seleciona Java ou Bedrock.
+7. O bot abre o ticket privado com o QR Pix, a chave e o valor. A equipe confere o comprovante.
+8. Após a aprovação, o plugin entrega o kit no Minecraft dentro de uma Shulker Box.
 
 **Importante:** `/kit criar` cadastra o produto na loja do Discord. Ele não cria espadas, armaduras ou outros itens dentro do Minecraft. Os itens reais continuam sendo configurados no plugin.
 
@@ -49,16 +49,18 @@ Todos os comandos `/kit` exigem a permissão **Administrador**.
 
 | Comando | O que faz |
 |---|---|
-| `/kit criar` | Cadastra na loja um kit que já chegou do plugin. Preenche nome, preço, descrição e imagem de uma vez. |
+| `/kit criar` | Cadastra na loja um kit que já chegou do plugin. Preenche nome exibido, descrição e imagem. |
 | `/kit listar` | Mostra os kits, o estado no Minecraft e se o cadastro comercial está pronto. |
-| `/kit editar` | Altera individualmente nome exibido, preço, descrição, imagem ou disponibilidade. |
+| `/kit editar` | Altera individualmente nome exibido, descrição, imagem ou bloqueio manual na loja. |
 | `/kit remover` | Marca o produto como indisponível na loja sem apagar o cadastro ou o kit no Minecraft. |
 
 O identificador técnico do plugin não muda. Por exemplo, o Minecraft pode continuar usando `Kit_Ferro`, enquanto o cliente vê **Kit Ferro**.
 
-Kits novos aparecem no catálogo como indisponíveis até terem preço. Quando um kit é desativado ou removido do plugin, ele permanece visível como indisponível. Os dados comerciais antigos e os pedidos não são apagados.
+O **Plugin-ASTHEN 1.2.0 é a fonte oficial do preço e da disponibilidade**. No Minecraft, use `/dk price Kit_Ferro 29,90` para definir o valor, `/dk price Kit_Ferro remover` para retirar da venda e `/dk enable` ou `/dk disable` para ativar/desativar. Kit sem preço não pode ser comprado.
 
-A versão atual do plugin envia nome, estado e quantidade de itens, mas ainda não envia preço. Por enquanto, configure o preço usando `/kit criar` ou `/kit editar`. O bot aceita o campo opcional `price` para quando o plugin passar a enviá-lo.
+A lista enviada ao bot inclui `price`, `price_cents` e `for_sale`. O bot usa `price_cents` para exibir o valor sem erro de arredondamento e só permite a compra quando `for_sale: true`. O preço não pode ser editado no Discord.
+
+Quando um kit é desativado ou removido do plugin, ou perde o preço, continua visível como indisponível. Os dados comerciais e pedidos antigos não são apagados.
 
 ## Outros recursos
 
@@ -70,6 +72,7 @@ A versão atual do plugin envia nome, estado e quantidade de itens, mas ainda n�
 - Escolha de Minecraft Java ou Bedrock antes de abrir o ticket.
 - API HTTP autenticada para o Plugin-ASTHEN usando o modo poll.
 - Tentativa automática adicional quando a entrega expira, reutilizando o mesmo identificador para evitar duplicidade.
+- Entrega do kit pelo plugin em uma Shulker Box com nome e itens preservados; inventário cheio pode gerar retirada pendente via `/dk claim`.
 - Backup local em `data/state.json` e sincronização opcional com Supabase.
 
 ## Instalação e atualização
@@ -103,18 +106,20 @@ A chave deve ser copiada diretamente entre arquivos locais: `DKB_SECRET` no `.en
 
 Consulte [Integração com o Plugin-ASTHEN](docs/PLUGIN-INTEGRATION.md) e [handoff técnico para o plugin](docs/PLUGIN-IMPLEMENTATION-HANDOFF.md).
 
-A entrega real só pode ser considerada testada depois que o Paper e o plugin estiverem online e concluírem uma compra de teste.
+**Verificação do Plugin-ASTHEN 1.2.0:** no [build do GitHub Actions de 15/11/2026](https://github.com/ElbsxS1/Plugin-ASTHEN/actions/runs/43659388395), os 67 testes JDK-only passaram e o `mvn package` terminou com `BUILD SUCCESS` usando a dependência Paper configurada.
+
+Isso não substitui o teste dentro do jogo. A entrega em Shulker Box ainda precisa ser validada em um servidor Paper real, incluindo cor, nome, slots e retirada com inventário cheio.
 
 ## Supabase
 
 O Supabase é opcional. Ele guarda um snapshot do estado e uma tabela organizada de kits por servidor Discord.
 
-**Instalação nova:** abra o SQL Editor do Supabase e execute o arquivo completo [`supabase/SETUP.sql`](supabase/SETUP.sql). Ele cria as tabelas:
+**Instalação nova:** abra o SQL Editor do Supabase e execute o arquivo completo [`supabase/SETUP.sql`](supabase/SETUP.sql). Ele cria as tabelas com os novos campos `price_cents`, `plugin_for_sale` e `for_sale`:
 
 - `asthen_bot_state`: snapshot do estado do bot.
 - `asthen_bot_kits`: catálogo comercial e estado de cada kit por servidor Discord.
 
-**Projeto que já tinha as tabelas:** execute [`supabase/003_asthen_bot_kit_catalog_status.sql`](supabase/003_asthen_bot_kit_catalog_status.sql) para adicionar os novos campos. A migração pode ser executada mais de uma vez.
+**Projeto que já tinha a tabela de kits:** execute [`supabase/004_asthen_bot_plugin_sale_contract.sql`](supabase/004_asthen_bot_plugin_sale_contract.sql) para adicionar os campos de preço em centavos e disponibilidade do plugin. A migração pode ser executada mais de uma vez.
 
 Depois configure no `.env`:
 

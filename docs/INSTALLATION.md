@@ -37,4 +37,4 @@ Não apague a pasta `data` nem substitua o arquivo `.env` sem fazer uma cópia. 
 
 ## Kits da loja
 
-Crie primeiro o kit real pelo Plugin-ASTHEN dentro do Paper. Quando o bot receber o kit, um administrador pode usar `/kit criar` para configurar nome comercial, preço, descrição e imagem. O comando não cria os itens do Minecraft.
+Crie primeiro o kit real pelo Plugin-ASTHEN dentro do Paper usando uma Shulker Box. Defina o preço no jogo com `/dk price <nome> <valor>`; kit sem preço não está à venda. Quando o bot receber a lista, um administrador pode usar `/kit criar` para configurar nome comercial, descrição e imagem. O comando não altera os itens nem o preço do Minecraft.

@@ -1,4 +1,4 @@
-# Comandos do ASTHEN BOT 2.9.0
+# Comandos do ASTHEN BOT 2.10.0
 
 ## Quem pode usar
 
@@ -38,9 +38,10 @@ Cadastra na loja do Discord um kit real que já foi recebido do plugin.
 
 1. Escolha um kit ainda não cadastrado comercialmente.
 2. Preencha o nome que o cliente verá.
-3. Informe o preço em reais, por exemplo `19,90`.
-4. Escreva uma descrição curta e útil.
-5. Cole um link HTTPS para a imagem, se tiver.
+3. Escreva uma descrição curta e útil.
+4. Cole um link HTTPS para a imagem, se tiver.
+
+O preço é definido no Minecraft com `/dk price <nome> <valor>`, por exemplo `/dk price Kit_Ferro 19,90`. Para remover o preço, use `/dk price <nome> remover`. Kit sem preço fica fora da venda.
 
 O nome técnico do plugin não é alterado. A imagem é opcional.
 
@@ -48,7 +49,7 @@ O nome técnico do plugin não é alterado. A imagem é opcional.
 
 ### `/kit listar`
 
-Mostra o nome comercial, preço, nome original do plugin, estado do kit no Minecraft e situação do cadastro da loja.
+Mostra o nome comercial, preço recebido em centavos do plugin, estado no Minecraft, situação da venda e estado dos dados comerciais.
 
 ### `/kit editar`
 
@@ -56,7 +57,7 @@ Mostra o nome comercial, preço, nome original do plugin, estado do kit no Minec
 2. Escolha o campo que deseja alterar.
 3. Preencha o novo valor.
 
-Campos disponíveis: nome exibido, preço, descrição, imagem HTTPS e disponibilidade comercial.
+Campos disponíveis: nome exibido, descrição, imagem HTTPS e bloqueio manual na loja. O preço e a ativação real são controlados no Minecraft com `/dk price`, `/dk enable` e `/dk disable`.
 
 ### `/kit remover`
 

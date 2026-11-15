@@ -1,4 +1,4 @@
--- ASTHEN BOT 2.9.0 — complete Supabase setup
+-- ASTHEN BOT 2.10.0 — complete Supabase setup
 -- Paste this entire file into Supabase > SQL Editor and run it once.
 -- Safe to run again: tables and columns use IF NOT EXISTS.
 -- The bot uses its Secret API Key only on the backend. Do not expose it to the browser or Discord.
@@ -23,6 +23,9 @@ create table if not exists public.asthen_bot_kits (
   display_name text not null,
   description text not null default '',
   price text not null default '',
+  price_cents bigint null check (price_cents is null or price_cents > 0),
+  plugin_for_sale boolean not null default false,
+  for_sale boolean not null default false,
   image_url text not null default '',
   plugin_enabled boolean not null default true,
   store_configured boolean not null default false,
@@ -37,7 +40,10 @@ create table if not exists public.asthen_bot_kits (
 alter table public.asthen_bot_kits
   add column if not exists store_configured boolean not null default false,
   add column if not exists manually_unavailable boolean not null default false,
-  add column if not exists missing_from_plugin boolean not null default false;
+  add column if not exists missing_from_plugin boolean not null default false,
+  add column if not exists price_cents bigint null,
+  add column if not exists plugin_for_sale boolean not null default false,
+  add column if not exists for_sale boolean not null default false;
 
 create index if not exists asthen_bot_kits_guild_id_idx
   on public.asthen_bot_kits (guild_id);

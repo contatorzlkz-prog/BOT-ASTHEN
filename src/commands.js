@@ -38,7 +38,7 @@ export const commandDefinitions = [
       .setDescription('Lista os kits recebidos do plugin e seu estado na loja.'))
     .addSubcommand(subcommand => subcommand
       .setName('editar')
-      .setDescription('Altera nome, preço, descrição, imagem ou disponibilidade.'))
+      .setDescription('Altera nome exibido, descrição, imagem ou disponibilidade na loja.'))
     .addSubcommand(subcommand => subcommand
       .setName('remover')
       .setDescription('Marca um kit como indisponível sem apagar seu cadastro.'))),

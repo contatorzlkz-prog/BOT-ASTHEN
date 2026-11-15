@@ -13,17 +13,16 @@
 ## Quem é responsável por cada dado
 
 **Plugin Minecraft**
-- Identificador técnico do kit.
-- Itens dentro do kit.
+- Identificador técnico e itens dentro do kit.
 - Estado ativo/desativado no servidor.
-- Entrega final no inventário do jogador.
+- Preço oficial em centavos e regra `for_sale`.
+- Entrega em uma Shulker Box com o nome do kit e os itens preservados.
 
 **Bot Discord**
 - Nome comercial exibido ao comprador.
-- Preço da loja.
-- Descrição comercial.
-- URL HTTPS da imagem.
-- Disponibilidade comercial e fluxo do pagamento.
+- Descrição comercial e URL HTTPS da imagem.
+- Bloqueio manual adicional da loja e fluxo de pagamento.
+- Exibição do preço exato recebido em `price_cents` (não define o valor).
 
 O bot não edita os itens do Minecraft. Um kit real nasce no plugin; o bot só o cadastra na loja depois de receber sua identificação pela bridge.
 
@@ -42,7 +41,7 @@ Bot importa/atualiza o catálogo
 Administrador usa /kit criar
           |
           v
-Nome comercial + preço + descrição + imagem
+Nome comercial + descrição + imagem (preço vem do plugin)
           |
           v
 Produto aparece na loja do Discord
@@ -58,8 +57,9 @@ Para mudanças pontuais, use `/kit editar`. Para bloquear compras, use `/kit rem
 4. A equipe confere o comprovante manualmente.
 5. Um administrador ou membro com o cargo de equipe aprova o pedido.
 6. O bot envia `request_id`, jogador, plataforma e identificador técnico do kit à bridge.
-7. O plugin consulta a fila, executa a entrega e envia o resultado.
-8. O bot informa o resultado no ticket e registra a decisão.
+7. O plugin consulta a fila, monta a Shulker Box do kit e entrega um único item ao jogador.
+8. Se não houver espaço, o plugin guarda o kit completo como pendente; o jogador pode retirá-lo com `/dk claim`.
+9. O bot informa o resultado no ticket e registra a decisão.
 
 Em caso de timeout, o bot repete uma vez com o mesmo `request_id`. O plugin deve tratar esse identificador como idempotente para impedir uma segunda entrega da mesma compra.
 

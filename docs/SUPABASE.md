@@ -1,4 +1,4 @@
-# Supabase — ASTHEN BOT 2.9.0
+# Supabase — ASTHEN BOT 2.10.0
 
 O Supabase é opcional. Quando configurado, o bot mantém um snapshot de dados e uma tabela normalizada para os kits de cada servidor Discord.
 
@@ -17,12 +17,13 @@ O script usa `IF NOT EXISTS` e pode ser executado novamente sem recriar as tabel
 
 ### Projeto que já tinha a tabela de kits
 
-Se você já executou os arquivos 001 e 002 de uma versão anterior, execute [`supabase/003_asthen_bot_kit_catalog_status.sql`](../supabase/003_asthen_bot_kit_catalog_status.sql). Essa migração adiciona os campos novos sem apagar os registros existentes.
+Se você atualizou da versão 2.9.0, execute [`supabase/004_asthen_bot_plugin_sale_contract.sql`](../supabase/004_asthen_bot_plugin_sale_contract.sql). Se a tabela ainda não tinha os campos da versão 2.9.0, execute primeiro `003_asthen_bot_kit_catalog_status.sql` e depois a migração 004. Nenhum registro antigo é apagado.
 
 Os arquivos separados também continuam disponíveis:
 - `001_asthen_bot_state.sql`
 - `002_asthen_bot_kits.sql`
 - `003_asthen_bot_kit_catalog_status.sql`
+- `004_asthen_bot_plugin_sale_contract.sql`
 
 ## 2. Configurar o .env
 
@@ -54,7 +55,10 @@ Guarda o catálogo por servidor Discord:
 | `plugin_name` | Identificador exato recebido do Plugin-ASTHEN. |
 | `display_name` | Nome apresentado ao cliente. |
 | `description` | Descrição comercial editada no Discord. |
-| `price` | Preço configurado para a loja. |
+| `price` | Preço formatado para exibição. |
+| `price_cents` | Valor inteiro em centavos recebido do plugin. |
+| `plugin_for_sale` | Estado oficial `for_sale` enviado pelo Plugin-ASTHEN. |
+| `for_sale` | Disponibilidade efetiva no catálogo do Discord, após considerar bloqueios manuais. |
 | `image_url` | URL HTTPS da imagem comercial. |
 | `plugin_enabled` | Informa se o kit está ativo no Minecraft. |
 | `store_configured` | Informa se os dados comerciais já foram cadastrados. |
@@ -68,8 +72,11 @@ Guarda o catálogo por servidor Discord:
 - Cada alteração é salva primeiro em `data/state.json`.
 - O bot envia o snapshot para `asthen_bot_state` e faz upsert dos kits em `asthen_bot_kits`.
 - Quando o plugin envia a lista completa por `POST /plugin/v1/kits`, o bot importa os kits novos.
-- A sincronização preserva nome comercial, preço, descrição, imagem e estado de cadastro.
-- O estado recebido do plugin fica separado da disponibilidade comercial definida pela equipe.
+- A sincronização preserva nome comercial, descrição, imagem e estado de cadastro.
+- O preço é sempre atualizado a partir de `price_cents`; esse valor é a fonte exata, sem arredondamento do campo decimal `price`.
+- `plugin_for_sale` registra a disponibilidade oficial informada pelo plugin e `for_sale` registra se o Discord realmente permite comprar após o bloqueio manual.
+- Se o plugin enviar `price_cents: null` ou `for_sale: false`, o bot limpa o preço de venda antigo e bloqueia novas compras.
+- O estado recebido do plugin fica separado do bloqueio manual definido pela equipe.
 - Se um kit deixar de aparecer na lista do plugin, ele continua armazenado e visível como indisponível. O bot não apaga registros antigos de kits ou pedidos.
 - Se a equipe usar `/kit remover`, o produto fica indisponível para compras futuras, mas os dados são preservados.
 - Quando o Supabase está indisponível, o arquivo local continua sendo usado e o bot tenta sincronizar novamente.

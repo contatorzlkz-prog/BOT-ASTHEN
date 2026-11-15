@@ -1,3 +1,25 @@
+## 2.10.0 — 15/11/2026
+
+### Integração com Plugin-ASTHEN 1.2.0
+- O preço passa a ter uma única fonte da verdade: `/dk price <nome> <valor>` no Minecraft.
+- O bot lê `price_cents` para mostrar o preço exato e usa `for_sale` para decidir se o kit pode ser comprado.
+- Remover o preço no plugin limpa o preço anterior no catálogo; kits sem preço ou desativados ficam indisponíveis.
+- `/kit criar` configura nome comercial, descrição e imagem, sem pedir preço.
+- `/kit editar` deixa de alterar preço e controla apenas os dados comerciais e o bloqueio manual da loja.
+- `/bridge status` mostra o preço recebido e se cada kit está à venda.
+
+### Entrega em Shulker Box
+- Mensagens de entrega explicam que o jogador recebe uma Shulker Box com o kit dentro.
+- A documentação registra cor, nome, preservação dos slots, espaço de inventário e retirada de kits pendentes com `/dk claim`.
+- A compilação do Plugin-ASTHEN 1.2.0 no GitHub Actions foi verificada; a abertura da caixa e a retirada ainda dependem de teste no servidor Paper real.
+
+### Supabase e documentação
+- Adicionados `price_cents`, `plugin_for_sale` e `for_sale` à tabela `asthen_bot_kits`.
+- Nova migração `004_asthen_bot_plugin_sale_contract.sql` para instalações existentes.
+- README, comandos, integração e arquitetura atualizados para o contrato do plugin 1.2.0.
+
+---
+
 ## 2.9.0 — 14/11/2026
 
 ### Kits e loja
