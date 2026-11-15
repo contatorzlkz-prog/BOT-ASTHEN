@@ -78,7 +78,10 @@ async function pushKitRows(config, snapshot) {
         description: String(kit.description || ''),
         price: String(kit.price || ''),
         image_url: String(kit.imageUrl || ''),
-        plugin_enabled: kit.enabled !== false,
+        plugin_enabled: kit.pluginEnabled !== false,
+        store_configured: kit.storeConfigured === true,
+        manually_unavailable: kit.manuallyUnavailable === true,
+        missing_from_plugin: kit.missingFromPlugin === true,
         item_count: Number.isFinite(Number(kit.itemCount)) ? Number(kit.itemCount) : 0,
         updated_at: now
       }));
@@ -94,19 +97,7 @@ async function pushKitRows(config, snapshot) {
       }
     }
 
-    const filters = new URLSearchParams({ guild_id: 'eq.' + guildId });
-    if (rows.length) {
-      const keepIds = rows.map(row => '"' + row.kit_id.replace(/"/g, '') + '"').join(',');
-      filters.set('kit_id', 'not.in.(' + keepIds + ')');
-    }
 
-    const cleanup = await supabaseRequest(config, '?' + filters.toString(), {
-      method: 'DELETE',
-      headers: { Prefer: 'return=minimal' }
-    }, config.kitsTable);
-    if (!cleanup.ok) {
-      throw new Error('Supabase respondeu HTTP ' + cleanup.status + ' ao remover kits antigos.');
-    }
   }
 }
 

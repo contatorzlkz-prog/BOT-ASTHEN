@@ -85,13 +85,57 @@ test('a API entrega pedidos ao plugin e recebe o resultado final', async () => {
   });
 });
 
+test('a API aceita Bedrock e valida Java separadamente', async () => {
+  const requestId = 'test-bedrock-001';
+  const pendingResult = deliverKit({
+    requestId,
+    player: 'Elber Player',
+    platform: 'bedrock',
+    kit: 'Kit_Ferro',
+    timeoutMs: 5000
+  });
+
+  const pull = await fetch(baseUrl + '/plugin/v1/pull?limit=5', {
+    headers: authHeaders()
+  });
+  const payload = await pull.json();
+  assert.deepEqual(payload.requests.find(item => item.request_id === requestId), {
+    request_id: requestId,
+    player: 'Elber Player',
+    platform: 'bedrock',
+    kit: 'Kit_Ferro'
+  });
+
+  const posted = await fetch(baseUrl + '/plugin/v1/result', {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      request_id: requestId,
+      final: true,
+      success: true,
+      status: 'KIT_DELIVERED',
+      player: 'Elber Player',
+      platform: 'bedrock',
+      kit: 'Kit_Ferro',
+      message: 'Kit entregue.'
+    })
+  });
+  assert.equal(posted.status, 200);
+  assert.equal((await pendingResult).status, 'KIT_DELIVERED');
+
+  await assert.rejects(
+    deliverKit({ requestId: 'bad-java', player: 'Nick Com Espaco', platform: 'java', kit: 'Kit_Ferro' }),
+    /Nick Java inválido/
+  );
+});
+
 test('a API informa estado e rejeita nick ou nome de kit inválido', async () => {
   const status = getBridgeStatus();
   assert.equal(status.running, true);
   assert.equal(status.port, bridge.port);
 
   await assert.rejects(
-    deliverKit({ requestId: 'bad-player', player: 'Nick com espaço', platform: 'java', kit: 'Kit_Ferro' }),
+    deliverKit({ requestId: 'bad-player', player: 'Nick Com Espaco', platform: 'java', kit: 'Kit_Ferro' }),
     /Nick Java inválido/
   );
   await assert.rejects(

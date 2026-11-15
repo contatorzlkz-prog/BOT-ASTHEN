@@ -31,14 +31,16 @@ test('admin commands are compact and Pix is no longer a slash command', () => {
   const names = commandDefinitions.map(item => item.toJSON().name);
   assert.deepEqual(names, ['configurar', 'kit', 'bridge']);
   assert.equal(command('pix'), undefined);
-  assert.deepEqual(command('kit').options.map(option => option.name), ['listar', 'editar', 'remover']);
-  assert.deepEqual(command('bridge').options.map(option => option.name), ['status', 'chave']);
+  assert.deepEqual(command('kit').options.map(option => option.name), ['criar', 'listar', 'editar', 'remover']);
+  assert.deepEqual(command('bridge').options.map(option => option.name), ['status']);
+  assert.equal(command('kit').default_member_permissions, '8');
 });
 
-test('shop button only opens catalog when at least one kit can be purchased', () => {
+test('shop button opens the catalog when plugin kits exist, even before price setup', () => {
   const emptyPanel = makeShopPanel([{ id: 'a', name: 'Kit_Teste', price: '', enabled: true }]);
   const emptyButton = emptyPanel.components[0].components[0].toJSON();
-  assert.equal(emptyButton.disabled, true);
+  assert.equal(emptyButton.disabled, false);
+  assert.equal(emptyButton.label, 'Ver catálogo');
 
   const availablePanel = makeShopPanel([{ id: 'a', name: 'Kit_Teste', price: 'R$ 5,00', enabled: true }]);
   const availableButton = availablePanel.components[0].components[0].toJSON();
@@ -46,7 +48,7 @@ test('shop button only opens catalog when at least one kit can be purchased', ()
   assert.equal(availableButton.label, 'Escolher kit');
 });
 
-test('shop catalog shows friendly display names and filters inactive or unpriced kits', () => {
+test('shop catalog shows friendly names and marks inactive or unpriced kits unavailable', () => {
   const row = makeCatalogMenu([
     { id: '1', name: 'Kit_Ferro', displayName: 'Kit Ferro', price: 'R$ 5,00', enabled: true },
     { id: '2', name: 'Kit_Dima', displayName: 'Kit Dima', price: '', enabled: true },
@@ -54,9 +56,9 @@ test('shop catalog shows friendly display names and filters inactive or unpriced
   ]);
   const menu = row.components[0].toJSON();
 
-  assert.deepEqual(menu.options.map(option => option.label), ['Kit Ferro']);
-  assert.deepEqual(menu.options.map(option => option.value), ['1']);
-  assert.ok(!menu.options[0].label.includes('_'));
+  assert.deepEqual(menu.options.map(option => option.label), ['Kit Ferro', 'Indisponível · Kit Dima', 'Indisponível · Kit Elytra']);
+  assert.deepEqual(menu.options.map(option => option.value), ['1', '2', '3']);
+  assert.ok(menu.options.every(option => !option.label.includes('_')));
 });
 
 test('purchase message contains Pix QR details and does not expose order id or kit contents', () => {

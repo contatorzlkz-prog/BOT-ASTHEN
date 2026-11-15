@@ -104,7 +104,7 @@ async function main() {
   }
   const bridgeSecret = ensureBridgeSecret();
   if (bridgeSecret.generated) {
-    console.log('[Asthen Bridge] Chave de integração criada e salva no .env. Um administrador pode copiá-la com /bridge chave.');
+    console.log('[Asthen Bridge] Chave de integração criada e salva no .env. Configure o mesmo valor de DKB_SECRET diretamente em bridge.secret no config.yml do plugin; a chave não é exibida no Discord.');
   }
   const rest = new REST({ version: '10' }).setToken(token);
   const body = commandDefinitions.map(command => command.toJSON());
