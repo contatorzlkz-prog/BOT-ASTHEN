@@ -11,10 +11,10 @@ A integração usa o modo poll: o plugin faz as conexões de saída para buscar 
 
 ## 2. Chave estável da integração
 
-1. Inicie o bot.
-2. Um administrador executa /bridge chave no Discord.
-3. Copie a resposta privada e entregue ao responsável pelo servidor Minecraft.
-4. Ele cola exatamente o mesmo valor em bridge.secret no config.yml do plugin.
+1. Inicie o bot uma vez para gerar e salvar `DKB_SECRET` no `.env`.
+2. No computador do bot, abra o `.env` e copie o valor de `DKB_SECRET`.
+3. No computador do Minecraft, coloque exatamente o mesmo valor em `bridge.secret` no `config.yml` do plugin.
+4. Não envie o segredo por Discord, chat, prints ou repositórios.
 
 A chave é criada somente quando DKB_SECRET ainda não existe. Ela permanece igual quando o bot é atualizado, desde que o arquivo .env seja preservado. Não existe comando de regeneração nesta versão.
 
@@ -67,7 +67,7 @@ O administrador cria o kit real no Minecraft com /dk create <nome>. O Plugin-AST
 No Discord:
 - /kit listar: confere a lista sincronizada.
 - /kit editar: seleciona um kit e altera nome exibido, preço, descrição ou imagem.
-- /kit remover: oculta o produto do catálogo; não apaga o arquivo do Minecraft.
+- /kit remover: marca o produto como indisponível sem apagar seu cadastro ou o arquivo do Minecraft.
 
 Para apagar o kit real, use a função de exclusão do plugin. Quando a lista seguinte não contiver mais esse identificador, o bot mantém o produto no catálogo e marca como indisponível. Produtos antigos e pedidos não são apagados.
 
@@ -83,7 +83,7 @@ Authorization: Bearer <DKB_SECRET>
 - POST /plugin/v1/result: recebe resultado final de entrega.
 - POST /plugin/v1/kits: recebe a lista completa dos kits do plugin.
 
-A API do bot envia somente request_id, player, platform: "java" e o identificador exato kit. O plugin continua responsável por entregar os itens.
+A API do bot envia request_id, player, a plataforma escolhida pelo cliente (java ou bedrock) e o identificador exato do kit. O plugin continua responsável por entregar os itens.
 
 ## 6. Fluxo de compra
 
