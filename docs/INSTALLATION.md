@@ -19,7 +19,7 @@ bash linux/setup-linux.sh
 bash linux/start-linux.sh
 ```
 
-O instalador solicita o token Discord e o Application ID e cria o `.env`. Para habilitar Supabase, edite depois as variáveis `SUPABASE_URL` e `SUPABASE_SECRET_KEY`.
+O instalador solicita o token Discord e o Application ID e cria o `.env`. Para habilitar Supabase, abra o SQL Editor e execute `supabase/SETUP.sql`. Depois configure `SUPABASE_URL` e `SUPABASE_SECRET_KEY` no `.env`.
 
 ## Criar o bot no Discord
 
@@ -29,4 +29,12 @@ Permissões recomendadas: View Channels, Send Messages, Embed Links, Attach File
 
 ## Arquivo .env
 
-O arquivo contém o token do Discord e, opcionalmente, a chave secreta do Supabase. A variável `DKB_SECRET` é criada automaticamente pelo bot na primeira inicialização. Não compartilhe nem envie `.env` ao GitHub.
+O arquivo contém o token do Discord e, opcionalmente, a chave secreta do Supabase. A variável `DKB_SECRET` é criada automaticamente pelo bot na primeira inicialização. Na configuração do Plugin-ASTHEN, use exatamente o mesmo valor em `bridge.secret`. Não compartilhe nem envie `.env` ao GitHub.
+
+## Atualizar uma instalação existente
+
+Não apague a pasta `data` nem substitua o arquivo `.env` sem fazer uma cópia. Eles guardam o estado local e o segredo estável da bridge. Se instalar em outra pasta, copie ambos antes de iniciar a versão nova.
+
+## Kits da loja
+
+Crie primeiro o kit real pelo Plugin-ASTHEN dentro do Paper. Quando o bot receber o kit, um administrador pode usar `/kit criar` para configurar nome comercial, preço, descrição e imagem. O comando não cria os itens do Minecraft.
