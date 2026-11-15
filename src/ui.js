@@ -72,7 +72,8 @@ function canBuyKit(kit) {
   return kit?.enabled !== false
     && kit?.manuallyUnavailable !== true
     && kit?.missingFromPlugin !== true
-    && Boolean(String(kit?.price || '').trim());
+    && kit?.pluginForSale === true
+    && kit?.forSale === true;
 }
 
 export function makeSupportPanel() {
@@ -137,9 +138,9 @@ export function makeCatalogMenu(kits = []) {
           ? 'Indisponível pela equipe'
           : kit.pluginEnabled === false || kit.enabled === false
             ? 'Desativado no servidor'
-            : !String(kit.price || '').trim()
-              ? 'Preço ainda não definido'
-              : String(kit.price);
+            : kit.pluginForSale !== true
+              ? (kit.priceCents ? 'Venda desativada no plugin' : 'Preço ainda não definido no Minecraft')
+              : String(kit.price || 'Preço indisponível');
       return {
         label: (available ? '' : 'Indisponível · ').concat(displayKitName(kit)).slice(0, 100),
         description: reason.slice(0, 100),
@@ -157,7 +158,7 @@ export function makeKitAdminMenu(kits = [], customId = 'kit:admin:select') {
     .setMaxValues(1)
     .addOptions(kits.slice(0, 25).map(kit => ({
       label: (canBuyKit(kit) ? '' : 'Indisponível · ').concat(displayKitName(kit)).slice(0, 100),
-      description: ((kit.missingFromPlugin ? 'Removido do servidor' : kit.enabled === false ? 'Desativado' : String(kit.price || 'Preço a definir')) + ' · ' + String(kit.name)).slice(0, 100),
+      description: ((kit.missingFromPlugin ? 'Removido do servidor' : kit.pluginEnabled === false ? 'Desativado no Minecraft' : kit.pluginForSale !== true ? (kit.priceCents ? 'Venda desativada' : 'Sem preço no Minecraft') : String(kit.price || 'À venda')) + ' · ' + String(kit.name)).slice(0, 100),
       value: String(kit.id)
     })));
   return new ActionRowBuilder().addComponents(menu);
@@ -171,10 +172,9 @@ export function makeKitEditFieldMenu(kit) {
     .setMaxValues(1)
     .addOptions(
       { label: 'Nome exibido na loja', description: 'Nome bonito que o cliente verá, sem underscores.', value: 'displayName' },
-      { label: 'Preço', description: 'Valor de venda do kit.', value: 'price' },
       { label: 'Descrição', description: 'Texto que aparece na prévia.', value: 'description' },
       { label: 'Imagem', description: 'Link HTTPS da imagem do kit.', value: 'imageUrl' },
-      { label: 'Ativar disponibilidade', description: 'Reabre a venda se o kit existir e estiver ativo no Minecraft.', value: 'availability' }
+      { label: 'Reabrir na loja', description: 'Remove o bloqueio manual; o plugin ainda precisa permitir a venda.', value: 'availability' }
     );
   return new ActionRowBuilder().addComponents(menu);
 }
@@ -197,7 +197,10 @@ export function makeKitPreviewEmbed(kit) {
     .setColor(brandColor())
     .setTitle(displayKitName(kit))
     .setDescription(String(kit.description || 'Descrição em atualização.'))
-    .addFields({ name: 'Preço', value: String(kit.price || 'A definir'), inline: true });
+    .addFields(
+      { name: 'Preço', value: String(kit.price || 'Não definido no Minecraft'), inline: true },
+      { name: 'Venda', value: kit.forSale === true ? 'Disponível' : 'Indisponível', inline: true }
+    );
   const image = safeImageUrl(kit.imageUrl);
   if (image) embed.setImage(image);
   return embed;
@@ -302,11 +305,18 @@ export function makeDeliveryEmbed(result) {
   return new EmbedBuilder()
     .setColor(delivered ? 0x3BA55D : pending ? 0xD4A72C : 0xD45B5B)
     .setTitle(delivered ? 'Kit entregue no Minecraft' : pending ? 'Kit guardado para retirada' : 'Resultado da entrega')
-    .setDescription(String(result.message || (delivered
-      ? 'O plugin confirmou a entrega do kit.'
-      : pending
-        ? 'O inventário estava cheio. O plugin guardou o kit para o jogador retirar.'
-        : 'O plugin não confirmou a entrega. Confira o resultado e tente novamente quando necessário.')))
+    .setDescription(
+      String(result.message || (delivered
+        ? 'O plugin confirmou a entrega do kit.'
+        : pending
+          ? 'O inventário estava cheio. O plugin guardou o kit para o jogador retirar.'
+          : 'O plugin não confirmou a entrega. Confira o resultado e tente novamente quando necessário.')) +
+      (delivered
+        ? '\\n\\nO kit foi entregue dentro de uma Shulker Box.'
+        : pending
+          ? '\\n\\nAo retirar o kit, o jogador receberá uma Shulker Box com os itens.'
+          : '')
+    )
     .addFields(
       { name: 'Jogador', value: String(result.player || '—'), inline: true },
       { name: 'Kit', value: String(result.kit || '—'), inline: true },
