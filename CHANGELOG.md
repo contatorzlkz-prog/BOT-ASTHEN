@@ -1,3 +1,27 @@
+## 2.8.0 — 14/11/2026
+
+### Loja
+- Kits desativados ou removidos do plugin continuam visíveis como indisponíveis.
+- Produtos antigos e seus dados comerciais deixam de ser apagados pela sincronização.
+- Ação de remover kit passa a marcar o produto como indisponível.
+- A sincronização aceita preço opcional do plugin e preserva o preço salvo quando o campo não existe.
+
+### Compras e entrega
+- O cliente escolhe Java ou Bedrock depois de informar o nick.
+- A plataforma fica salva no pedido, nos logs e nos avisos.
+- A aprovação envia a plataforma correta ao plugin.
+- Timeout gera uma segunda tentativa automática com o mesmo requestId.
+- Falhas conhecidas passam a ter mensagens mais claras para o comprador.
+- Pedidos antigos sem plataforma ficam pausados até a equipe escolher Java ou Bedrock.
+
+### Segurança e integração
+- Módulo `asthen-bridge.js` copiado do repositório do plugin para o bot.
+- API local usa `DKB_HOST` (padrão 127.0.0.1) e `DKB_PORT` (padrão 8787).
+- Comando que exibia a chave foi removido; `DKB_SECRET` deve ser copiado localmente entre `.env` e `config.yml`.
+- Supabase deixa de excluir linhas antigas de produtos.
+
+---
+
 ## 2.7.0 — 14/11/2026
 
 ### Catálogo ligado ao Plugin-ASTHEN
