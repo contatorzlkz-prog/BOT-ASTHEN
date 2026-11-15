@@ -311,6 +311,9 @@ function makeKitCreateModal(kit) {
     .setStyle(TextInputStyle.Short)
     .setMaxLength(500)
     .setRequired(false);
+  if (kit.price) price.setValue(String(kit.price).replace(/^R\$\s*/i, '').slice(0, 20));
+  if (kit.description) description.setValue(String(kit.description).slice(0, 800));
+  if (kit.imageUrl) imageUrl.setValue(String(kit.imageUrl).slice(0, 500));
 
   return new ModalBuilder()
     .setCustomId('kit:create-modal:' + kit.id)
@@ -349,7 +352,9 @@ async function handleKitCommand(interaction) {
         : kit.pluginEnabled === false ? 'desativado no Minecraft'
           : kit.manuallyUnavailable ? 'indisponível na loja'
             : kit.enabled === false ? 'indisponível' : 'ativo';
-      const shopState = kit.storeConfigured ? 'cadastro comercial pronto' : 'falta cadastrar na loja';
+      const shopState = kit.manuallyUnavailable || kit.missingFromPlugin
+        ? 'indisponível na loja'
+        : kit.storeConfigured ? 'cadastro comercial pronto' : 'falta cadastrar na loja';
       return (index + 1) + '. **' + String(kit.displayName || makeKitDisplayName(kit.name)) + '** — ' +
         String(kit.price || 'preço pendente') + '\nMinecraft: ' + pluginState +
         ' · Loja: ' + shopState + '\nID do plugin: `' + kit.name + '`';
@@ -366,7 +371,6 @@ async function handleKitCommand(interaction) {
     const pending = config.kits.filter(kit =>
       kit.pluginManaged === true
       && kit.pluginEnabled !== false
-      && kit.enabled !== false
       && kit.missingFromPlugin !== true
       && kit.storeConfigured !== true
     );
