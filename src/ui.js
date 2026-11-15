@@ -329,6 +329,19 @@ export function makeDeliveryRetryControls(mode = 'same') {
   );
 }
 
+export function makeDeliveryPlatformControls() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('delivery:set-platform:java')
+      .setLabel('Definir Java')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('delivery:set-platform:bedrock')
+      .setLabel('Definir Bedrock')
+      .setStyle(ButtonStyle.Success)
+  );
+}
+
 export function makeOrderControls() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
