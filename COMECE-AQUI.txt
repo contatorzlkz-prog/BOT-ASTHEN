@@ -12,12 +12,13 @@ COMO CADASTRAR KITS
 
 1. Crie o kit real dentro do servidor Minecraft pelo Plugin-ASTHEN.
 2. Aguarde o plugin sincronizar a lista com o bot. Use /bridge status para conferir.
-3. No Discord, um administrador usa /kit criar.
-4. Selecione o kit e preencha nome comercial, preço, descrição e link HTTPS da imagem.
-5. Use /kit editar para mudar um campo depois.
+3. No Minecraft, defina o preço com /dk price Kit_Ferro 29,90. Sem preço, o kit não fica à venda.
+4. No Discord, um administrador usa /kit criar para preencher nome comercial, descrição e link HTTPS da imagem.
+5. Use /kit editar para mudar os dados comerciais; o preço continua sendo controlado no Minecraft.
 
 IMPORTANTE
-- /kit criar configura somente o produto da loja Discord. Os itens reais continuam no plugin Minecraft.
+- /kit criar configura somente a apresentação na loja Discord. O preço e os itens reais continuam no Plugin-ASTHEN.
+- O plugin 1.2.0 entrega o kit dentro de uma Shulker Box. Esta parte ainda precisa de teste em jogo.
 - Só membros com a permissão Administrador podem usar /kit.
 - O pagamento é conferido manualmente pela equipe.
 - Não existe mais o comando /pix.
