@@ -6,6 +6,8 @@ on:
     paths:
       - package.json
       - VERSION.txt
+      - supabase/SETUP.sql
+      - .github/workflows/release-zip.yml
 
 permissions:
   contents: write
