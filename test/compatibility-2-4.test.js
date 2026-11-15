@@ -42,7 +42,10 @@ test('shop button opens the catalog when plugin kits exist, even before price se
   assert.equal(emptyButton.disabled, false);
   assert.equal(emptyButton.label, 'Ver catálogo');
 
-  const availablePanel = makeShopPanel([{ id: 'a', name: 'Kit_Teste', price: 'R$ 5,00', enabled: true }]);
+  const availablePanel = makeShopPanel([{
+    id: 'a', name: 'Kit_Teste', price: 'R$ 5,00', enabled: true,
+    pluginForSale: true, forSale: true
+  }]);
   const availableButton = availablePanel.components[0].components[0].toJSON();
   assert.equal(availableButton.disabled, false);
   assert.equal(availableButton.label, 'Escolher kit');
@@ -50,9 +53,9 @@ test('shop button opens the catalog when plugin kits exist, even before price se
 
 test('shop catalog shows friendly names and marks inactive or unpriced kits unavailable', () => {
   const row = makeCatalogMenu([
-    { id: '1', name: 'Kit_Ferro', displayName: 'Kit Ferro', price: 'R$ 5,00', enabled: true },
-    { id: '2', name: 'Kit_Dima', displayName: 'Kit Dima', price: '', enabled: true },
-    { id: '3', name: 'Kit_Elytra', displayName: 'Kit Elytra', price: 'R$ 9,00', enabled: false }
+    { id: '1', name: 'Kit_Ferro', displayName: 'Kit Ferro', price: 'R$ 5,00', enabled: true, pluginForSale: true, forSale: true },
+    { id: '2', name: 'Kit_Dima', displayName: 'Kit Dima', price: '', enabled: true, pluginForSale: false, forSale: false },
+    { id: '3', name: 'Kit_Elytra', displayName: 'Kit Elytra', price: 'R$ 9,00', enabled: false, pluginForSale: false, forSale: false }
   ]);
   const menu = row.components[0].toJSON();
 
