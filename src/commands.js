@@ -37,7 +37,7 @@ export const commandDefinitions = [
       .setDescription('Escolhe um kit e o campo que deseja alterar.'))
     .addSubcommand(subcommand => subcommand
       .setName('remover')
-      .setDescription('Remove um kit do catálogo da loja.'))),
+      .setDescription('Marca o kit como indisponível sem apagar seu registro.'))),
 
   adminOnly(new SlashCommandBuilder()
     .setName('bridge')
