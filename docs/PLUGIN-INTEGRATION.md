@@ -1,4 +1,4 @@
-# Integração do ASTHEN BOT 2.7.0 com o Plugin-ASTHEN
+# Integração do ASTHEN BOT 2.8.0 com o Plugin-ASTHEN
 
 A integração usa o modo poll: o plugin faz as conexões de saída para buscar pedidos e devolver resultados. O servidor Minecraft não precisa aceitar conexões de entrada.
 
@@ -18,7 +18,7 @@ A integração usa o modo poll: o plugin faz as conexões de saída para buscar 
 
 A chave é criada somente quando DKB_SECRET ainda não existe. Ela permanece igual quando o bot é atualizado, desde que o arquivo .env seja preservado. Não existe comando de regeneração nesta versão.
 
-O código publicado do plugin ainda precisa ser adaptado para aceitar a chave vinda do bot. Atualmente o plugin tenta gerar a própria chave quando bridge.secret está vazio. O responsável pelo plugin deve seguir [PLUGIN-IMPLEMENTATION-HANDOFF.md](PLUGIN-IMPLEMENTATION-HANDOFF.md).
+O plugin ainda gera uma chave própria se `bridge.secret` estiver vazio. Por isso, preencha manualmente esse campo com o valor de `DKB_SECRET` do bot. Não é preciso publicar nem enviar o segredo.
 
 ## 3. Testar com computadores diferentes
 
@@ -50,7 +50,7 @@ No plugins/DiscordKitBridge/config.yml:
 bridge:
   enabled: true
   mode: "poll"
-  secret: "COLE_A_CHAVE_MOSTRADA_POR_bridge_chave"
+  secret: "COLE_LOCALMENTE_O_MESMO_DKB_SECRET_DO_BOT"
   poll:
     url: "https://ENDERECO-HTTPS-DO-TUNEL"
     interval-seconds: 3
@@ -69,7 +69,7 @@ No Discord:
 - /kit editar: seleciona um kit e altera nome exibido, preço, descrição ou imagem.
 - /kit remover: oculta o produto do catálogo; não apaga o arquivo do Minecraft.
 
-Para apagar o kit real, use a função de exclusão do plugin. Quando a lista seguinte não contiver mais esse identificador, o bot remove o produto e a linha correspondente de asthen_bot_kits no Supabase.
+Para apagar o kit real, use a função de exclusão do plugin. Quando a lista seguinte não contiver mais esse identificador, o bot mantém o produto no catálogo e marca como indisponível. Produtos antigos e pedidos não são apagados.
 
 ## 5. Contrato HTTP
 
@@ -92,10 +92,14 @@ A API do bot envia somente request_id, player, platform: "java" e o identificado
 3. O bot abre o ticket com QR Pix, chave, valor e instrução compacta para anexar o comprovante.
 4. Um membro autorizado da equipe confere o comprovante e confirma o pagamento.
 5. O bot solicita a entrega ao plugin.
-6. O plugin devolve o resultado; avisos técnicos de falha ficam privados para a equipe.
+6. O plugin devolve o resultado. O comprador recebe uma mensagem clara e a equipe recebe detalhes técnicos. Em caso de timeout, o bot tenta novamente uma vez com o mesmo request_id.
 
 O mesmo request_id deve ser reutilizado em uma repetição de entrega para evitar duplicidade.
 
 ## 7. Supabase
 
 Execute os arquivos supabase/001_asthen_bot_state.sql e supabase/002_asthen_bot_kits.sql. Consulte [SUPABASE.md](SUPABASE.md).
+
+### Preço dos kits
+
+O bot aceita `price` como campo opcional na sincronização. O plugin publicado ainda envia somente `name`, `enabled` e `items`, então configure o preço com `/kit editar` até o plugin enviar esse campo. Se `price` não vier, o bot preserva o valor já cadastrado.
