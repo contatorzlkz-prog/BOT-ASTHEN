@@ -1,4 +1,4 @@
-# ASTHEN BOT 2.7.0 — Handoff técnico para a IA atualizar o Plugin-ASTHEN
+# ASTHEN BOT 2.8.0 — Handoff técnico para a IA atualizar o Plugin-ASTHEN
 
 Este documento é a especificação de integração para a pessoa e para a IA que vão modificar o código Java do plugin. Leia o documento inteiro antes de alterar arquivos. O objetivo é adaptar o plugin existente ao contrato do bot, preservando os sistemas que já funcionam.
 
@@ -17,7 +17,7 @@ No PC do amigo, 127.0.0.1 aponta para o próprio PC do amigo, não para o comput
 
 O ASTHEN BOT cria uma chave aleatória forte somente quando DKB_SECRET ainda não existe. Salva o valor em .env. Nas inicializações seguintes e nas atualizações normais do bot, o mesmo valor é reaproveitado.
 
-O administrador usa /bridge chave para ver a chave em resposta privada e cola esse mesmo valor em bridge.secret no config.yml do plugin.
+O administrador copia `DKB_SECRET` diretamente do `.env` local do bot e configura o mesmo valor em `bridge.secret` no `config.yml` do plugin. A chave não deve ser enviada por chat.
 
 ### Comportamento que precisa ser corrigido no plugin atual
 
@@ -159,8 +159,8 @@ O código atual do PollClient já possui o envio de POST /plugin/v1/kits após c
 - O bot importa o identificador e cria um registro comercial inicialmente sem preço, descrição ou imagem.
 - No Discord, administrador usa /kit editar para escolher nome exibido, preço, descrição ou imagem HTTPS.
 - O nome de exibição não altera o identificador que o bot envia ao plugin.
-- Quando o administrador exclui o kit no plugin, a lista completa seguinte deixa de conter o identificador; o bot remove sua entrada do catálogo e do Supabase.
-- /kit remover no Discord só oculta o produto da loja; não apaga itens no Minecraft.
+- Quando o administrador exclui o kit no plugin, a lista completa seguinte deixa de conter o identificador; o bot mantém o produto no catálogo, marcado como indisponível, e preserva seus dados comerciais.
+- /kit remover no Discord marca o produto como indisponível; não apaga o cadastro nem os itens no Minecraft.
 
 Não implementar cadastro de itens dentro do bot. O bot não envia listas de ItemStack nem arquivos de kit.
 
@@ -190,7 +190,7 @@ Preserve o histórico de request_id já existente. A mesma compra repetida preci
 4. Ao criar um kit com /dk create Kit_Teste, o bot recebe a lista e o kit aparece em /kit listar.
 5. Administrador usa /kit editar para definir preço, descrição, nome exibido e imagem.
 6. O produto aparece no catálogo depois de ter preço e estar habilitado.
-7. Excluir o kit no plugin remove a entrada do catálogo depois da próxima sincronização.
+7. Excluir o kit no plugin mantém o produto no catálogo como indisponível depois da próxima sincronização.
 8. Aprovar compra de teste entrega exatamente um kit e devolve KIT_DELIVERED ou KIT_PENDING.
 9. Reenviar o mesmo request_id não duplica a entrega.
 10. Testar chave incorreta, túnel offline, bot offline, jogador offline, kit inexistente e inventário cheio.
