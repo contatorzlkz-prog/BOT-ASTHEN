@@ -2,18 +2,27 @@ ASTHEN BOT — INÍCIO RÁPIDO
 
 1. Extraia o ZIP.
 2. Execute INSTALAR.bat.
-3. Informe o token e o Application ID do seu próprio bot.
+3. Informe o token e o Application ID do seu próprio bot Discord.
 4. Execute INICIAR.bat.
 5. No Discord, configure os canais:
 
 /configurar suporte:#suporte loja:#loja logs:#logs compradores:#compradores equipe:@Equipe
-/pix chave:SUA_CHAVE instrucoes:Envie o comprovante neste canal.
 
-Para cadastrar produtos:
-/kit adicionar
+COMO CADASTRAR KITS
 
-O ticket de pagamento só é aberto depois que o cliente escolhe o kit,
-informa o nick do Minecraft e confirma a revisão.
+1. Crie o kit real dentro do servidor Minecraft pelo Plugin-ASTHEN.
+2. Aguarde o plugin sincronizar a lista com o bot. Use /bridge status para conferir.
+3. No Discord, um administrador usa /kit criar.
+4. Selecione o kit e preencha nome comercial, preço, descrição e link HTTPS da imagem.
+5. Use /kit editar para mudar um campo depois.
 
-Configurações, kits, tickets e compras em preparação são salvos em
-data/state.json. Faça backup desse arquivo. Nunca compartilhe .env.
+IMPORTANTE
+- /kit criar configura somente o produto da loja Discord. Os itens reais continuam no plugin Minecraft.
+- Só membros com a permissão Administrador podem usar /kit.
+- O pagamento é conferido manualmente pela equipe.
+- Não existe mais o comando /pix.
+- .env e data/state.json devem ser mantidos ao atualizar. Nunca compartilhe o .env.
+
+SUPABASE (OPCIONAL)
+Abra o SQL Editor do Supabase e execute o arquivo supabase/SETUP.sql.
+Depois configure SUPABASE_URL e SUPABASE_SECRET_KEY no .env.
