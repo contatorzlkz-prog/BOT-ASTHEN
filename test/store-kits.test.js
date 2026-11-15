@@ -70,6 +70,19 @@ test('optional plugin price updates the price while omitted price preserves it',
   ]).kits[0].price, 'R$ 9,90');
 });
 
+test('an empty price field from the plugin does not erase the price set in Discord', () => {
+  const guildId = testGuildId();
+  const initial = syncPluginKits(guildId, [
+    { name: 'Kit_Ferro', enabled: true, items: 12, price: 'R$ 6,90' }
+  ]);
+  const kit = initial.kits[0];
+  const updated = syncPluginKits(guildId, [
+    { name: 'Kit_Ferro', enabled: true, items: 12, price: '' }
+  ]);
+  assert.equal(updated.kits[0].price, 'R$ 6,90');
+  assert.equal(updated.kits[0].storeConfigured, true);
+});
+
 test('a kit disabled by the plugin stays in the catalog as unavailable', () => {
   const guildId = testGuildId();
   const first = syncPluginKits(guildId, [{ name: 'Kit_Ferro', enabled: true, items: 12 }]);
