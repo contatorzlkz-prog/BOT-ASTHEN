@@ -1,4 +1,4 @@
-# ASTHEN BOT 2.8.0 — Handoff técnico para a IA atualizar o Plugin-ASTHEN
+# ASTHEN BOT 2.9.0 — Handoff técnico para a IA atualizar o Plugin-ASTHEN
 
 Este documento é a especificação de integração para a pessoa e para a IA que vão modificar o código Java do plugin. Leia o documento inteiro antes de alterar arquivos. O objetivo é adaptar o plugin existente ao contrato do bot, preservando os sistemas que já funcionam.
 
@@ -59,7 +59,7 @@ No plugins/DiscordKitBridge/config.yml:
 bridge:
   enabled: true
   mode: "poll"
-  secret: "CHAVE_COPIADA_DO_COMANDO_bridge_chave"
+  secret: "COLE_LOCALMENTE_O_MESMO_DKB_SECRET_DO_BOT"
   poll:
     url: "https://ENDERECO-HTTPS-DO-TUNEL"
     interval-seconds: 3
@@ -156,13 +156,14 @@ O código atual do PollClient já possui o envio de POST /plugin/v1/kits após c
 
 - Administrador cria itens dentro de uma Shulker Box e usa /dk create <nome>.
 - O plugin salva o kit real e envia a lista atualizada para /plugin/v1/kits.
-- O bot importa o identificador e cria um registro comercial inicialmente sem preço, descrição ou imagem.
-- No Discord, administrador usa /kit editar para escolher nome exibido, preço, descrição ou imagem HTTPS.
+- O bot importa o identificador e cria um registro comercial aguardando configuração.
+- No Discord, um administrador usa /kit criar para selecionar o kit recebido e preencher nome exibido, preço, descrição e imagem HTTPS em uma janela.
+- Depois do cadastro, /kit editar permite alterações individuais.
 - O nome de exibição não altera o identificador que o bot envia ao plugin.
-- Quando o administrador exclui o kit no plugin, a lista completa seguinte deixa de conter o identificador; o bot mantém o produto no catálogo, marcado como indisponível, e preserva seus dados comerciais.
+- Quando o administrador exclui o kit no plugin, a lista completa seguinte deixa de conter o identificador; o bot mantém o produto no catálogo, marcado como indisponível, e preserva seus dados comerciais e o histórico.
 - /kit remover no Discord marca o produto como indisponível; não apaga o cadastro nem os itens no Minecraft.
 
-Não implementar cadastro de itens dentro do bot. O bot não envia listas de ItemStack nem arquivos de kit.
+Não implementar cadastro de itens dentro do bot. O bot não envia listas de ItemStack nem arquivos de kit. Todos os comandos /kit do Discord exigem a permissão Administrador.
 
 ## 6. Idempotência e segurança
 
@@ -188,9 +189,9 @@ Preserve o histórico de request_id já existente. A mesma compra repetida preci
 2. Chave do bot é aceita e autentica a API.
 3. Plugin no segundo computador conecta à URL HTTPS do túnel.
 4. Ao criar um kit com /dk create Kit_Teste, o bot recebe a lista e o kit aparece em /kit listar.
-5. Administrador usa /kit editar para definir preço, descrição, nome exibido e imagem.
-6. O produto aparece no catálogo depois de ter preço e estar habilitado.
-7. Excluir o kit no plugin mantém o produto no catálogo como indisponível depois da próxima sincronização.
+5. Um administrador usa /kit criar para definir preço, descrição, nome exibido e imagem; depois pode ajustar campos com /kit editar.
+6. O produto aparece como disponível na loja depois de ter preço e estar habilitado no plugin.
+7. Excluir o kit no plugin mantém o produto no catálogo como indisponível depois da próxima sincronização; nenhum registro histórico é apagado.
 8. Aprovar compra de teste entrega exatamente um kit e devolve KIT_DELIVERED ou KIT_PENDING.
 9. Reenviar o mesmo request_id não duplica a entrega.
 10. Testar chave incorreta, túnel offline, bot offline, jogador offline, kit inexistente e inventário cheio.
