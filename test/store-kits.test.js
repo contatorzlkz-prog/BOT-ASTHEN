@@ -134,6 +134,20 @@ test('old manual products remain in the store and become unavailable if absent f
   assert.equal(old.price, 'R$ 2,00');
 });
 
+test('new plugin kits are marked as not yet configured for the Discord store', () => {
+  const guildId = testGuildId();
+  const result = syncPluginKits(guildId, [{ name: 'Kit_Novo', enabled: true, items: 4 }]);
+  assert.equal(result.kits[0].storeConfigured, false);
+});
+
+test('a kit with a plugin-supplied price is ready for the shop and keeps that state', () => {
+  const guildId = testGuildId();
+  const first = syncPluginKits(guildId, [{ name: 'Kit_Com_Preco', enabled: true, items: 4, price: 'R$ 4,90' }]);
+  assert.equal(first.kits[0].storeConfigured, true);
+  const next = syncPluginKits(guildId, [{ name: 'Kit_Com_Preco', enabled: true, items: 4 }]);
+  assert.equal(next.kits[0].storeConfigured, true);
+});
+
 test('friendly kit names remove underscores and hyphens', () => {
   assert.equal(makeKitDisplayName('Kit_Netherita-Plus'), 'Kit Netherita Plus');
 });
