@@ -312,9 +312,9 @@ export function makeDeliveryEmbed(result) {
           ? 'O inventário estava cheio. O plugin guardou o kit para o jogador retirar.'
           : 'O plugin não confirmou a entrega. Confira o resultado e tente novamente quando necessário.')) +
       (delivered
-        ? '\\n\\nO kit foi entregue dentro de uma Shulker Box.'
+        ? '\n\nO kit foi entregue dentro de uma Shulker Box.'
         : pending
-          ? '\\n\\nAo retirar o kit, o jogador receberá uma Shulker Box com os itens.'
+          ? '\n\nAo retirar o kit, o jogador receberá uma Shulker Box com os itens.'
           : '')
     )
     .addFields(
