@@ -77,6 +77,10 @@ async function pushKitRows(config, snapshot) {
         display_name: String(kit.displayName || kit.name.replace(/[_-]+/g, ' ')),
         description: String(kit.description || ''),
         price: String(kit.price || ''),
+        price_cents: Number.isSafeInteger(Number(kit.priceCents)) && Number(kit.priceCents) > 0
+          ? Number(kit.priceCents) : null,
+        plugin_for_sale: kit.pluginForSale === true,
+        for_sale: kit.forSale === true,
         image_url: String(kit.imageUrl || ''),
         plugin_enabled: kit.pluginEnabled !== false,
         store_configured: kit.storeConfigured === true,
