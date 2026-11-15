@@ -1,6 +1,7 @@
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 const adminOnly = command => command.setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
+const administratorOnly = command => command.setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 const textChannel = option => option
   .addChannelTypes(ChannelType.GuildText)
   .setRequired(false);
@@ -26,18 +27,21 @@ export const commandDefinitions = [
       .setDescription('Cargo autorizado a revisar pagamentos e fechar tickets.')
       .setRequired(false))),
 
-  adminOnly(new SlashCommandBuilder()
+  administratorOnly(new SlashCommandBuilder()
     .setName('kit')
-    .setDescription('Gerencia os kits sincronizados com o Minecraft.')
+    .setDescription('Administra os kits que o plugin disponibiliza na loja.')
+    .addSubcommand(subcommand => subcommand
+      .setName('criar')
+      .setDescription('Cadastrar na loja um kit já criado no Minecraft.'))
     .addSubcommand(subcommand => subcommand
       .setName('listar')
-      .setDescription('Lista os kits recebidos do plugin.'))
+      .setDescription('Lista os kits recebidos do plugin e seu estado na loja.'))
     .addSubcommand(subcommand => subcommand
       .setName('editar')
-      .setDescription('Escolhe um kit e o campo que deseja alterar.'))
+      .setDescription('Altera nome, preço, descrição, imagem ou disponibilidade.'))
     .addSubcommand(subcommand => subcommand
       .setName('remover')
-      .setDescription('Marca o kit como indisponível sem apagar seu registro.'))),
+      .setDescription('Marca um kit como indisponível sem apagar seu cadastro.'))),
 
   adminOnly(new SlashCommandBuilder()
     .setName('bridge')
