@@ -1,201 +1,169 @@
-# ASTHEN BOT 2.9.0 — Handoff técnico para a IA atualizar o Plugin-ASTHEN
+# ASTHEN BOT 2.10.0 — Contrato técnico com Plugin-ASTHEN 1.2.0
 
-Este documento é a especificação de integração para a pessoa e para a IA que vão modificar o código Java do plugin. Leia o documento inteiro antes de alterar arquivos. O objetivo é adaptar o plugin existente ao contrato do bot, preservando os sistemas que já funcionam.
+Este documento descreve a integração atualmente esperada entre o bot Discord e o plugin Minecraft. O Plugin-ASTHEN 1.2.0 já implementa o contrato de preço, disponibilidade e entrega em Shulker Box. Não reescreva o plugin nem duplique no bot as responsabilidades que pertencem ao Minecraft.
 
-**Não reescreva o plugin do zero.** O transporte poll já existente deve ser adaptado, não substituído.
+## 1. Responsabilidade de cada projeto
 
-## 1. Arquitetura obrigatória: computadores diferentes
+**Plugin-ASTHEN (Paper):**
+- Cria e armazena os kits reais e seus ItemStacks.
+- Define preço em reais e controla ativação/desativação.
+- Envia `price`, `price_cents` e `for_sale` ao bot.
+- Valida plataforma Java/Bedrock e executa a entrega no inventário.
+- Entrega o kit em uma Shulker Box e mantém entregas pendentes quando o inventário está cheio.
 
-- **PC do dono do bot:** ASTHEN BOT e API HTTP local em 127.0.0.1:8787.
-- **PC/host do Minecraft:** servidor Paper e Plugin-ASTHEN.
-- **Conexão:** o plugin inicia conexões HTTPS de saída para a URL pública do túnel/proxy do bot.
-- **Teste:** pode ser Paper local no PC do amigo. Não é necessária host Minecraft pública para o primeiro teste.
+**ASTHEN BOT (Discord):**
+- Exibe o catálogo, nome comercial, descrição e imagem.
+- Lê o preço oficial em centavos e respeita `for_sale`.
+- Abre ticket, apresenta Pix, registra a decisão da equipe e solicita entrega.
+- Mantém o identificador `request_id` para impedir duplicidade.
 
-No PC do amigo, 127.0.0.1 aponta para o próprio PC do amigo, não para o computador que executa o bot. Portanto, a configuração do plugin precisa receber a URL HTTPS do túnel.
+O bot não cria, modifica ou serializa itens do Minecraft. O preço também não pode ser editado pelo Discord.
 
-## 2. Chave de integração: gerada uma vez pelo bot
+## 2. Requisitos de rede e chave compartilhada
 
-O ASTHEN BOT cria uma chave aleatória forte somente quando DKB_SECRET ainda não existe. Salva o valor em .env. Nas inicializações seguintes e nas atualizações normais do bot, o mesmo valor é reaproveitado.
+- O bot executa a API HTTP local em `127.0.0.1:8787`.
+- O plugin executa dentro de um servidor Paper em outro computador ou host.
+- O plugin usa modo `poll` e inicia conexões HTTPS de saída para o endereço público que encaminha ao bot.
+- O segredo precisa ser idêntico nos dois lados: `DKB_SECRET` no `.env` do bot e `bridge.secret` no `config.yml` do plugin.
 
-O administrador copia `DKB_SECRET` diretamente do `.env` local do bot e configura o mesmo valor em `bridge.secret` no `config.yml` do plugin. A chave não deve ser enviada por chat.
+O bot gera `DKB_SECRET` uma vez e o mantém no arquivo `.env`. Use esse valor como referência e copie-o localmente para `bridge.secret`. Nunca publique ou envie o segredo em mensagens, prints, tickets ou no GitHub.
 
-### Comportamento que precisa ser corrigido no plugin atual
+Para teste entre computadores, use um túnel HTTPS direcionado a `http://127.0.0.1:8787`. Não use localhost no computador Minecraft para tentar alcançar o PC do bot.
 
-No DiscordKitBridge.java, o método resolveSecret() atual procura DKB_SECRET/bridge.secret e gera um token novo quando o campo está vazio. Essa geração automática deve ser removida para a integração com o ASTHEN BOT.
-
-Comportamento esperado:
-
-- Ler bridge.secret e validar mínimo de 32 caracteres.
-- Não criar, substituir ou reescrever a chave automaticamente.
-- Campo vazio ou inválido: desativar somente a comunicação com o bot, exibir uma mensagem clara no console e continuar carregando os demais recursos locais do plugin.
-- Nunca registrar o conteúdo do segredo em logs ou mensagens.
-- A mesma chave deve ser usada no header Authorization: Bearer ....
-
-O bot não tem comando de regeneração nesta versão. A chave só muda se o administrador remover/substituir manualmente DKB_SECRET no .env; nesse caso, o plugin também terá de receber o novo valor.
-
-## 3. Configuração de rede
-
-### No PC do dono do bot
-
-No .env:
-
-~~~env
-DKB_HOST=127.0.0.1
-DKB_PORT=8787
-~~~
-
-1. Inicie o ASTHEN BOT e confirme que a API está ativa em http://127.0.0.1:8787.
-2. Inicie INICIAR-TUNEL.bat, que executa cloudflared tunnel --url http://127.0.0.1:8787.
-3. Copie a URL HTTPS https://....trycloudflare.com mostrada pelo Cloudflare.
-4. Mantenha o bot e o túnel ligados durante o teste.
-
-A URL Quick Tunnel é temporária; muda quando o túnel é recriado. É destinada a testes, não produção. Não abra a porta 8787 diretamente no roteador nem exponha HTTP aberto.
-
-### No PC/host do amigo
-
-No plugins/DiscordKitBridge/config.yml:
-
-~~~yaml
-bridge:
-  enabled: true
-  mode: "poll"
-  secret: "COLE_LOCALMENTE_O_MESMO_DKB_SECRET_DO_BOT"
-  poll:
-    url: "https://ENDERECO-HTTPS-DO-TUNEL"
-    interval-seconds: 3
-    max-per-poll: 5
-    http-timeout: 10
-~~~
-
-Use somente a URL base HTTPS, sem acrescentar /plugin/v1. Não use localhost na URL do plugin para tentar alcançar o PC do dono do bot.
-
-O modo poll é obrigatório para esta arquitetura. Não crie um servidor HTTP público dentro do plugin e não peça porta de entrada no PC do amigo.
-
-## 4. Contrato HTTP implementado no bot
+## 3. Rotas HTTP
 
 Todas as rotas exigem:
 
 ~~~http
-Authorization: Bearer <bridge.secret>
+Authorization: Bearer <DKB_SECRET>
 ~~~
 
-### 4.1 Buscar pedidos
+### Buscar pedidos
 
 ~~~http
 GET /plugin/v1/pull?limit=5
 ~~~
 
-Sem pedidos, o bot responde 204 No Content. Com pedidos:
+Sem pedido, o bot responde HTTP 204. Com pedidos, retorna uma lista contendo `request_id`, `player`, `platform` e `kit`.
 
-~~~json
-{
-  "requests": [
-    {
-      "request_id": "id-unico-do-pedido",
-      "player": "NickMinecraft",
-      "platform": "java",
-      "kit": "Kit_Ferro"
-    }
-  ]
-}
-~~~
-
-O plugin deve validar os campos sem alterar request_id.
-
-### 4.2 Devolver resultado
+### Devolver resultado
 
 ~~~http
 POST /plugin/v1/result
 Content-Type: application/json
 ~~~
 
-Enviar o objeto final produzido pelo plugin, mantendo request_id, final: true, success, status, player, platform, kit e message. Exemplo:
+O plugin devolve o objeto final com `request_id`, `final: true`, `success`, `status`, `player`, `platform`, `kit` e `message`.
 
-~~~json
-{
-  "request_id": "id-unico-do-pedido",
-  "final": true,
-  "success": true,
-  "status": "KIT_DELIVERED",
-  "player": "NickMinecraft",
-  "platform": "java",
-  "kit": "Kit_Ferro",
-  "message": "Kit entregue."
-}
-~~~
-
-### 4.3 Sincronizar kits
-
-O plugin deve enviar a lista completa de kits sempre que mudar e ao iniciar/recarregar:
+### Sincronizar catálogo
 
 ~~~http
 POST /plugin/v1/kits
 Content-Type: application/json
 ~~~
 
+O plugin envia a lista completa de kits ao iniciar, depois de alterações e periodicamente. O bot reconcilia a lista sem apagar os registros comerciais antigos.
+
+## 4. Contrato de preço e disponibilidade — versão 1.2.0
+
+Exemplo de kit ativo, com preço e disponível para venda:
+
 ~~~json
 {
-  "kits": [
-    {
-      "name": "Kit_Ferro",
-      "enabled": true,
-      "items": 12
-    },
-    {
-      "name": "Kit_Dima",
-      "enabled": true,
-      "items": 18
-    }
-  ]
+  "name": "Kit_Ferro",
+  "enabled": true,
+  "items": 12,
+  "price": 29.9,
+  "price_cents": 2990,
+  "for_sale": true
 }
 ~~~
 
-O código atual do PollClient já possui o envio de POST /plugin/v1/kits após carregar ou alterar o catálogo. Preserve esse comportamento. Confirme no código que a lista enviada é completa, não apenas os kits novos. O bot usa a lista completa para importar kits novos e detectar exclusões.
+Exemplo de kit sem preço:
 
-## 5. Fluxo de kits: plugin é a origem dos itens
+~~~json
+{
+  "name": "Kit_Sem_Preco",
+  "enabled": true,
+  "items": 8,
+  "price": null,
+  "price_cents": null,
+  "for_sale": false
+}
+~~~
 
-- Administrador cria itens dentro de uma Shulker Box e usa /dk create <nome>.
-- O plugin salva o kit real e envia a lista atualizada para /plugin/v1/kits.
-- O bot importa o identificador e cria um registro comercial aguardando configuração.
-- No Discord, um administrador usa /kit criar para selecionar o kit recebido e preencher nome exibido, preço, descrição e imagem HTTPS em uma janela.
-- Depois do cadastro, /kit editar permite alterações individuais.
-- O nome de exibição não altera o identificador que o bot envia ao plugin.
-- Quando o administrador exclui o kit no plugin, a lista completa seguinte deixa de conter o identificador; o bot mantém o produto no catálogo, marcado como indisponível, e preserva seus dados comerciais e o histórico.
-- /kit remover no Discord marca o produto como indisponível; não apaga o cadastro nem os itens no Minecraft.
+O significado dos campos:
+- `name`: identificador técnico, usado pelo bot ao solicitar a entrega.
+- `enabled`: estado de ativação no Minecraft.
+- `items`: quantidade de itens armazenados no kit.
+- `price`: representação do preço em reais.
+- `price_cents`: valor inteiro em centavos e fonte de precisão para o bot.
+- `for_sale`: verdadeiro somente quando o kit está ativo e tem preço.
 
-Não implementar cadastro de itens dentro do bot. O bot não envia listas de ItemStack nem arquivos de kit. Todos os comandos /kit do Discord exigem a permissão Administrador.
+Comandos do plugin:
+- `/dk price <nome> <valor>`: define ou altera o preço. Vírgula e ponto são aceitos; limite de R$ 999.999,99.
+- `/dk price <nome> remover`: remove o preço e tira o kit da venda, sem apagar o kit nem os itens.
+- `/dk enable <nome>`: ativa o kit.
+- `/dk disable <nome>`: desativa o kit.
+- `/dk toggle <nome>`: atalho para alternar a ativação.
 
-## 6. Idempotência e segurança
+O bot usa `price_cents` em vez de recalcular o valor a partir do decimal `price`. Quando recebe `price_cents: null` ou `for_sale: false`, deve limpar o preço de venda anterior e impedir novas compras. Nunca pode manter um preço antigo do Discord como substituto do preço removido no plugin.
 
-Preserve o histórico de request_id já existente. A mesma compra repetida precisa devolver o resultado original e nunca entregar o mesmo kit duas vezes.
+O bot também aplica um bloqueio manual adicional com `/kit remover`. Reabrir no Discord remove somente esse bloqueio; não pode sobrepor `enabled: false` ou `for_sale: false` enviados pelo plugin.
 
-- Timeout ou resposta perdida: reutilizar o mesmo request_id.
-- Não criar outro identificador automaticamente depois de uma resposta perdida.
-- Nunca informar sucesso se o kit não foi entregue nem ficou guardado como pendente.
-- As chamadas HTTP precisam continuar assíncronas e não bloquear a thread principal do Paper.
-- Nunca registrar a chave em logs, stack traces ou respostas REST.
+## 5. Fluxo de cadastro comercial
 
-## 7. O que preservar
+1. Um administrador cria o kit real no Paper segurando a Shulker Box preenchida e usa `/dk create <nome>`.
+2. Define o preço e a ativação no Minecraft, com os comandos do plugin.
+3. O plugin envia a lista para `POST /plugin/v1/kits`.
+4. No Discord, um administrador usa `/kit criar` para definir nome exibido, descrição e imagem HTTPS.
+5. Use `/kit editar` para alterar esses dados e `/kit listar` para conferir o estado.
+6. O identificador técnico recebido do plugin não deve ser alterado pelo nome comercial.
 
-- /dk create, /dk delete, /dk list, /dk info, /dk preview, /dk give, /dk toggle, /dk claim e /dk reload.
-- Armazenamento dos kits e histórico de solicitações.
-- Entrega atômica, validação Java/Bedrock e Floodgate.
-- Fila de itens pendentes.
-- Logs locais e proteção contra duplicidade.
+A sincronização precisa preservar os campos comerciais criados no Discord, mas substituir o preço e a disponibilidade de acordo com o contrato enviado pelo plugin.
 
-## 8. Critérios e roteiro de teste
+## 6. Entrega em Shulker Box
 
-1. Chave ausente/inválida não é gerada nem substituída pelo plugin.
-2. Chave do bot é aceita e autentica a API.
-3. Plugin no segundo computador conecta à URL HTTPS do túnel.
-4. Ao criar um kit com /dk create Kit_Teste, o bot recebe a lista e o kit aparece em /kit listar.
-5. Um administrador usa /kit criar para definir preço, descrição, nome exibido e imagem; depois pode ajustar campos com /kit editar.
-6. O produto aparece como disponível na loja depois de ter preço e estar habilitado no plugin.
-7. Excluir o kit no plugin mantém o produto no catálogo como indisponível depois da próxima sincronização; nenhum registro histórico é apagado.
-8. Aprovar compra de teste entrega exatamente um kit e devolve KIT_DELIVERED ou KIT_PENDING.
-9. Reenviar o mesmo request_id não duplica a entrega.
-10. Testar chave incorreta, túnel offline, bot offline, jogador offline, kit inexistente e inventário cheio.
+O Plugin-ASTHEN 1.2.0:
+- Armazena os dados originais dos itens nos slots da caixa cadastrada.
+- Cria uma Shulker Box da mesma cor da caixa original, com o nome do kit.
+- Coloca os itens nos mesmos slots originais e entrega a caixa como um único item.
+- Requer um slot livre no inventário.
+- Se a caixa não couber, guarda o kit completo como pendente; não entrega apenas parte dos itens.
+- Permite retirar o kit pendente com `/dk claim` ou no evento de entrada, conforme configuração.
 
-## 9. Entrega da IA
+O bot deve considerar sucesso somente para `KIT_DELIVERED` ou `KIT_PENDING`. Para `KIT_PENDING`, informe que o jogador precisa retirar a Shulker Box. A mensagem de sucesso deve deixar claro que a entrega foi feita dentro de uma Shulker Box.
 
-Devolver o código-fonte atualizado, config.yml de exemplo sem segredo, lista de classes alteradas e resultados dos testes. Não incluir .env, chaves reais, IPs privados ou dados de jogadores.
+**Validação ainda pendente:** o build do GitHub Actions compila contra a dependência Paper real configurada no Maven, mas não prova o comportamento em jogo. A montagem, abertura da caixa, preservação dos slots e retirada com inventário cheio precisam ser testadas em um servidor Paper real.
+
+## 7. Idempotência e segurança
+
+- Cada compra possui um `request_id` único.
+- Timeout ou resposta perdida: repetir com o mesmo `request_id`.
+- Não gerar outro ID só porque a primeira chamada expirou.
+- Nunca anunciar sucesso se o plugin não retornou `KIT_DELIVERED` ou `KIT_PENDING`.
+- Não executar comandos arbitrários recebidos por HTTP.
+- Não registrar o segredo em logs nem em mensagens do Discord.
+
+## 8. Checklist de integração
+
+- [ ] `DKB_SECRET` do bot é igual a `bridge.secret` no plugin.
+- [ ] A URL HTTPS do túnel encaminha para a API do bot.
+- [ ] O plugin sincroniza a lista completa de kits.
+- [ ] `price_cents` é mostrado corretamente, inclusive em valores como 29,90.
+- [ ] `/dk price <nome> remover` torna o produto indisponível no Discord.
+- [ ] `/dk disable` bloqueia novas compras; `/dk enable` reabre quando existe preço.
+- [ ] `/kit remover` bloqueia a loja sem apagar os itens no Minecraft.
+- [ ] Um pagamento de teste gera uma única entrega.
+- [ ] A Shulker Box chega com nome, cor e itens nos slots esperados.
+- [ ] Com inventário cheio, o kit fica pendente e `/dk claim` entrega a caixa completa.
+- [ ] Repetir o mesmo `request_id` não duplica a entrega.
+
+## 9. Preservar em futuras alterações
+
+- PIX fixo e QR Code do bot.
+- Fluxo de tickets, aprovação manual e logs.
+- Java/Bedrock e validação via Floodgate.
+- Chave compartilhada estável.
+- Catálogo histórico, pedidos e sincronização Supabase.
+- Fila de entrega, repetição com o mesmo `request_id` e proteção contra duplicidade.
