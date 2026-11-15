@@ -38,7 +38,9 @@ test('plugin kits are imported and keep Discord shop metadata across full syncs'
   const iron = first.kits.find(kit => kit.name === 'Kit_Ferro');
   assert.ok(iron);
   assert.equal(iron.displayName, 'Kit Ferro');
-  assert.equal(iron.price, '');
+  assert.equal(iron.price, 'R$ 8,90');
+  assert.equal(iron.priceCents, 890);
+  assert.equal(iron.forSale, true);
 
   updateKit(guildId, iron.id, {
     displayName: 'Pacote de Ferro',
@@ -102,17 +104,19 @@ test('for_sale=false blocks purchases even when a price remains in cents', () =>
   assert.equal(kit.forSale, false);
 });
 
-test('an empty price field from the plugin does not erase the price set in Discord', () => {
+test('legacy payloads without price_cents preserve compatibility while 1.2.0 null price clears sale', () => {
   const guildId = testGuildId();
-  const initial = syncPluginKits(guildId, [
+  const legacy = syncPluginKits(guildId, [
     { name: 'Kit_Ferro', enabled: true, items: 12, price: 'R$ 6,90' }
-  ]);
-  const kit = initial.kits[0];
-  const updated = syncPluginKits(guildId, [
-    { name: 'Kit_Ferro', enabled: true, items: 12, price: '' }
-  ]);
-  assert.equal(updated.kits[0].price, 'R$ 6,90');
-  assert.equal(updated.kits[0].storeConfigured, true);
+  ]).kits[0];
+  assert.equal(legacy.price, 'R$ 6,90');
+
+  const current = syncPluginKits(guildId, [
+    { name: 'Kit_Ferro', enabled: true, items: 12, price: null, price_cents: null, for_sale: false }
+  ]).kits[0];
+  assert.equal(current.price, '');
+  assert.equal(current.priceCents, null);
+  assert.equal(current.forSale, false);
 });
 
 test('a kit disabled by the plugin stays in the catalog as unavailable', () => {
@@ -212,6 +216,16 @@ test('plugin price and Discord commercial metadata remain separate', () => {
   assert.equal(next.kits[0].storeConfigured, true);
   assert.equal(next.kits[0].description, 'Descrição comercial');
   assert.equal(next.kits[0].forSale, true);
+});
+
+test('legacy decimal price strings and numeric prices convert to exact cents', () => {
+  const guildId = testGuildId();
+  const prices = syncPluginKits(guildId, [
+    { name: 'Kit_Ponto', enabled: true, items: 1, price: 29.9 },
+    { name: 'Kit_Virgula', enabled: true, items: 1, price: 'R$ 1.299,90' }
+  ]).kits;
+  assert.equal(prices.find(kit => kit.name === 'Kit_Ponto').price, 'R$ 29,90');
+  assert.equal(prices.find(kit => kit.name === 'Kit_Virgula').price, 'R$ 1.299,90');
 });
 
 test('friendly kit names remove underscores and hyphens', () => {
