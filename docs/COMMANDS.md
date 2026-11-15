@@ -1,4 +1,4 @@
-# Comandos do ASTHEN BOT 2.7.0
+# Comandos do ASTHEN BOT 2.8.0
 
 Os comandos administrativos exigem a permissão **Gerenciar servidor**. Para revisar pagamentos e fechar tickets, também é autorizado o cargo definido em /configurar equipe.
 
@@ -32,17 +32,21 @@ O identificador técnico do plugin não é alterado. Por exemplo, o plugin pode 
 
 ### /kit remover
 
-Remove o produto do catálogo da loja. Não apaga os itens do servidor Minecraft. Para excluir o kit real, use o comando administrativo de exclusão do próprio plugin. A próxima sincronização atualiza a lista do bot e remove o registro antigo do Supabase.
+Marca o produto como indisponível, preservando preço, descrição e histórico. Se o plugin remover o kit, ele continua no catálogo como indisponível.
 
 ## Integração
 
 - /bridge status: mostra se a API local está online, quantos pedidos aguardam resposta, a última lista de kits recebida do plugin e o estado do Supabase.
-- /bridge chave: mostra em privado a chave de integração salva no .env.
+- o arquivo `.env` local: mostra a situação da API e da sincronização; a chave nunca aparece no Discord.
 
-A chave é gerada uma vez por instalação e permanece igual nas atualizações normais. Não existe comando para regenerá-la. Preserve o arquivo .env.
+A chave `DKB_SECRET` é gerada uma vez por instalação e permanece igual nas atualizações normais. Preserve o `.env` e configure o mesmo valor em `bridge.secret` no plugin.
 
 ## Pagamento
 
 A chave Pix e o QR Code são fixos no código da loja. Não existe comando /pix. A mensagem do pedido contém o QR, a chave, o botão **Copiar Pix** e a orientação para anexar o comprovante.
 
 A equipe confere o comprovante manualmente. Depois, um membro autorizado confirma ou recusa o pedido.
+
+## Plataforma do pedido
+
+O cliente informa o nick e escolhe Java ou Bedrock. A plataforma fica salva no pedido e é enviada ao plugin na aprovação.
