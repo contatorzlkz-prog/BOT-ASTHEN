@@ -69,7 +69,10 @@ function displayKitName(kit) {
 }
 
 function canBuyKit(kit) {
-  return kit?.enabled !== false && Boolean(String(kit?.price || '').trim());
+  return kit?.enabled !== false
+    && kit?.manuallyUnavailable !== true
+    && kit?.missingFromPlugin !== true
+    && Boolean(String(kit?.price || '').trim());
 }
 
 export function makeSupportPanel() {
@@ -103,32 +106,46 @@ export function makeShopPanel(kits = []) {
     .setColor(brandColor())
     .setTitle('Loja de kits')
     .setDescription(
-      kits.some(canBuyKit)
+      kits.length
         ? CONFIG.shop.panelDescription
-        : 'A loja ainda não possui kits ativos com preço definido.'
+        : 'A loja ainda não recebeu kits do servidor.'
     );
 
   const button = new ButtonBuilder()
     .setCustomId('shop:catalog')
-    .setLabel(kits.some(canBuyKit) ? 'Escolher kit' : 'Loja indisponível')
+    .setLabel(kits.some(canBuyKit) ? 'Escolher kit' : kits.length ? 'Ver catálogo' : 'Loja indisponível')
     .setStyle(ButtonStyle.Primary)
-    .setDisabled(!kits.some(canBuyKit));
+    .setDisabled(!kits.length);
 
   return { embeds: [embed], components: [new ActionRowBuilder().addComponents(button)] };
 }
 
 export function makeCatalogMenu(kits = []) {
-  const available = kits.filter(canBuyKit).slice(0, CONFIG.shop.maxKits);
+  const listed = [...kits]
+    .sort((a, b) => Number(canBuyKit(b)) - Number(canBuyKit(a)))
+    .slice(0, CONFIG.shop.maxKits);
   const menu = new StringSelectMenuBuilder()
     .setCustomId('shop:select')
     .setPlaceholder('Selecione um kit')
     .setMinValues(1)
     .setMaxValues(1)
-    .addOptions(available.map(kit => ({
-      label: displayKitName(kit),
-      description: String(kit.price || 'Preço a definir').slice(0, 100),
-      value: String(kit.id)
-    })));
+    .addOptions(listed.map(kit => {
+      const available = canBuyKit(kit);
+      const reason = kit.missingFromPlugin
+        ? 'Removido do servidor'
+        : kit.manuallyUnavailable
+          ? 'Indisponível pela equipe'
+          : kit.pluginEnabled === false || kit.enabled === false
+            ? 'Desativado no servidor'
+            : !String(kit.price || '').trim()
+              ? 'Preço ainda não definido'
+              : String(kit.price);
+      return {
+        label: (available ? '' : 'Indisponível · ').concat(displayKitName(kit)).slice(0, 100),
+        description: reason.slice(0, 100),
+        value: String(kit.id)
+      };
+    }));
   return new ActionRowBuilder().addComponents(menu);
 }
 
@@ -139,8 +156,8 @@ export function makeKitAdminMenu(kits = [], customId = 'kit:admin:select') {
     .setMinValues(1)
     .setMaxValues(1)
     .addOptions(kits.slice(0, 25).map(kit => ({
-      label: displayKitName(kit),
-      description: (String(kit.price || 'Preço a definir') + ' · ' + String(kit.name)).slice(0, 100),
+      label: (canBuyKit(kit) ? '' : 'Indisponível · ').concat(displayKitName(kit)).slice(0, 100),
+      description: ((kit.missingFromPlugin ? 'Removido do servidor' : kit.enabled === false ? 'Desativado' : String(kit.price || 'Preço a definir')) + ' · ' + String(kit.name)).slice(0, 100),
       value: String(kit.id)
     })));
   return new ActionRowBuilder().addComponents(menu);
@@ -156,7 +173,8 @@ export function makeKitEditFieldMenu(kit) {
       { label: 'Nome exibido na loja', description: 'Nome bonito que o cliente verá, sem underscores.', value: 'displayName' },
       { label: 'Preço', description: 'Valor de venda do kit.', value: 'price' },
       { label: 'Descrição', description: 'Texto que aparece na prévia.', value: 'description' },
-      { label: 'Imagem', description: 'Link HTTPS da imagem do kit.', value: 'imageUrl' }
+      { label: 'Imagem', description: 'Link HTTPS da imagem do kit.', value: 'imageUrl' },
+      { label: 'Ativar disponibilidade', description: 'Reabre a venda se o kit existir e estiver ativo no Minecraft.', value: 'availability' }
     );
   return new ActionRowBuilder().addComponents(menu);
 }
@@ -224,7 +242,8 @@ export function makePurchaseReviewEmbed(draft) {
     .addFields(
       { name: 'Kit', value: displayKitName(draft.kit), inline: true },
       { name: 'Preço', value: String(draft.kit.price), inline: true },
-      { name: 'Nick', value: String(draft.minecraftNick), inline: true }
+      { name: 'Nick', value: String(draft.minecraftNick), inline: true },
+      { name: 'Plataforma', value: draft.platform === 'bedrock' ? 'Bedrock' : 'Java', inline: true }
     );
   const image = safeImageUrl(draft.kit.imageUrl);
   if (image) embed.setThumbnail(image);
@@ -234,26 +253,24 @@ export function makePurchaseReviewEmbed(draft) {
 export function makePurchaseReviewControls(draft) {
   const revision = String(draft.revision || '0');
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('shop:confirm:' + revision)
-      .setLabel('Confirmar pedido')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId('shop:switch-kit:' + revision)
-      .setLabel('Trocar kit')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId('shop:edit-nick:' + revision)
-      .setLabel('Editar nick')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId('shop:cancel:' + revision)
-      .setLabel('Cancelar')
-      .setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId('shop:confirm:' + revision).setLabel('Confirmar pedido').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('shop:switch-kit:' + revision).setLabel('Trocar kit').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('shop:edit-nick:' + revision).setLabel('Editar nick').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('shop:edit-platform:' + revision).setLabel('Editar plataforma').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('shop:cancel:' + revision).setLabel('Cancelar').setStyle(ButtonStyle.Danger)
   );
 }
 
-export function makeOrderEmbed({ userId, kit, minecraftNick }) {
+export function makePlatformControls(draft) {
+  const revision = String(draft.revision || '0');
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('shop:platform:java:' + revision).setLabel('Minecraft Java').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('shop:platform:bedrock:' + revision).setLabel('Minecraft Bedrock').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('shop:cancel:' + revision).setLabel('Cancelar').setStyle(ButtonStyle.Danger)
+  );
+}
+
+export function makeOrderEmbed({ userId, kit, minecraftNick, platform }) {
   const embed = new EmbedBuilder()
     .setColor(brandColor())
     .setTitle('Pagamento · ' + displayKitName(kit))
@@ -266,6 +283,7 @@ export function makeOrderEmbed({ userId, kit, minecraftNick }) {
       { name: 'Kit', value: displayKitName(kit), inline: true },
       { name: 'Valor', value: String(kit.price || '—'), inline: true },
       { name: 'Nick', value: String(minecraftNick || '—'), inline: true },
+      { name: 'Plataforma', value: platform === 'bedrock' ? 'Bedrock' : platform === 'java' ? 'Java' : 'Não informada', inline: true },
       { name: 'Chave Pix', value: '`' + PIX_KEY_DEFAULT + '`', inline: true },
       { name: 'Comprovante', value: 'Anexe a imagem ou o PDF nesta conversa.', inline: false }
     )
@@ -292,6 +310,7 @@ export function makeDeliveryEmbed(result) {
     .addFields(
       { name: 'Jogador', value: String(result.player || '—'), inline: true },
       { name: 'Kit', value: String(result.kit || '—'), inline: true },
+      { name: 'Plataforma', value: result.platform === 'bedrock' ? 'Bedrock' : result.platform === 'java' ? 'Java' : '—', inline: true },
       { name: 'Status', value: status, inline: true }
     )
     .setTimestamp();
@@ -360,6 +379,7 @@ export function makeOrderLogEmbed({ ticket, decision, staffUser }) {
       { name: 'Kit', value: String(ticket.kitName || '—'), inline: true },
       { name: 'Valor', value: String(ticket.kitPrice || '—'), inline: true },
       { name: 'Nick Minecraft', value: String(ticket.minecraftNick || '—'), inline: true },
+      { name: 'Plataforma', value: ticket.platform === 'bedrock' ? 'Bedrock' : ticket.platform === 'java' ? 'Java' : 'Não informada', inline: true },
       { name: closed ? 'Fechado por' : 'Responsável', value: String(staffUser), inline: true },
       { name: 'Canal do pedido', value: '<#' + ticket.channelId + '>', inline: true }
     )
@@ -375,7 +395,8 @@ export function makeBuyerAnnouncement(ticket) {
     )
     .addFields(
       { name: 'Valor', value: String(ticket.kitPrice || '—'), inline: true },
-      { name: 'Nick', value: String(ticket.minecraftNick || '—'), inline: true }
+      { name: 'Nick', value: String(ticket.minecraftNick || '—'), inline: true },
+      { name: 'Plataforma', value: ticket.platform === 'bedrock' ? 'Bedrock' : ticket.platform === 'java' ? 'Java' : 'Não informada', inline: true }
     )
     .setTimestamp();
   return embed;
