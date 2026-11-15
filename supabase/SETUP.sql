@@ -40,7 +40,10 @@ create table if not exists public.asthen_bot_kits (
 alter table public.asthen_bot_kits
   add column if not exists store_configured boolean not null default false,
   add column if not exists manually_unavailable boolean not null default false,
-  add column if not exists missing_from_plugin boolean not null default false;
+  add column if not exists missing_from_plugin boolean not null default false,
+  add column if not exists price_cents bigint null,
+  add column if not exists plugin_for_sale boolean not null default false,
+  add column if not exists for_sale boolean not null default false;
 
 create index if not exists asthen_bot_kits_guild_id_idx
   on public.asthen_bot_kits (guild_id);
