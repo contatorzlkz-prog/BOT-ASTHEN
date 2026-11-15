@@ -94,19 +94,7 @@ async function pushKitRows(config, snapshot) {
       }
     }
 
-    const filters = new URLSearchParams({ guild_id: 'eq.' + guildId });
-    if (rows.length) {
-      const keepIds = rows.map(row => '"' + row.kit_id.replace(/"/g, '') + '"').join(',');
-      filters.set('kit_id', 'not.in.(' + keepIds + ')');
-    }
 
-    const cleanup = await supabaseRequest(config, '?' + filters.toString(), {
-      method: 'DELETE',
-      headers: { Prefer: 'return=minimal' }
-    }, config.kitsTable);
-    if (!cleanup.ok) {
-      throw new Error('Supabase respondeu HTTP ' + cleanup.status + ' ao remover kits antigos.');
-    }
   }
 }
 
