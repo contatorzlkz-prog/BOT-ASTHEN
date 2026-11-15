@@ -334,7 +334,11 @@ async function handleKitEditFieldSelection(interaction) {
       return replyPrivate(interaction, 'Não é possível ativar: o kit foi removido ou está desativado no Minecraft.');
     }
     updateKit(interaction.guildId, kit.id, { manuallyUnavailable: false, enabled: true });
-    await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
+    const freshConfig = getGuildConfig(interaction.guildId);
+    const shopChannel = await fetchTextChannel(interaction.guild, freshConfig.shopPanelChannelId);
+    if (shopChannel) {
+      updateGuildConfig(interaction.guildId, await updatePanel(interaction.guild, freshConfig, 'shop', shopChannel));
+    }
     return interaction.update({ content: 'O kit voltou a ficar disponível na loja.', embeds: [], components: [] });
   }
   return interaction.showModal(makeKitEditModal(kit, field));
