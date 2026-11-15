@@ -8,18 +8,6 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.resolve(currentDir, '../data');
 const dataFile = path.join(dataDir, 'state.json');
 
-const LEGACY_SAMPLE_KITS = new Set([
-  'kit keep',
-  'kit ferro',
-  'kit dima',
-  'kit netherita',
-  'kit elytra',
-  'kit construcao'
-]);
-
-const emptyState = () => ({ guilds: {}, tickets: {}, purchaseDrafts: {} });
-let state = emptyState();
-
 function normalizeKitName(name) {
   return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -32,21 +20,6 @@ export function makeKitDisplayName(name) {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 100);
-}
-
-function isLegacySampleKit(kit) {
-  // Never classify a kit reported by the Minecraft plugin as a demo product,
-  // even when its technical name matches one of the old 2.4 sample names.
-  if (kit?.pluginManaged) return false;
-
-  const id = String(kit?.id || '').toLowerCase();
-  const name = normalizeKitName(kit?.name);
-  const displayName = normalizeKitName(kit?.displayName);
-  return id.startsWith('demo-kit-')
-    || /kit demo/.test(name)
-    || /kit demo/.test(displayName)
-    || LEGACY_SAMPLE_KITS.has(name)
-    || LEGACY_SAMPLE_KITS.has(displayName);
 }
 
 function defaultGuildConfig() {
@@ -81,16 +54,18 @@ function ensureGuildConfig(guildId) {
   delete config.pixKey;
   delete config.pixInstructions;
 
-  // Remove only the sample entries that shipped with older demo catalogs.
-  // Real custom kits are preserved.
-  config.kits = config.kits.filter(kit => !isLegacySampleKit(kit));
-
+  // Preserve all existing products. Missing plugin kits are marked unavailable by syncPluginKits.
+  config.hiddenPluginKits = [];
   config.kits = config.kits.map(kit => ({
     ...kit,
     displayName: kit.displayName || makeKitDisplayName(kit.name),
     description: String(kit.description || ''),
     imageUrl: String(kit.imageUrl || ''),
-    price: String(kit.price || '')
+    price: String(kit.price || ''),
+    manuallyUnavailable: kit.manuallyUnavailable === true,
+    missingFromPlugin: kit.missingFromPlugin === true,
+    pluginEnabled: typeof kit.pluginEnabled === 'boolean' ? kit.pluginEnabled : kit.enabled !== false,
+    enabled: kit.enabled !== false && kit.manuallyUnavailable !== true
   }));
 
   return config;
@@ -195,27 +170,22 @@ export function updateKit(guildId, kitId, changes) {
 
 export function removeKit(guildId, kitId) {
   const config = ensureGuildConfig(guildId);
-  const target = config.kits.find(kit => kit.id === kitId);
-  if (!target) return false;
+  const index = config.kits.findIndex(kit => kit.id === kitId);
+  if (index < 0) return false;
 
-  // Removing a plugin-managed listing hides it until the plugin reports that
-  // the underlying kit was deleted. The next full sync will remove stale DB rows.
-  if (target.pluginManaged) {
-    config.hiddenPluginKits = [...new Set([
-      ...config.hiddenPluginKits,
-      normalizeKitName(target.name)
-    ])];
-  }
-
-  config.kits = config.kits.filter(kit => kit.id !== kitId);
+  // The old remove action now disables the product without deleting its data.
+  config.kits[index] = {
+    ...config.kits[index],
+    enabled: false,
+    manuallyUnavailable: true
+  };
   saveStore();
   return true;
 }
 
 /**
- * Reconcile the plugin's complete kit list with the store catalog.
- * New Minecraft kits appear automatically, while their shop metadata remains editable.
- * Kits removed from the plugin disappear from the store and Supabase.
+ * Reconcile the plugin's complete list without deleting historical products.
+ * Missing products remain in the store as unavailable. Optional plugin prices are supported.
  */
 export function syncPluginKits(guildId, pluginKits) {
   const config = ensureGuildConfig(guildId);
@@ -227,37 +197,48 @@ export function syncPluginKits(guildId, pluginKits) {
 
   const incomingByName = new Map();
   for (const item of incoming) incomingByName.set(normalizeKitName(item.name), item);
-  const hidden = new Set(config.hiddenPluginKits);
-  // Once a removed plugin kit is no longer reported, clear its hidden marker.
-  config.hiddenPluginKits = [...hidden].filter(name => incomingByName.has(name));
 
   const existingByName = new Map(config.kits.map(kit => [normalizeKitName(kit.name), kit]));
   const syncedKits = [];
 
   for (const item of incoming) {
     const key = normalizeKitName(item.name);
-    if (hidden.has(key)) continue;
     const old = existingByName.get(key);
+    const pluginEnabled = item.enabled === true;
+    const manuallyUnavailable = old?.manuallyUnavailable === true;
+    const hasPluginPrice = Object.prototype.hasOwnProperty.call(item, 'price') && item.price !== null;
     syncedKits.push({
       id: old?.id || randomUUID().slice(0, 12),
       name: item.name,
       displayName: old?.displayName || makeKitDisplayName(item.name),
-      price: String(old?.price || ''),
+      price: hasPluginPrice ? String(item.price).trim() : String(old?.price || ''),
       description: String(old?.description || ''),
       imageUrl: String(old?.imageUrl || ''),
-      enabled: item.enabled === true,
-      itemCount: Number.isFinite(Number(item.items)) ? Number(item.items) : 0,
+      enabled: pluginEnabled && !manuallyUnavailable,
+      pluginEnabled,
+      manuallyUnavailable,
+      missingFromPlugin: false,
+      itemCount: Number.isFinite(Number(item.items)) ? Number(item.items) : (old?.itemCount || 0),
       pluginManaged: true
     });
   }
 
-  // A valid full list from the plugin is authoritative: stale manual/demo rows disappear.
-  const next = syncedKits;
+  const missingKits = config.kits
+    .filter(kit => !incomingByName.has(normalizeKitName(kit.name)))
+    .map(kit => ({
+      ...kit,
+      enabled: false,
+      pluginEnabled: false,
+      missingFromPlugin: true
+    }));
+
+  const next = [...syncedKits, ...missingKits];
   const beforeJson = JSON.stringify({ kits: config.kits, hidden: config.hiddenPluginKits });
-  const afterJson = JSON.stringify({ kits: next, hidden: config.hiddenPluginKits });
+  const afterJson = JSON.stringify({ kits: next, hidden: [] });
   if (beforeJson === afterJson) return { changed: false, kits: config.kits };
 
   config.kits = next;
+  config.hiddenPluginKits = [];
   saveStore();
   return { changed: true, kits: config.kits };
 }
