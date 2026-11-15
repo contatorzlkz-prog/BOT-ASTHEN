@@ -80,7 +80,8 @@ function isKitPurchasable(kit) {
     && kit.enabled !== false
     && kit.manuallyUnavailable !== true
     && kit.missingFromPlugin !== true
-    && Boolean(String(kit.price || '').trim());
+    && kit.forSale === true
+    && kit.pluginForSale === true;
 }
 
 function replyPrivate(interaction, content, components = [], embeds = []) {
@@ -253,7 +254,6 @@ async function configureChannels(interaction) {
 function makeKitEditModal(kit, field) {
   const fields = {
     displayName: { title: 'Nome na loja', label: 'Nome que o cliente verá', placeholder: 'Ex.: Kit do Guerreiro', max: 80, style: TextInputStyle.Short },
-    price: { title: 'Preço do kit', label: 'Novo preço', placeholder: 'Ex.: R$ 19,90', max: 30, style: TextInputStyle.Short },
     description: { title: 'Descrição do kit', label: 'Descrição exibida na loja', placeholder: 'Explique brevemente o que o kit oferece', max: 800, style: TextInputStyle.Paragraph },
     imageUrl: { title: 'Imagem do kit', label: 'Link HTTPS da imagem', placeholder: 'https://.../imagem.png', max: 500, style: TextInputStyle.Short }
   };
@@ -288,14 +288,6 @@ function makeKitCreateModal(kit) {
     .setRequired(true)
     .setValue(String(kit.displayName || makeKitDisplayName(kit.name)).slice(0, 80));
 
-  const price = new TextInputBuilder()
-    .setCustomId('price')
-    .setLabel('Preço em reais')
-    .setPlaceholder('Ex.: 19,90')
-    .setStyle(TextInputStyle.Short)
-    .setMaxLength(20)
-    .setRequired(true);
-
   const description = new TextInputBuilder()
     .setCustomId('description')
     .setLabel('Descrição para o comprador')
@@ -311,7 +303,6 @@ function makeKitCreateModal(kit) {
     .setStyle(TextInputStyle.Short)
     .setMaxLength(500)
     .setRequired(false);
-  if (kit.price) price.setValue(String(kit.price).replace(/^R\$\s*/i, '').slice(0, 20));
   if (kit.description) description.setValue(String(kit.description).slice(0, 800));
   if (kit.imageUrl) imageUrl.setValue(String(kit.imageUrl).slice(0, 500));
 
@@ -320,18 +311,9 @@ function makeKitCreateModal(kit) {
     .setTitle(('Cadastrar ' + shortName).slice(0, 45))
     .addComponents(
       new ActionRowBuilder().addComponents(displayName),
-      new ActionRowBuilder().addComponents(price),
       new ActionRowBuilder().addComponents(description),
       new ActionRowBuilder().addComponents(imageUrl)
     );
-}
-
-function normalizeBrlPrice(value) {
-  const raw = String(value || '').trim().replace(/^R\$\s*/i, '').replace(/\s/g, '');
-  if (!/^(?:\d{1,3}(?:\.\d{3})*|\d+)(?:,\d{1,2})?$/.test(raw)) return null;
-  const amount = Number(raw.replace(/\./g, '').replace(',', '.'));
-  if (!Number.isFinite(amount) || amount <= 0 || amount > 99999999) return null;
-  return 'R$ ' + amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 async function handleKitCommand(interaction) {
@@ -352,19 +334,27 @@ async function handleKitCommand(interaction) {
         : kit.pluginEnabled === false ? 'desativado no Minecraft'
           : kit.manuallyUnavailable ? 'indisponível na loja'
             : kit.enabled === false ? 'indisponível' : 'ativo';
-      const shopState = kit.manuallyUnavailable || kit.missingFromPlugin
-        ? 'indisponível na loja'
-        : kit.storeConfigured ? 'cadastro comercial pronto' : 'falta cadastrar na loja';
+      const saleState = kit.manuallyUnavailable
+        ? 'bloqueado pela equipe'
+        : kit.missingFromPlugin
+          ? 'removido do Minecraft'
+          : kit.pluginEnabled === false
+            ? 'desativado no Minecraft'
+            : kit.pluginForSale !== true
+              ? (kit.priceCents ? 'fora de venda no plugin' : 'sem preço no Minecraft')
+              : kit.forSale === true ? 'à venda' : 'indisponível';
+      const metadataState = kit.storeConfigured ? 'dados da loja prontos' : 'dados da loja pendentes';
       return (index + 1) + '. **' + String(kit.displayName || makeKitDisplayName(kit.name)) + '** — ' +
-        String(kit.price || 'preço pendente') + '\nMinecraft: ' + pluginState +
-        ' · Loja: ' + shopState + '\nID do plugin: `' + kit.name + '`';
+        String(kit.price || 'sem preço') + '\nMinecraft: ' + pluginState +
+        ' · Venda: ' + saleState + ' · Cadastro: ' + metadataState +
+        '\nID do plugin: `' + kit.name + '`';
     });
     const remaining = config.kits.length > 22 ? '\n... e mais ' + (config.kits.length - 22) + ' kit(s).' : '';
     return replyPrivate(interaction, lines.join('\n\n').slice(0, 1850) + remaining);
   }
 
   if (!config.kits.length) {
-    return replyPrivate(interaction, 'Nenhum kit foi sincronizado. Primeiro crie o kit real no Minecraft pelo Plugin-ASTHEN e aguarde a lista aparecer em /bridge status. Depois use /kit criar para cadastrar o produto na loja.');
+    return replyPrivate(interaction, 'Nenhum kit foi sincronizado. Crie o kit real no Minecraft pelo Plugin-ASTHEN e aguarde a lista em /bridge status. Defina o preço no jogo com /dk price <nome> <valor>; depois use /kit criar para cadastrar nome exibido, descrição e imagem no Discord.');
   }
 
   if (subcommand === 'criar') {
@@ -378,7 +368,7 @@ async function handleKitCommand(interaction) {
       return replyPrivate(interaction, 'Todos os kits ativos recebidos do plugin já têm cadastro comercial. Use /kit editar para alterar um produto existente.');
     }
     return interaction.reply({
-      content: 'Selecione um kit que já existe no Minecraft. Esta etapa cadastra apenas nome, preço, descrição e imagem na loja; os itens reais continuam sendo criados no plugin.',
+      content: 'Selecione um kit que já existe no Minecraft. O preço é definido no jogo com /dk price <nome> <valor>. Esta etapa cadastra apenas nome exibido, descrição e imagem no Discord.'
       components: [makeKitAdminMenu(pending, 'kit:create-select')],
       ephemeral: true
     });
@@ -420,27 +410,25 @@ async function handleKitCreateModal(interaction) {
   }
 
   const displayName = interaction.fields.getTextInputValue('displayName').trim();
-  const price = normalizeBrlPrice(interaction.fields.getTextInputValue('price'));
   const description = interaction.fields.getTextInputValue('description').trim();
   const rawImageUrl = interaction.fields.getTextInputValue('imageUrl').trim();
   const imageUrl = normalizeImageUrl(rawImageUrl);
 
   if (displayName.length < 2) return replyPrivate(interaction, 'O nome exibido precisa ter pelo menos 2 caracteres.');
-  if (!price) return replyPrivate(interaction, 'Preço inválido. Use o formato brasileiro, por exemplo 19,90.');
   if (rawImageUrl && !imageUrl) return replyPrivate(interaction, 'A imagem precisa ser um link HTTPS válido.');
 
   const updated = updateKit(interaction.guildId, kitId, {
     displayName,
-    price,
     description,
     imageUrl: imageUrl || '',
     storeConfigured: true,
-    enabled: true,
-    manuallyUnavailable: false
+    enabled: current.pluginEnabled !== false,
+    manuallyUnavailable: false,
+    forSale: current.pluginForSale === true
   });
   await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
   return interaction.reply({
-    content: 'Kit cadastrado na loja. O kit real continua sendo gerenciado pelo Plugin-ASTHEN.',
+    content: 'Cadastro comercial salvo. O preço e a disponibilidade de venda continuam sendo controlados pelo Plugin-ASTHEN.'
     embeds: updated ? [makeKitPreviewEmbed(updated)] : [],
     ephemeral: true
   });
@@ -477,9 +465,13 @@ async function handleKitEditFieldSelection(interaction) {
   if (!kit) return replyPrivate(interaction, 'Este kit não está mais no catálogo.');
   if (field === 'availability') {
     if (kit.missingFromPlugin || kit.pluginEnabled === false) {
-      return replyPrivate(interaction, 'Não é possível ativar: o kit foi removido ou está desativado no Minecraft.');
+      return replyPrivate(interaction, 'Não é possível reabrir: o kit foi removido ou está desativado no Minecraft.');
     }
-    updateKit(interaction.guildId, kit.id, { manuallyUnavailable: false, enabled: true });
+    updateKit(interaction.guildId, kit.id, {
+      manuallyUnavailable: false,
+      enabled: true,
+      forSale: kit.pluginForSale === true
+    });
     const freshConfig = getGuildConfig(interaction.guildId);
     const shopChannel = await fetchTextChannel(interaction.guild, freshConfig.shopPanelChannelId);
     if (shopChannel) {
@@ -502,11 +494,6 @@ async function handleKitEditModal(interaction) {
   if (field === 'displayName') {
     if (value.length < 2) return replyPrivate(interaction, 'O nome exibido precisa ter pelo menos 2 caracteres.');
     changes.displayName = value;
-  } else if (field === 'price') {
-    const price = normalizeBrlPrice(value);
-    if (!price) return replyPrivate(interaction, 'Preço inválido. Use o formato brasileiro, por exemplo 19,90.');
-    changes.price = price;
-    changes.storeConfigured = true;
   } else if (field === 'description') {
     changes.description = value;
   } else if (field === 'imageUrl') {
