@@ -135,7 +135,7 @@ test('a API informa estado e rejeita nick ou nome de kit inválido', async () =>
   assert.equal(status.port, bridge.port);
 
   await assert.rejects(
-    deliverKit({ requestId: 'bad-player', player: 'Nick com espaço', platform: 'java', kit: 'Kit_Ferro' }),
+    deliverKit({ requestId: 'bad-player', player: 'Nick Com Espaco', platform: 'java', kit: 'Kit_Ferro' }),
     /Nick Java inválido/
   );
   await assert.rejects(
