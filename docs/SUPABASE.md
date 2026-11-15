@@ -1,33 +1,31 @@
-# Supabase — ASTHEN BOT 2.10.0
+# Supabase — ASTHEN BOT 2.11.0
 
-O Supabase é opcional. Quando configurado, o bot mantém um snapshot de dados e uma tabela normalizada para os kits de cada servidor Discord.
+O Supabase é obrigatório para aprovar vendas na versão 2.11.0, pois o limite semanal precisa ser protegido por uma transação no banco. O estado geral também continua sincronizado com asthen_bot_state, com cópia local em data/state.json.
 
-## 1. Criar as tabelas
+## 1. Criar as tabelas e funções
 
-No painel do Supabase, abra **SQL Editor**.
+No painel do Supabase, abra SQL Editor.
 
 ### Projeto novo
 
-Abra o arquivo [`supabase/SETUP.sql`](../supabase/SETUP.sql), copie todo o conteúdo e execute. Esse único script cria:
+Execute o arquivo completo supabase/SETUP.sql. Ele cria:
+- public.asthen_bot_state: snapshot de configurações, tickets e compras em preparação.
+- public.asthen_bot_kits: catálogo e apresentação dos kits por servidor Discord.
+- public.asthen_bot_weekly_stock: unidades reservadas por kit e semana.
+- public.asthen_bot_stock_reservations: registro idempotente de cada compra aprovada.
+- A função public.reserve_asthen_weekly_kit_stock(...), usada para reservar uma unidade sem ultrapassar o limite.
 
-- `public.asthen_bot_state`: uma linha com `id = 'main'` e o snapshot do estado do bot.
-- `public.asthen_bot_kits`: uma linha por kit e servidor Discord.
+### Projeto existente
 
-O script usa `IF NOT EXISTS` e pode ser executado novamente sem recriar as tabelas.
+- Projeto na 2.10.0: execute 005_asthen_bot_weekly_kit_stock.sql.
+- Projeto na 2.9.0: execute 004_asthen_bot_plugin_sale_contract.sql e depois 005_asthen_bot_weekly_kit_stock.sql.
+- Projeto vindo da 2.7.0: se ainda não aplicou os campos das versões anteriores, execute 003_asthen_bot_kit_catalog_status.sql, depois 004_asthen_bot_plugin_sale_contract.sql e por último 005_asthen_bot_weekly_kit_stock.sql.
 
-### Projeto que já tinha a tabela de kits
-
-Se você atualizou da versão 2.9.0, execute [`supabase/004_asthen_bot_plugin_sale_contract.sql`](../supabase/004_asthen_bot_plugin_sale_contract.sql). Se a tabela ainda não tinha os campos da versão 2.9.0, execute primeiro `003_asthen_bot_kit_catalog_status.sql` e depois a migração 004. Nenhum registro antigo é apagado.
-
-Os arquivos separados também continuam disponíveis:
-- `001_asthen_bot_state.sql`
-- `002_asthen_bot_kits.sql`
-- `003_asthen_bot_kit_catalog_status.sql`
-- `004_asthen_bot_plugin_sale_contract.sql`
+As migrações usam IF NOT EXISTS e podem ser repetidas. Não apague as linhas de catálogo ou o snapshot existente.
 
 ## 2. Configurar o .env
 
-Use a URL base do projeto, sem `/rest/v1` nem `/v1` no final:
+Use a URL base, sem /rest/v1 nem /v1 no final:
 
 ~~~env
 SUPABASE_URL=https://seu-projeto.supabase.co
@@ -36,66 +34,44 @@ SUPABASE_TABLE=asthen_bot_state
 SUPABASE_KITS_TABLE=asthen_bot_kits
 ~~~
 
-O bot também reconhece as variáveis antigas `SUPABASE_SERVICE_ROLE_KEY` e `SUPABASE_KEY`. A Secret API Key deve ficar somente no computador/servidor onde o bot roda.
+A chave secreta fica somente no computador/servidor onde o bot roda. O backend a envia no cabeçalho apikey; nunca a coloque em páginas públicas ou no Discord. Também são reconhecidas as variáveis antigas SUPABASE_SERVICE_ROLE_KEY e SUPABASE_KEY.
 
-## 3. O que cada tabela guarda
+## 3. Como funciona o estoque semanal
+
+Cada kit tem 10 unidades por semana, por servidor Discord. A semana começa no domingo às 00:00 e termina no sábado às 23:59:59, no fuso America/Sao_Paulo (horário de Brasília).
+
+- O catálogo consulta o saldo atual no Supabase e mostra quantas unidades restam.
+- A prévia e a revisão da compra também mostram o saldo.
+- Abrir um ticket ou enviar um comprovante não consome estoque.
+- A unidade é reservada somente quando a equipe confirma o pagamento.
+- A função SQL faz a reserva atomicamente. Compras concorrentes não ultrapassam 10.
+- O mesmo ticket usa sempre a mesma chave de reserva; repetir uma aprovação ou reiniciar o bot não desconta uma segunda unidade.
+- Na virada de domingo, o bot usa uma nova data week_start. Não é necessário agendar uma tarefa para zerar contadores.
+
+As tabelas mantêm o histórico de reservas; não apague asthen_bot_weekly_stock nem asthen_bot_stock_reservations enquanto quiser preservar os registros.
+
+Se o Supabase estiver desligado, sem a migração 005 ou sem a função RPC, o bot impede a aprovação do pagamento. Isso evita confirmar uma compra que não tenha consumido uma unidade do estoque corretamente.
+
+## 4. O que cada tabela guarda
 
 ### asthen_bot_state
-
-Guarda uma cópia do estado completo do bot, incluindo configurações dos servidores, tickets e compras em preparação.
+Snapshot geral do bot, incluindo configurações, tickets, pedidos e compras em preparação.
 
 ### asthen_bot_kits
+Catálogo do Discord: nome comercial, descrição, preço sincronizado do plugin, imagem, disponibilidade e identificador técnico.
 
-Guarda o catálogo por servidor Discord:
+### asthen_bot_weekly_stock
+Uma linha por servidor, kit e domingo de início da semana. reserved_count nunca pode ultrapassar weekly_limit (10).
 
-| Coluna | Conteúdo |
-|---|---|
-| `guild_id` | ID do servidor Discord. |
-| `kit_id` | ID interno e estável do catálogo do bot. |
-| `plugin_name` | Identificador exato recebido do Plugin-ASTHEN. |
-| `display_name` | Nome apresentado ao cliente. |
-| `description` | Descrição comercial editada no Discord. |
-| `price` | Preço formatado para exibição. |
-| `price_cents` | Valor inteiro em centavos recebido do plugin. |
-| `plugin_for_sale` | Estado oficial `for_sale` enviado pelo Plugin-ASTHEN. |
-| `for_sale` | Disponibilidade efetiva no catálogo do Discord, após considerar bloqueios manuais. |
-| `image_url` | URL HTTPS da imagem comercial. |
-| `plugin_enabled` | Informa se o kit está ativo no Minecraft. |
-| `store_configured` | Informa se os dados comerciais já foram cadastrados. |
-| `manually_unavailable` | Registra bloqueio manual de novas compras. |
-| `missing_from_plugin` | Marca kits que deixaram de aparecer na lista do plugin. |
-| `item_count` | Quantidade de itens reportada pelo plugin. |
-| `updated_at` | Última atualização da linha. |
+### asthen_bot_stock_reservations
+Uma linha por ticket aprovado. A chave única (guild_id, request_id) evita descontar duas vezes o mesmo pedido.
 
-## 4. Como a sincronização funciona
+## 5. Diagnóstico
 
-- Cada alteração é salva primeiro em `data/state.json`.
-- O bot envia o snapshot para `asthen_bot_state` e faz upsert dos kits em `asthen_bot_kits`.
-- Quando o plugin envia a lista completa por `POST /plugin/v1/kits`, o bot importa os kits novos.
-- A sincronização preserva nome comercial, descrição, imagem e estado de cadastro.
-- O preço é sempre atualizado a partir de `price_cents`; esse valor é a fonte exata, sem arredondamento do campo decimal `price`.
-- `plugin_for_sale` registra a disponibilidade oficial informada pelo plugin e `for_sale` registra se o Discord realmente permite comprar após o bloqueio manual.
-- Se o plugin enviar `price_cents: null` ou `for_sale: false`, o bot limpa o preço de venda antigo e bloqueia novas compras.
-- O estado recebido do plugin fica separado do bloqueio manual definido pela equipe.
-- Se um kit deixar de aparecer na lista do plugin, ele continua armazenado e visível como indisponível. O bot não apaga registros antigos de kits ou pedidos.
-- Se a equipe usar `/kit remover`, o produto fica indisponível para compras futuras, mas os dados são preservados.
-- Quando o Supabase está indisponível, o arquivo local continua sendo usado e o bot tenta sincronizar novamente.
+- HTTP 404 ao consultar estoque: execute a migração 005.
+- RPC não encontrada: confira se reserve_asthen_weekly_kit_stock foi criada no schema public.
+- Permissão negada: confira se o bot está usando uma chave secreta de backend com permissão service_role.
+- Estoque não diminui após criar ticket: isso é esperado; a unidade só é reservada quando a equipe confirma o pagamento.
+- Bot reiniciou: os saldos continuam no Supabase; o identificador do ticket mantém a reserva idempotente.
 
-O Plugin-ASTHEN é a origem dos itens reais no Minecraft. O bot não cria os itens dentro do jogo.
-
-## 5. Cabeçalhos e chaves
-
-Para uma chave `sb_secret_...`, o bot envia a credencial no cabeçalho `apikey`, sem tratá-la como JWT no cabeçalho `Authorization`. Chaves antigas `service_role` continuam sendo enviadas como Bearer JWT.
-
-Uma Secret API Key tem acesso administrativo. Use-a somente no backend do bot. Nunca a coloque no GitHub, em páginas públicas, prints ou mensagens.
-
-## 6. Diagnóstico
-
-- **401/403:** confira a URL base e se a credencial é uma Secret API Key ou uma chave antiga `service_role`.
-- **404 / tabela não encontrada:** confira se o SQL foi executado e se os nomes em `SUPABASE_TABLE` e `SUPABASE_KITS_TABLE` estão corretos.
-- **PGRST125 / Invalid path specified:** retire `/rest/v1` e `/v1` do final da URL.
-- **Sem conexão:** confira a rede e o estado do projeto. O bot continua usando o backup local.
-
-O comando `/bridge status` mostra se o Supabase está configurado e apresenta a última sincronização ou o aviso mais recente.
-
-Nunca compartilhe o conteúdo do `.env` ao pedir ajuda.
+Nunca compartilhe o conteúdo do .env ao pedir ajuda.

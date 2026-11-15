@@ -73,7 +73,8 @@ function canBuyKit(kit) {
     && kit?.manuallyUnavailable !== true
     && kit?.missingFromPlugin !== true
     && kit?.pluginForSale === true
-    && kit?.forSale === true;
+    && kit?.forSale === true
+    && !(Number.isInteger(kit?.weeklyRemaining) && kit.weeklyRemaining <= 0);
 }
 
 export function makeSupportPanel() {
@@ -121,6 +122,7 @@ export function makeShopPanel(kits = []) {
   return { embeds: [embed], components: [new ActionRowBuilder().addComponents(button)] };
 }
 
+
 export function makeCatalogMenu(kits = []) {
   const listed = [...kits]
     .sort((a, b) => Number(canBuyKit(b)) - Number(canBuyKit(a)))
@@ -131,18 +133,24 @@ export function makeCatalogMenu(kits = []) {
     .setMinValues(1)
     .setMaxValues(1)
     .addOptions(listed.map(kit => {
+      const hasWeeklyStock = Number.isInteger(kit.weeklyRemaining);
+      const soldOut = hasWeeklyStock && kit.weeklyRemaining <= 0;
       const available = canBuyKit(kit);
-      const reason = kit.missingFromPlugin
-        ? 'Removido do servidor'
-        : kit.manuallyUnavailable
-          ? 'Indisponível pela equipe'
-          : kit.pluginEnabled === false || kit.enabled === false
-            ? 'Desativado no servidor'
-            : kit.pluginForSale !== true
-              ? (kit.priceCents ? 'Venda desativada no plugin' : 'Preço ainda não definido no Minecraft')
-              : String(kit.price || 'Preço indisponível');
+      const reason = soldOut
+        ? 'Limite semanal atingido · volta domingo 00h'
+        : kit.missingFromPlugin
+          ? 'Removido do servidor'
+          : kit.manuallyUnavailable
+            ? 'Indisponível pela equipe'
+            : kit.pluginEnabled === false || kit.enabled === false
+              ? 'Desativado no servidor'
+              : kit.pluginForSale !== true
+                ? (kit.priceCents ? 'Venda desativada no plugin' : 'Preço ainda não definido no Minecraft')
+                : String(kit.price || 'Preço indisponível') +
+                  (hasWeeklyStock ? ' · ' + kit.weeklyRemaining + '/' + (kit.weeklyLimit || 10) + ' esta semana' : '');
       return {
-        label: (available ? '' : 'Indisponível · ').concat(displayKitName(kit)).slice(0, 100),
+        label: (soldOut ? 'Esgotado · ' : available ? '' : 'Indisponível · ')
+          .concat(displayKitName(kit)).slice(0, 100),
         description: reason.slice(0, 100),
         value: String(kit.id)
       };
@@ -192,6 +200,7 @@ export function makeKitRemoveControls(kitId) {
   );
 }
 
+
 export function makeKitPreviewEmbed(kit) {
   const embed = new EmbedBuilder()
     .setColor(brandColor())
@@ -201,6 +210,14 @@ export function makeKitPreviewEmbed(kit) {
       { name: 'Preço', value: String(kit.price || 'Não definido no Minecraft'), inline: true },
       { name: 'Venda', value: kit.forSale === true ? 'Disponível' : 'Indisponível', inline: true }
     );
+  if (Number.isInteger(kit.weeklyRemaining)) {
+    embed.addFields({
+      name: 'Estoque desta semana',
+      value: kit.weeklyRemaining + '/' + (kit.weeklyLimit || 10) +
+        ' unidades disponíveis. Reinicia domingo às 00:00 (Brasília).',
+      inline: false
+    });
+  }
   const image = safeImageUrl(kit.imageUrl);
   if (image) embed.setImage(image);
   return embed;
@@ -237,6 +254,7 @@ export function makeSupportTicketEmbed(kind, user) {
     .setTimestamp();
 }
 
+
 export function makePurchaseReviewEmbed(draft) {
   const embed = new EmbedBuilder()
     .setColor(brandColor())
@@ -248,6 +266,14 @@ export function makePurchaseReviewEmbed(draft) {
       { name: 'Nick', value: String(draft.minecraftNick), inline: true },
       { name: 'Plataforma', value: draft.platform === 'bedrock' ? 'Bedrock' : 'Java', inline: true }
     );
+  if (Number.isInteger(draft.kit.weeklyRemaining)) {
+    embed.addFields({
+      name: 'Estoque semanal',
+      value: draft.kit.weeklyRemaining + '/' + (draft.kit.weeklyLimit || 10) +
+        ' disponíveis no momento. A unidade só é reservada quando a equipe confirma o pagamento.',
+      inline: false
+    });
+  }
   const image = safeImageUrl(draft.kit.imageUrl);
   if (image) embed.setThumbnail(image);
   return embed;
@@ -273,6 +299,7 @@ export function makePlatformControls(draft) {
   );
 }
 
+
 export function makeOrderEmbed({ userId, kit, minecraftNick, platform }) {
   const embed = new EmbedBuilder()
     .setColor(brandColor())
@@ -280,14 +307,15 @@ export function makeOrderEmbed({ userId, kit, minecraftNick, platform }) {
     .setDescription(
       (userId ? '**Comprador:** <@' + userId + '>\n\n' : '') +
       'Faça o Pix no valor indicado; informe o valor manualmente no banco. Depois envie a foto ou o arquivo do comprovante aqui. ' +
-      'A equipe confere o pagamento antes de solicitar a entrega.'
+      'A equipe confere o pagamento antes de reservar uma unidade e solicitar a entrega.'
     )
     .addFields(
       { name: 'Kit', value: displayKitName(kit), inline: true },
       { name: 'Valor', value: String(kit.price || '—'), inline: true },
       { name: 'Nick', value: String(minecraftNick || '—'), inline: true },
       { name: 'Plataforma', value: platform === 'bedrock' ? 'Bedrock' : platform === 'java' ? 'Java' : 'Não informada', inline: true },
-      { name: 'Chave Pix', value: '`' + PIX_KEY_DEFAULT + '`', inline: true },
+      { name: 'Limite semanal', value: '10 unidades por kit. A unidade é reservada após a aprovação do pagamento.', inline: false },
+      { name: 'Chave Pix', value: '\x60' + PIX_KEY_DEFAULT + '\x60', inline: true },
       { name: 'Comprovante', value: 'Anexe a imagem ou o PDF nesta conversa.', inline: false }
     )
     .setTimestamp();
@@ -298,24 +326,33 @@ export function makeOrderEmbed({ userId, kit, minecraftNick, platform }) {
   return embed;
 }
 
+
 export function makeDeliveryEmbed(result) {
   const status = String(result.status || 'UNKNOWN');
   const delivered = status === 'KIT_DELIVERED';
   const pending = status === 'KIT_PENDING';
+  const offlinePending = pending && result.pendingReason === 'offline';
   return new EmbedBuilder()
     .setColor(delivered ? 0x3BA55D : pending ? 0xD4A72C : 0xD45B5B)
-    .setTitle(delivered ? 'Kit entregue no Minecraft' : pending ? 'Kit guardado para retirada' : 'Resultado da entrega')
+    .setTitle(
+      delivered ? 'Kit entregue no Minecraft'
+        : offlinePending ? 'Kit reservado até o jogador entrar'
+          : pending ? 'Kit guardado para retirada'
+            : 'Resultado da entrega'
+    )
     .setDescription(
       String(result.message || (delivered
         ? 'O plugin confirmou a entrega do kit.'
         : pending
-          ? 'O inventário estava cheio. O plugin guardou o kit para o jogador retirar.'
+          ? 'O plugin guardou o kit completo como pendente.'
           : 'O plugin não confirmou a entrega. Confira o resultado e tente novamente quando necessário.')) +
       (delivered
         ? '\n\nO kit foi entregue dentro de uma Shulker Box.'
-        : pending
-          ? '\n\nAo retirar o kit, o jogador receberá uma Shulker Box com os itens.'
-          : '')
+        : offlinePending
+          ? '\n\nO servidor tentará entregar automaticamente quando o jogador entrar.'
+          : pending
+            ? '\n\nO jogador deve liberar espaço no inventário e usar /dk claim para receber a Shulker Box.'
+            : '')
     )
     .addFields(
       { name: 'Jogador', value: String(result.player || '—'), inline: true },

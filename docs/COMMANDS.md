@@ -1,4 +1,4 @@
-# Comandos do ASTHEN BOT 2.10.0
+# Comandos do ASTHEN BOT 2.11.0
 
 ## Quem pode usar
 
@@ -81,3 +81,12 @@ A chave `DKB_SECRET` nunca é mostrada no Discord. Copie-a diretamente do `.env`
 ## Pagamento
 
 Não existe comando `/pix`. A chave e o QR Code ficam na própria mensagem de pagamento. A equipe confere o comprovante manualmente antes de aprovar o pedido.
+
+
+## Estoque semanal da loja
+
+- Cada kit tem até 10 unidades por semana, por servidor Discord.
+- O catálogo e a prévia mostram quantas unidades ainda estão disponíveis.
+- Abrir ticket não consome uma unidade. O estoque é reservado quando a equipe confirma o pagamento.
+- O limite reinicia automaticamente no domingo às 00:00 (horário de Brasília).
+- O estoque fica no Supabase. A aprovação é bloqueada quando a conexão ou a migração 005 estiver indisponível.

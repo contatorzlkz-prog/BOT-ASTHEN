@@ -60,6 +60,22 @@ bridge:
 
 Use a URL HTTPS gerada pelo túnel, sem acrescentar /plugin/v1. Não use localhost ou 127.0.0.1 para chegar ao PC do dono do bot.
 
+### Entrega quando o jogador está offline ou com inventário cheio
+
+No plugins/DiscordKitBridge/config.yml, ajuste estas opções:
+
+~~~yaml
+kits:
+  require-online: false
+
+delivery:
+  pending-if-inventory-full: true
+~~~
+
+require-online: false é obrigatório para permitir que a compra aprovada seja enfileirada quando o jogador estiver offline. Quando ele entrar, o PlayerListener tenta entregar automaticamente. Se o inventário ainda estiver cheio, o plugin mantém o kit pendente e envia uma mensagem para liberar espaço e usar /dk claim. O plugin atual não tenta novamente a cada slot liberado sem o comando; a próxima entrada também dispara a tentativa automática.
+
+Depois de alterar o arquivo, execute /dk reload se a versão do plugin oferecer recarga de configuração, ou reinicie o servidor.
+
 ## 4. Kits: plugin como origem dos itens
 
 O administrador cria o kit real no Minecraft usando o comando do Plugin-ASTHEN (por exemplo, `/dk create Kit_Ferro`, conforme a versão instalada). O plugin envia a lista completa em `POST /plugin/v1/kits` e o bot importa os novos identificadores.
@@ -100,13 +116,15 @@ A API do bot envia request_id, player, a plataforma escolhida pelo cliente (java
 3. O bot abre o ticket com QR Pix, chave, valor e instrução compacta para anexar o comprovante.
 4. Um membro autorizado da equipe confere o comprovante e confirma o pagamento.
 5. O bot solicita a entrega ao plugin com o nick e a plataforma Java ou Bedrock escolhida pelo cliente.
-6. O plugin devolve o resultado. O comprador recebe uma mensagem clara e a equipe recebe detalhes técnicos. Em caso de timeout, o bot tenta novamente uma vez com o mesmo request_id.
+6. Se o jogador estiver offline e kits.require-online: false, o plugin guarda o kit como pendente e tenta entregá-lo automaticamente quando ele entrar.
+7. Se o inventário estiver cheio, delivery.pending-if-inventory-full: true mantém o kit pendente; o servidor pede para liberar espaço e usar /dk claim.
+8. O plugin devolve o resultado. O comprador recebe uma mensagem clara e a equipe recebe detalhes técnicos. Em caso de timeout, o bot tenta novamente uma vez com o mesmo request_id.
 
 O mesmo request_id deve ser reutilizado em uma repetição de entrega para evitar duplicidade.
 
 ## 7. Supabase
 
-Em uma instalação nova, execute todo o arquivo [supabase/SETUP.sql](../supabase/SETUP.sql). Para quem atualizou o bot 2.9.0, execute [supabase/004_asthen_bot_plugin_sale_contract.sql](../supabase/004_asthen_bot_plugin_sale_contract.sql). Em bancos mais antigos que ainda não têm os campos da migração 003, execute 003 e depois 004. Consulte [SUPABASE.md](SUPABASE.md).
+Em uma instalação nova, execute todo o arquivo supabase/SETUP.sql. Em um banco que já usa 2.10.0, execute supabase/005_asthen_bot_weekly_kit_stock.sql. Se estiver vindo da 2.7.0, aplique 003, 004 e 005 nessa ordem. Consulte SUPABASE.md.
 
 ### Preço e disponibilidade — contrato do Plugin-ASTHEN 1.2.0
 

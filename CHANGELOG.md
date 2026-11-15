@@ -1,3 +1,26 @@
+## 2.11.0 — 15/11/2026
+
+### Loja e estoque semanal
+- Cada kit passa a ter um limite de 10 unidades por semana, por servidor Discord.
+- O catálogo, a prévia e a revisão mostram o saldo semanal disponível.
+- A unidade é reservada somente quando a equipe confirma o pagamento.
+- A reserva usa uma função SQL atômica e idempotente no Supabase; duas aprovações simultâneas não ultrapassam o limite e o mesmo ticket não consome duas unidades.
+- A semana reinicia automaticamente aos domingos às 00:00 no fuso America/Sao_Paulo; não depende de cron nem do horário de funcionamento do bot.
+- A aprovação é bloqueada quando o Supabase ou a migração 005 não estão disponíveis.
+
+### Entrega offline
+- As mensagens do bot distinguem jogador offline de inventário cheio.
+- O fluxo documentado usa kits.require-online=false para manter a entrega pendente até o jogador entrar.
+- Quando o inventário está cheio, o plugin mantém o kit pendente e pede para liberar espaço e usar /dk claim.
+- A foto comercial do kit continua aparecendo na prévia e no ticket de pagamento.
+
+### Supabase e distribuição
+- Adicionadas as tabelas asthen_bot_weekly_stock e asthen_bot_stock_reservations e a RPC reserve_asthen_weekly_kit_stock.
+- Adicionada a migração 005 e atualizado o SETUP.sql.
+- O ZIP de distribuição passa a usar o nome ASTHEN-BOT-v2.11.0.zip em uma Release do GitHub.
+
+---
+
 ## 2.10.0 — 15/11/2026
 
 ### Integração com Plugin-ASTHEN 1.2.0

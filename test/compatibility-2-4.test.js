@@ -106,3 +106,16 @@ test('payment ticket keeps Pix copy and staff decisions on one message', () => {
   assert.ok(controls.some(component => component.custom_id === 'order:reject'));
   assert.ok(controls.some(component => component.custom_id === 'ticket:close'));
 });
+
+
+test('catalog clearly marks weekly stock exhaustion and remaining units', () => {
+  const row = makeCatalogMenu([
+    { id: 'kit-stock', name: 'Kit_Ferro', displayName: 'Kit Ferro', price: 'R$ 9,90', enabled: true, pluginForSale: true, forSale: true, weeklyRemaining: 0, weeklyLimit: 10 },
+    { id: 'kit-left', name: 'Kit_Dima', displayName: 'Kit Dima', price: 'R$ 19,90', enabled: true, pluginForSale: true, forSale: true, weeklyRemaining: 4, weeklyLimit: 10 }
+  ]);
+  const menu = row.components[0].toJSON();
+  assert.equal(menu.options[0].label, 'Kit Dima');
+  assert.ok(menu.options[0].description.includes('4/10'));
+  assert.equal(menu.options[1].label, 'Esgotado · Kit Ferro');
+  assert.ok(menu.options[1].description.includes('Limite semanal'));
+});

@@ -22,15 +22,16 @@ export function getSupabaseConfig() {
   ).trim();
   const table = String(process.env.SUPABASE_TABLE || 'asthen_bot_state').trim();
   const kitsTable = String(process.env.SUPABASE_KITS_TABLE || 'asthen_bot_kits').trim();
+  const weeklyStockTable = String(process.env.SUPABASE_WEEKLY_STOCK_TABLE || 'asthen_bot_weekly_stock').trim();
 
   if (!projectUrl || !secretKey) return null;
   if (!/^https:\/\//i.test(projectUrl)) {
     throw new Error('SUPABASE_URL precisa ser a URL HTTPS base do projeto.');
   }
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(kitsTable)) {
+  if (![table, kitsTable, weeklyStockTable].every(name => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))) {
     throw new Error('O nome de uma tabela Supabase contém caracteres inválidos.');
   }
-  return { projectUrl, secretKey, table, kitsTable };
+  return { projectUrl, secretKey, table, kitsTable, weeklyStockTable };
 }
 
 function buildHeaders(config, extra = {}) {
@@ -265,10 +266,131 @@ export async function initializeSupabaseSync({
   }
 }
 
+
+/**
+ * Returns the Sunday that starts the current sales week in Brasilia.
+ * Uses the IANA timezone instead of the bot host's local timezone.
+ */
+export function getBrasiliaWeekStart(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  const localDate = new Date(Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day)
+  ));
+  localDate.setUTCDate(localDate.getUTCDate() - localDate.getUTCDay());
+  return localDate.toISOString().slice(0, 10);
+}
+
+function requireWeeklyStockConfig() {
+  const config = getSupabaseConfig();
+  if (!config) {
+    throw new Error('O Supabase é obrigatório para controlar o limite semanal. Configure SUPABASE_URL e SUPABASE_SECRET_KEY.');
+  }
+  return config;
+}
+
+/**
+ * Kits without a row still have all 10 units available for this week.
+ */
+export async function getWeeklyKitStock(guildId) {
+  if (!String(guildId || '').trim()) throw new Error('O servidor Discord não foi informado para consultar o estoque.');
+  const config = requireWeeklyStockConfig();
+  const weekStart = getBrasiliaWeekStart();
+  const query = new URLSearchParams({
+    select: 'kit_id,reserved_count,weekly_limit',
+    guild_id: 'eq.' + String(guildId),
+    week_start: 'eq.' + weekStart
+  });
+  const response = await supabaseRequest(
+    config,
+    '?' + query.toString(),
+    { method: 'GET' },
+    config.weeklyStockTable
+  );
+  if (!response.ok) {
+    throw new Error(
+      'Não foi possível consultar o estoque semanal no Supabase (HTTP ' + response.status +
+      '). Execute supabase/005_asthen_bot_weekly_kit_stock.sql.'
+    );
+  }
+
+  const rows = await response.json();
+  const items = {};
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const limit = Number.isInteger(Number(row.weekly_limit)) && Number(row.weekly_limit) > 0
+      ? Number(row.weekly_limit) : 10;
+    const reserved = Number.isInteger(Number(row.reserved_count)) && Number(row.reserved_count) > 0
+      ? Number(row.reserved_count) : 0;
+    items[String(row.kit_id)] = {
+      reserved,
+      limit,
+      remaining: Math.max(0, limit - reserved)
+    };
+  }
+  return { weekStart, limit: 10, items };
+}
+
+/**
+ * The database function serializes approvals and treats requestId as an idempotency key.
+ */
+export async function reserveWeeklyKitStock({ guildId, kitId, requestId } = {}) {
+  if (!String(guildId || '').trim() || !String(kitId || '').trim() || !String(requestId || '').trim()) {
+    throw new Error('Não foi possível reservar o estoque: servidor, kit ou pedido ausente.');
+  }
+  const config = requireWeeklyStockConfig();
+  const weekStart = getBrasiliaWeekStart();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  let response;
+  try {
+    response = await fetch(config.projectUrl + '/rest/v1/rpc/reserve_asthen_weekly_kit_stock', {
+      method: 'POST',
+      headers: buildHeaders(config),
+      body: JSON.stringify({
+        p_guild_id: String(guildId),
+        p_kit_id: String(kitId),
+        p_request_id: String(requestId),
+        p_week_start: weekStart
+      }),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Tempo limite ao reservar a unidade semanal no Supabase. O pagamento não foi aprovado pelo bot.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      'O Supabase não conseguiu reservar o estoque (HTTP ' + response.status +
+      '). Confira a migração supabase/005_asthen_bot_weekly_kit_stock.sql.'
+    );
+  }
+  let result = await response.json();
+  if (Array.isArray(result)) result = result[0];
+  if (!result || typeof result.ok !== 'boolean') {
+    throw new Error('O Supabase respondeu com um resultado inválido para a reserva semanal.');
+  }
+  return { ...result, week_start: result.week_start || weekStart };
+}
+
 export function getSupabaseStatus() {
+  const config = getSupabaseConfig();
   return {
-    enabled: Boolean(getSupabaseConfig()),
-    kitsTable: getSupabaseConfig()?.kitsTable || null,
+    enabled: Boolean(config),
+    kitsTable: config?.kitsTable || null,
+    weeklyStockTable: config?.weeklyStockTable || null,
+    weeklyStockEnabled: Boolean(config),
     lastSyncedAt,
     lastError: lastSyncError
   };

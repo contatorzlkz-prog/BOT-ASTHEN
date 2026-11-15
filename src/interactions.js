@@ -47,9 +47,10 @@ import { archiveAndDeleteTicket, createPrivateTicket } from './tickets.js';
 import { CONFIG } from './config.js';
 import { deliverKit, getBridgeStatus } from './bridge.js';
 import { PIX_KEY_DEFAULT, PIX_QR_FILENAME, PIX_QR_IMAGE_PATH } from './pix.js';
-import { getSupabaseStatus } from './supabase.js';
+import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock } from './supabase.js';
 
 const closingTickets = new Set();
+const orderDecisionsInFlight = new Set();
 
 function normalizeImageUrl(value) {
   if (!value) return '';
@@ -81,7 +82,26 @@ function isKitPurchasable(kit) {
     && kit.manuallyUnavailable !== true
     && kit.missingFromPlugin !== true
     && kit.forSale === true
-    && kit.pluginForSale === true;
+    && kit.pluginForSale === true
+    && !(Number.isInteger(kit.weeklyRemaining) && kit.weeklyRemaining <= 0);
+}
+
+function withWeeklyStock(kits, snapshot) {
+  return kits.map(kit => {
+    const current = snapshot.items?.[kit.id];
+    const weeklyLimit = Number.isInteger(current?.limit) ? current.limit : snapshot.limit || 10;
+    return {
+      ...kit,
+      weeklyRemaining: Number.isInteger(current?.remaining) ? current.remaining : weeklyLimit,
+      weeklyLimit,
+      weeklyWeekStart: snapshot.weekStart
+    };
+  });
+}
+
+function weeklyStockErrorMessage(error) {
+  return 'A loja não conseguiu consultar o estoque semanal no Supabase. Verifique a configuração do banco e execute supabase/005_asthen_bot_weekly_kit_stock.sql. ' +
+    (error?.message ? 'Detalhe: ' + String(error.message).slice(0, 220) : '');
 }
 
 function replyPrivate(interaction, content, components = [], embeds = []) {
@@ -582,6 +602,7 @@ function makeMinecraftNickModal(customId, currentNick = '') {
     .addComponents(new ActionRowBuilder().addComponents(input));
 }
 
+
 async function openCatalog(interaction) {
   const config = getGuildConfig(interaction.guildId);
   if (!config.kits.length) return replyPrivate(interaction, 'A loja ainda não recebeu kits do servidor.');
@@ -598,9 +619,21 @@ async function openCatalog(interaction) {
     }
   }
 
+  let stockSnapshot;
+  try {
+    stockSnapshot = await getWeeklyKitStock(interaction.guildId);
+  } catch (error) {
+    return replyPrivate(interaction, weeklyStockErrorMessage(error));
+  }
+  const stockedKits = withWeeklyStock(config.kits, stockSnapshot);
   const existingDraft = getPurchaseDraft(interaction.guildId, interaction.user.id);
   if (existingDraft) {
-    if (existingDraft.kit && config.kits.some(kit => kit.id === existingDraft.kit.id)) {
+    const currentKit = stockedKits.find(kit => kit.id === existingDraft.kit?.id);
+    if (currentKit) {
+      existingDraft.kit = { ...existingDraft.kit, ...currentKit };
+      savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
+    }
+    if (existingDraft.kit && currentKit) {
       if (existingDraft.stage === 'creating') {
         existingDraft.stage = existingDraft.minecraftNick
           ? (existingDraft.platform ? 'review' : 'platform')
@@ -611,7 +644,7 @@ async function openCatalog(interaction) {
         existingDraft.stage = 'review';
         savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
         return interaction.reply({
-          content: 'Você já iniciou uma compra. Confira os dados antes de confirmar.',
+          content: 'Você já iniciou uma compra. Confira os dados antes de continuar.',
           embeds: [makePurchaseReviewEmbed(existingDraft)],
           components: [makePurchaseReviewControls(existingDraft)],
           ephemeral: true
@@ -639,8 +672,8 @@ async function openCatalog(interaction) {
   }
 
   return interaction.reply({
-    content: CONFIG.shop.catalogPrompt,
-    components: [makeCatalogMenu(config.kits)],
+    content: CONFIG.shop.catalogPrompt + '\n\nCada kit tem até 10 unidades por semana. O estoque reinicia domingo às 00:00 (horário de Brasília).',
+    components: [makeCatalogMenu(stockedKits)],
     ephemeral: true
   });
 }
@@ -664,27 +697,40 @@ async function continuePurchase(interaction) {
   return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
 }
 
+
 async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = false) {
   const config = getGuildConfig(interaction.guildId);
   const kit = config.kits.find(item => item.id === kitId);
   if (!isKitPurchasable(kit)) return replyPrivate(interaction, 'Este kit está indisponível para compra. Ele continua no catálogo para consulta.');
 
+  let stockSnapshot;
+  try {
+    stockSnapshot = await getWeeklyKitStock(interaction.guildId);
+  } catch (error) {
+    return replyPrivate(interaction, weeklyStockErrorMessage(error));
+  }
+  const stockedKit = withWeeklyStock([kit], stockSnapshot)[0];
+  if (stockedKit.weeklyRemaining <= 0) {
+    return replyPrivate(interaction, 'As 10 unidades deste kit já foram reservadas nesta semana. O estoque volta no domingo às 00:00 (horário de Brasília).');
+  }
+
   const existing = findOpenTicket(interaction.guildId, interaction.user.id, 'shop');
   if (existing) {
     const channel = await fetchTextChannel(interaction.guild, existing.channelId);
-    if (channel) {
-      return replyPrivate(interaction, 'Você já tem um pedido aberto.', [makeChannelLinkRow(channel)]);
-    }
+    if (channel) return replyPrivate(interaction, 'Você já tem um pedido aberto.', [makeChannelLinkRow(channel)]);
   }
 
   const draft = {
     kit: {
-      id: kit.id,
-      name: kit.name,
-      displayName: kit.displayName || makeKitDisplayName(kit.name),
-      price: kit.price,
-      description: kit.description,
-      imageUrl: kit.imageUrl || ''
+      id: stockedKit.id,
+      name: stockedKit.name,
+      displayName: stockedKit.displayName || makeKitDisplayName(stockedKit.name),
+      price: stockedKit.price,
+      description: stockedKit.description,
+      imageUrl: stockedKit.imageUrl || '',
+      weeklyRemaining: stockedKit.weeklyRemaining,
+      weeklyLimit: stockedKit.weeklyLimit,
+      weeklyWeekStart: stockedKit.weeklyWeekStart
     },
     minecraftNick: '',
     platform: '',
@@ -715,6 +761,7 @@ async function confirmSelectedKit(interaction, requestedRevision) {
   return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
 }
 
+
 async function switchPurchaseKit(interaction, requestedRevision) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
   if (!draft || draft.revision !== requestedRevision) {
@@ -722,9 +769,18 @@ async function switchPurchaseKit(interaction, requestedRevision) {
   }
   const config = getGuildConfig(interaction.guildId);
   if (!config.kits.length) return replyPrivate(interaction, 'A loja ainda não recebeu kits do servidor.');
-  return interaction.update({ content: CONFIG.shop.catalogPrompt, embeds: [], components: [makeCatalogMenu(config.kits)] });
+  try {
+    const stockSnapshot = await getWeeklyKitStock(interaction.guildId);
+    const stockedKits = withWeeklyStock(config.kits, stockSnapshot);
+    return interaction.update({
+      content: CONFIG.shop.catalogPrompt + '\n\nCada kit tem até 10 unidades por semana. O estoque reinicia domingo às 00:00 (horário de Brasília).',
+      embeds: [],
+      components: [makeCatalogMenu(stockedKits)]
+    });
+  } catch (error) {
+    return replyPrivate(interaction, weeklyStockErrorMessage(error));
+  }
 }
-
 
 function purchasableKits(config) {
   return config.kits.filter(isKitPurchasable);
@@ -855,6 +911,17 @@ async function confirmPurchase(interaction, requestedRevision) {
     return replyPrivate(interaction, 'Este kit foi removido ou está indisponível para compra.');
   }
 
+  let stockSnapshot;
+  try {
+    stockSnapshot = await getWeeklyKitStock(interaction.guildId);
+  } catch (error) {
+    return replyPrivate(interaction, weeklyStockErrorMessage(error));
+  }
+  const currentKitWithStock = withWeeklyStock([currentKit], stockSnapshot)[0];
+  if (currentKitWithStock.weeklyRemaining <= 0) {
+    return replyPrivate(interaction, 'As 10 unidades deste kit já foram reservadas nesta semana. Nenhum novo ticket foi criado; o estoque reinicia domingo às 00:00 (horário de Brasília).');
+  }
+
   const existing = findOpenTicket(interaction.guildId, interaction.user.id, 'shop');
   if (existing) {
     const channel = await fetchTextChannel(interaction.guild, existing.channelId);
@@ -877,7 +944,7 @@ async function confirmPurchase(interaction, requestedRevision) {
       guild: interaction.guild,
       user: interaction.user,
       type: 'shop',
-      kit: currentKit,
+      kit: currentKitWithStock,
       minecraftNick: draft.minecraftNick,
       platform: draft.platform
     });
@@ -886,7 +953,7 @@ async function confirmPurchase(interaction, requestedRevision) {
       await sendOrderTicketMessage(
         result.channel,
         interaction.user,
-        currentKit,
+        currentKitWithStock,
         draft.minecraftNick,
         draft.platform,
         getGuildConfig(interaction.guildId)
@@ -970,6 +1037,7 @@ async function closeTicket(interaction) {
   }
 }
 
+
 async function decideOrder(interaction, decision) {
   const ticket = getTicket(interaction.channelId);
   if (!ticket || ticket.type !== 'shop') return replyPrivate(interaction, 'Este canal não contém um pedido válido.');
@@ -982,51 +1050,115 @@ async function decideOrder(interaction, decision) {
   if (ticket.orderStatus !== 'pending') {
     return replyPrivate(interaction, 'Este pedido já foi analisado. Use o botão Fechar quando terminar o atendimento.');
   }
-
-  const logsChannel = await fetchTextChannel(interaction.guild, config.logsChannelId);
-  if (!logsChannel) {
-    return replyPrivate(interaction, 'O canal privado de logs não está configurado. Use /configurar logs:#canal.');
+  if (orderDecisionsInFlight.has(interaction.channelId)) {
+    return replyPrivate(interaction, 'Este pedido já está sendo analisado por outro membro da equipe.');
   }
 
-  let buyersChannel = null;
-  if (decision === 'approved') {
-    buyersChannel = await fetchTextChannel(interaction.guild, config.buyersChannelId);
-    if (!buyersChannel) {
-      return replyPrivate(interaction, 'O canal de compradores não está configurado. Use /configurar compradores:#canal.');
+  orderDecisionsInFlight.add(interaction.channelId);
+  try {
+    const logsChannel = await fetchTextChannel(interaction.guild, config.logsChannelId);
+    if (!logsChannel) return replyPrivate(interaction, 'O canal privado de logs não está configurado. Use /configurar logs:#canal.');
+
+    let buyersChannel = null;
+    if (decision === 'approved') {
+      buyersChannel = await fetchTextChannel(interaction.guild, config.buyersChannelId);
+      if (!buyersChannel) return replyPrivate(interaction, 'O canal de compradores não está configurado. Use /configurar compradores:#canal.');
     }
-  }
 
-  await interaction.deferUpdate();
+    await interaction.deferUpdate();
+    let reservation = null;
+    const reservationId = 'ticket-' + ticket.channelId;
 
-  await logsChannel.send({
-    embeds: [makeOrderLogEmbed({ ticket, decision, staffUser: interaction.user })],
-    allowedMentions: { users: [], roles: [] }
-  });
+    if (decision === 'approved') {
+      try {
+        reservation = await reserveWeeklyKitStock({
+          guildId: ticket.guildId || interaction.guildId,
+          kitId: ticket.kitId,
+          requestId: reservationId
+        });
+      } catch (error) {
+        console.error('[Asthen Stock] Não foi possível reservar o estoque:', error);
+        await interaction.followUp({
+          content: 'Pagamento não aprovado pelo bot: não consegui reservar uma das 10 unidades semanais no Supabase. Confira a conexão e a migração 005; depois tente novamente.',
+          ephemeral: true
+        });
+        return;
+      }
 
-  if (decision === 'approved') {
-    await buyersChannel.send({
-      embeds: [makeBuyerAnnouncement(ticket)],
-      allowedMentions: { users: [ticket.userId], roles: [] }
+      if (!reservation.ok) {
+        await interaction.followUp({
+          content: 'Limite semanal esgotado: as 10 unidades deste kit já foram reservadas nesta semana. Não confirme este pagamento como aprovado; a equipe precisa resolver o pedido com o comprador.',
+          ephemeral: true
+        });
+        try {
+          await interaction.message.edit({
+            content: 'Aprovação bloqueada: limite semanal deste kit esgotado. O pedido continua pendente para a equipe resolver com o comprador.',
+            components: [makeOrderControls()]
+          });
+        } catch (error) {
+          console.warn('[Asthen Stock] Não foi possível atualizar a mensagem do pedido:', error.message);
+        }
+        return;
+      }
+    }
+
+    const reviewedAt = new Date().toISOString();
+    updateTicket(interaction.channelId, {
+      orderStatus: decision,
+      reviewedBy: interaction.user.id,
+      reviewedAt,
+      ...(reservation ? {
+        stockReservationId: reservationId,
+        stockWeekStart: reservation.week_start,
+        stockReservedAt: reviewedAt,
+        stockReservedCount: reservation.reserved_count,
+        stockRemaining: reservation.remaining
+      } : {})
     });
-  }
 
-  updateTicket(interaction.channelId, {
-    orderStatus: decision,
-    reviewedBy: interaction.user.id,
-    reviewedAt: new Date().toISOString()
-  });
+    try {
+      await logsChannel.send({
+        embeds: [makeOrderLogEmbed({ ticket: { ...ticket, orderStatus: decision }, decision, staffUser: interaction.user })],
+        allowedMentions: { users: [], roles: [] }
+      });
+    } catch (error) {
+      console.error('[Asthen] Não foi possível registrar a decisão no canal de logs:', error);
+    }
 
-  const label = decision === 'approved' ? 'confirmado' : 'recusado';
-  await interaction.message.edit({
-    content: 'Pedido ' + label + ' por ' + interaction.user.toString() +
-      '. O canal continua aberto. ' + (decision === 'approved' ? 'A entrega do kit foi solicitada ao plugin.' : 'Use Fechar quando o atendimento terminar.'),
-    components: [makeCloseRow()]
-  });
+    if (decision === 'approved') {
+      try {
+        await buyersChannel.send({
+          embeds: [makeBuyerAnnouncement(ticket)],
+          allowedMentions: { users: [ticket.userId], roles: [] }
+        });
+      } catch (error) {
+        console.error('[Asthen] Não foi possível publicar o anúncio de compra:', error);
+      }
+    }
 
-  if (decision === 'approved') {
-    const approvedTicket = getTicket(interaction.channelId);
-    void processApprovedDelivery(interaction.channel, approvedTicket, { interaction })
-      .catch(error => console.error('[Asthen] Falha ao iniciar entrega do kit:', error));
+    const stockNote = reservation
+      ? ' Estoque reservado: ' + reservation.remaining + '/10 unidades restantes até domingo às 00:00 (Brasília).'
+      : '';
+    const label = decision === 'approved' ? 'confirmado' : 'recusado';
+    try {
+      await interaction.message.edit({
+        content: 'Pedido ' + label + ' por ' + interaction.user.toString() +
+          '. O canal continua aberto. ' +
+          (decision === 'approved' ? 'A entrega do kit foi solicitada ao plugin.' : 'Use Fechar quando o atendimento terminar.') +
+          stockNote,
+        components: [makeCloseRow()]
+      });
+    } catch (error) {
+      console.error('[Asthen] Não foi possível atualizar a mensagem do pedido:', error);
+    }
+
+    if (decision === 'approved') {
+      const approvedTicket = getTicket(interaction.channelId);
+      void processApprovedDelivery(interaction.channel, approvedTicket, { interaction })
+        .catch(error => console.error('[Asthen] Falha ao iniciar entrega do kit:', error));
+    }
+  } finally {
+    orderDecisionsInFlight.delete(interaction.channelId);
   }
 }
 
@@ -1059,6 +1191,7 @@ async function handleBridgeCommand(interaction) {
     'Kits recebidos do plugin: ' + status.kits.length,
     status.lastKitsSyncAt ? 'Última lista recebida: ' + status.lastKitsSyncAt : 'Aguardando primeira sincronização do plugin.',
     'Supabase: ' + (database.enabled ? 'configurado' : 'desativado'),
+    'Estoque semanal: ' + (database.weeklyStockEnabled ? '10 unidades por kit, reserva no Supabase, reinício domingo 00:00 (Brasília)' : 'indisponível — configure o Supabase e execute a migração 005'),
     database.lastSyncedAt ? 'Última sincronização do banco: ' + database.lastSyncedAt : '',
     database.lastError ? 'Aviso Supabase: ' + database.lastError : '',
     '',
@@ -1083,11 +1216,18 @@ async function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+
 function friendlyDeliveryMessage(status, originalMessage = '') {
+  const original = String(originalMessage || '').toLowerCase();
+  if (status === 'KIT_PENDING' && original.includes('offline')) {
+    return 'O jogador estava offline. O plugin guardou o kit na fila e tentará entregá-lo automaticamente quando ele entrar no servidor. Isso exige kits.require-online: false no config.yml do plugin.';
+  }
+  if (status === 'KIT_PENDING') {
+    return 'O inventário estava cheio. O plugin guardou o kit completo como pendente e avisou o jogador para liberar pelo menos um espaço. Depois de liberar espaço, ele deve usar /dk claim.';
+  }
   const messages = {
     KIT_DELIVERED: 'O plugin confirmou que uma Shulker Box com o kit foi entregue ao jogador.',
-    KIT_PENDING: 'O inventário estava cheio. O plugin guardou o kit completo como pendente; o jogador poderá retirar a Shulker Box com /dk claim.',
-    PLAYER_OFFLINE: 'O jogador não está online. Entre no servidor e peça à equipe para tentar novamente.',
+    PLAYER_OFFLINE: 'O jogador está offline, mas o plugin recusou colocar o kit na fila. Ative kits.require-online: false no config.yml do plugin e repita a entrega.',
     KIT_NOT_FOUND: 'O kit não foi encontrado no servidor. A equipe precisa conferir se ele ainda existe no plugin.',
     PLATFORM_MISMATCH: 'A plataforma informada não corresponde à plataforma detectada pelo servidor. A equipe precisa conferir Java/Bedrock e o nick.',
     PLATFORM_UNVERIFIABLE: 'O servidor não conseguiu verificar a conta Bedrock. A equipe precisa conferir Geyser e Floodgate.',
@@ -1156,6 +1296,7 @@ async function processApprovedDelivery(channel, ticket, { newRequest = false, in
       embeds: [makeDeliveryEmbed({
         ...result,
         message: friendlyDeliveryMessage(status, result.message),
+        pendingReason: status === 'KIT_PENDING' && /offline/i.test(String(result.message || '')) ? 'offline' : 'inventory',
         player: result.player || current.minecraftNick,
         platform: result.platform || current.platform,
         kit: current.kitDisplayName || current.kitName

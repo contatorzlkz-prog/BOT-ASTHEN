@@ -1,0 +1,45 @@
+name: release-zip
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - package.json
+      - VERSION.txt
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build versioned ZIP
+        id: package
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          DIRECTORY="ASTHEN-BOT-v${VERSION}"
+          ARCHIVE="ASTHEN-BOT-v${VERSION}.zip"
+          mkdir -p "$DIRECTORY"
+          git archive "${GITHUB_SHA}" | tar -x -C "$DIRECTORY"
+          zip -qr "$ARCHIVE" "$DIRECTORY"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish versioned GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ steps.package.outputs.version }}"
+          ARCHIVE="${{ steps.package.outputs.archive }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ARCHIVE" --clobber
+          else
+            gh release create "$TAG" "$ARCHIVE" \
+              --target "$GITHUB_SHA" \
+              --title "ASTHEN BOT ${{ steps.package.outputs.version }}" \
+              --generate-notes
+          fi

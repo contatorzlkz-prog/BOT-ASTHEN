@@ -4,12 +4,12 @@ Bot de Discord para o servidor Minecraft ASTHEN: atendimento privado, loja de ki
 
 ![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)
 ![Discord.js](https://img.shields.io/badge/discord.js-14-5865F2?logo=discord&logoColor=white)
-![Supabase](https://img.shields.io/badge/Supabase-opcional-3ECF8E?logo=supabase&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-estoque_persistente-3ECF8E?logo=supabase&logoColor=white)
 [![Checks](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/vers%C3%A3o-2.10.0-7C5CFC)
+![Version](https://img.shields.io/badge/vers%C3%A3o-2.11.0-7C5CFC)
 
 <p align="center">
-  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip">
+  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/latest/download/ASTHEN-BOT-v2.11.0.zip">
     <img src="assets/download-zip.svg" alt="Baixar ASTHEN BOT em ZIP" width="264" height="58">
   </a>
 </p>
@@ -39,7 +39,8 @@ O **Plugin-ASTHEN é a origem dos kits reais e dos itens entregues no Minecraft*
 5. O bot recebe `price_cents` e `for_sale` do plugin; só oferece kits autorizados para venda.
 6. O comprador confere a prévia, informa o nick e seleciona Java ou Bedrock.
 7. O bot abre o ticket privado com o QR Pix, a chave e o valor. A equipe confere o comprovante.
-8. Após a aprovação, o plugin entrega o kit no Minecraft dentro de uma Shulker Box.
+8. Após a aprovação, o bot reserva uma unidade do estoque semanal no Supabase e solicita a entrega ao plugin.
+9. O plugin entrega a Shulker Box; se o jogador estiver offline, a entrega fica pendente para quando entrar (com kits.require-online: false).
 
 **Importante:** `/kit criar` cadastra o produto na loja do Discord. Ele não cria espadas, armaduras ou outros itens dentro do Minecraft. Os itens reais continuam sendo configurados no plugin.
 
@@ -72,8 +73,11 @@ Quando um kit é desativado ou removido do plugin, ou perde o preço, continua v
 - Escolha de Minecraft Java ou Bedrock antes de abrir o ticket.
 - API HTTP autenticada para o Plugin-ASTHEN usando o modo poll.
 - Tentativa automática adicional quando a entrega expira, reutilizando o mesmo identificador para evitar duplicidade.
-- Entrega do kit pelo plugin em uma Shulker Box com nome e itens preservados; inventário cheio pode gerar retirada pendente via `/dk claim`.
-- Backup local em `data/state.json` e sincronização opcional com Supabase.
+- Entrega do kit pelo plugin em uma Shulker Box com nome e itens preservados.
+- Jogador offline: kit fica pendente no plugin e é tentado automaticamente quando entrar.
+- Inventário cheio: o servidor avisa para liberar espaço; depois o jogador usa /dk claim.
+- Limite de 10 unidades por kit a cada semana, com reinício domingo às 00:00 no horário de Brasília.
+- Estoque semanal e reservas salvos transacionalmente no Supabase; reiniciar o bot não zera as vendas.
 
 ## Instalação e atualização
 
@@ -110,18 +114,26 @@ Consulte [Integração com o Plugin-ASTHEN](docs/PLUGIN-INTEGRATION.md) e [hando
 
 Isso não substitui o teste dentro do jogo. A entrega em Shulker Box ainda precisa ser validada em um servidor Paper real, incluindo cor, nome, slots e retirada com inventário cheio.
 
+
 ## Supabase
 
-O Supabase é opcional. Ele guarda um snapshot do estado e uma tabela organizada de kits por servidor Discord.
+O Supabase é obrigatório para aprovar vendas na versão 2.11.0, pois o limite semanal precisa ser protegido por uma transação no banco. Ele guarda o snapshot, o catálogo e o controle persistente do estoque semanal.
 
-**Instalação nova:** abra o SQL Editor do Supabase e execute o arquivo completo [`supabase/SETUP.sql`](supabase/SETUP.sql). Ele cria as tabelas com os novos campos `price_cents`, `plugin_for_sale` e `for_sale`:
+**Instalação nova:** abra o SQL Editor e execute o arquivo supabase/SETUP.sql. Ele cria:
+- asthen_bot_state: snapshot de configurações, tickets e compras em preparação.
+- asthen_bot_kits: catálogo comercial por servidor Discord.
+- asthen_bot_weekly_stock: contador semanal de unidades reservadas por kit.
+- asthen_bot_stock_reservations: registro idempotente das compras que consumiram uma unidade.
 
-- `asthen_bot_state`: snapshot do estado do bot.
-- `asthen_bot_kits`: catálogo comercial e estado de cada kit por servidor Discord.
+**Projeto que já usa a versão 2.10.0:** execute supabase/005_asthen_bot_weekly_kit_stock.sql.
 
-**Projeto que já tinha a tabela de kits:** execute [`supabase/004_asthen_bot_plugin_sale_contract.sql`](supabase/004_asthen_bot_plugin_sale_contract.sql) para adicionar os campos de preço em centavos e disponibilidade do plugin. A migração pode ser executada mais de uma vez.
+**Projeto antigo vindo da 2.7.0:** execute as migrações 003_asthen_bot_kit_catalog_status.sql, 004_asthen_bot_plugin_sale_contract.sql e, por último, 005_asthen_bot_weekly_kit_stock.sql, nessa ordem.
 
-Depois configure no `.env`:
+O estoque é de 10 unidades por kit, por servidor Discord, e a reserva acontece quando a equipe confirma o pagamento. O banco calcula uma janela nova a cada domingo às 00:00, usando o fuso America/Sao_Paulo (horário de Brasília). Não existe reinício manual nem cron: a chave de cada semana é a data do domingo.
+
+A reserva é feita por uma função SQL atômica e idempotente. Dois compradores simultâneos não conseguem consumir a mesma última unidade, e repetir a aprovação do mesmo ticket não desconta duas vezes. Se o Supabase estiver indisponível ou a migração 005 não existir, o bot bloqueia a aprovação em vez de vender sem registrar o estoque.
+
+Configure no .env:
 
 ~~~env
 SUPABASE_URL=https://seu-projeto.supabase.co
@@ -130,7 +142,7 @@ SUPABASE_TABLE=asthen_bot_state
 SUPABASE_KITS_TABLE=asthen_bot_kits
 ~~~
 
-Use uma Secret API Key somente no backend do bot. Não a coloque no cliente, em páginas públicas ou no GitHub. Veja [configuração e diagnóstico do Supabase](docs/SUPABASE.md).
+Use uma Secret API Key somente no backend do bot. Não a coloque no cliente, em páginas públicas ou no GitHub. Veja a configuração em docs/SUPABASE.md.
 
 ## Estrutura do projeto
 
