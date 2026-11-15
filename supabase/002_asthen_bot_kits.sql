@@ -1,4 +1,4 @@
--- ASTHEN BOT 2.9.0
+-- ASTHEN BOT 2.10.0
 -- Execute after 001_asthen_bot_state.sql in Supabase > SQL Editor.
 -- One row per shop kit in each Discord guild. The bot keeps state.json and
 -- asthen_bot_state as local/full-state backups; this table is the normalized kit catalog.
