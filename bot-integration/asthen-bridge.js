@@ -33,7 +33,7 @@ function safeEqual(a, b) {
  * @param {number} [opts.port=8787]
  * @param {string} [opts.host='0.0.0.0']
  * @param {number} [opts.leaseMs=15000]  tempo até um pedido não respondido ser oferecido de novo ao plugin
- * @param {(kits: Array<{name:string, enabled:boolean, items:number}>) => void} [opts.onKits]
+ * @param {(kits: Array<{name:string, enabled:boolean, items:number, price:number|null, price_cents:number|null, for_sale:boolean}>) => void} [opts.onKits]
  */
 function startBridge(opts) {
   const { token, port = Number(process.env.DKB_PORT || 8787), host = '127.0.0.1', leaseMs = 15000, maxBody = 64 * 1024, onKits = () => {}, log = console } = opts || {};
