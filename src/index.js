@@ -243,21 +243,37 @@ async function main() {
 
   await client.login(token);
 
-  const shutdown = async signal => {
-    console.log('[Asthen] Encerrando com segurança (' + signal + ')...');
-    try {
-      await flushSupabaseSync();
-    } catch (error) {
-      console.error('[Asthen Supabase] Não foi possível concluir a última sincronização:', error.message);
-    }
-    client.destroy();
-    process.exit(0);
+  let bridgeServer = null;
+  let shutdownPromise = null;
+  const shutdown = signal => {
+    if (shutdownPromise) return shutdownPromise;
+    shutdownPromise = (async () => {
+      console.log('[Asthen] Encerrando com segurança (' + signal + ')...');
+      try {
+        await bridgeServer?.close();
+      } catch (error) {
+        console.error('[Asthen Bridge] Não foi possível fechar a API de integração:', error.message);
+      }
+      try {
+        const flush = flushSupabaseSync();
+        const completed = await Promise.race([
+          flush.then(() => true),
+          new Promise(resolve => setTimeout(() => resolve(false), 20_000))
+        ]);
+        if (!completed) console.error('[Asthen Supabase] Limite de encerramento atingido; os dados locais permanecem salvos e a sincronização será tentada no próximo início.');
+      } catch (error) {
+        console.error('[Asthen Supabase] Não foi possível concluir a última sincronização:', error.message);
+      }
+      client.destroy();
+      process.exit(0);
+    })();
+    return shutdownPromise;
   };
   process.once('SIGINT', () => { void shutdown('SIGINT'); });
   process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
 
   try {
-    const bridge = await startBridge({
+    bridgeServer = await startBridge({
       token: bridgeSecret.token,
       host: process.env.DKB_HOST?.trim() || '127.0.0.1',
       port: Number(process.env.DKB_PORT || 8787),
@@ -292,7 +308,7 @@ async function main() {
           '. Catálogos atualizados: ' + changedGuilds + '.');
       }
     });
-    console.log('[Asthen Bridge] API ativa em http://' + bridge.host + ':' + bridge.port + '.');
+    console.log('[Asthen Bridge] API ativa em http://' + bridgeServer.host + ':' + bridgeServer.port + '.');
   } catch (error) {
     console.error('[Asthen Bridge] Não foi possível iniciar a API de integração:', error.message);
     console.error('[Asthen Bridge] O bot do Discord continuará online, mas a entrega automática ficará indisponível.');
