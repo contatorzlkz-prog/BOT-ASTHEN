@@ -135,6 +135,8 @@ function startBridge(opts) {
         leasedAt: Number(item.leasedAt) || 0,
         leaseUntil: Number(item.leaseUntil) || 0,
         attempts: Number.isInteger(item.attempts) && item.attempts >= 0 ? item.attempts : 0,
+        guildId: typeof item.guildId === 'string' ? item.guildId : null,
+        ticketId: typeof item.ticketId === 'string' ? item.ticketId : null,
         result: isRecord(item.result) ? clone(item.result) : null,
         deliveryUpdate: isRecord(item.deliveryUpdate) ? clone(item.deliveryUpdate) : null
       });
@@ -335,6 +337,7 @@ function startBridge(opts) {
       return { status: 409, body: { success: false, status: 'RESULT_CONFLICT' } };
     }
 
+    const hadWaiter = resultWaiters.has(job.requestId);
     job.result = clone(body);
     job.status = body.status === 'KIT_PENDING'
       ? 'KIT_PENDING'
@@ -344,7 +347,7 @@ function startBridge(opts) {
     persistJobs();
 
     settleResultWaiter(job.requestId, body);
-    notifyCallback(onResult, 'onResult', { request: job.payload, result: body });
+    notifyCallback(onResult, 'onResult', { request: job.payload, result: body, resumed: !hadWaiter });
     return { status: 200, body: { success: true } };
   }
 
