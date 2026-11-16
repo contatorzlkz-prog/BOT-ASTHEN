@@ -152,6 +152,7 @@ BOT-ASTHEN/
 ├── bot-integration/         # API HTTP copiada/adaptada para o bot
 ├── data/                    # Estado local (não versionar dados reais)
 ├── docs/                    # Instalação, comandos e integrações
+├── prompts/                 # Prompts de correção e evolução do bot/plugin
 ├── linux/                   # Scripts para Linux
 ├── src/                     # Código do bot Discord
 ├── supabase/                # SQL de criação e migração das tabelas
@@ -177,8 +178,11 @@ O GitHub Actions executa as mesmas verificações em pull requests e atualizaç�
 
 ## Documentação
 
+- [Prompts de manutenção ASTHEN — índice](prompts/README.md)
+- [Prompt completo do Plugin-ASTHEN 1.3.0](prompts/PLUGIN-ASTHEN-1.3.0-CORRECOES.md)
+- [Prompt de correções do BOT-ASTHEN 2.13.0](prompts/BOT-ASTHEN-2.13.0-CORRECOES.md)
+- [Prompt mestre: integração completa bot + plugin](prompts/INTEGRACAO-ASTHEN-COMPLETA.md)
 - [Túneis HTTPS, hostname asthen-bot e migração para VPS](docs/TUNNEL-SETUP.md)
-- [Prompt atualizado para Plugin-ASTHEN 1.3.0 / Long Polling](docs/PLUGIN-LONG-POLLING-PROMPT.md)
 
 - [Instalação detalhada](docs/INSTALLATION.md)
 - [Lista de comandos](docs/COMMANDS.md)
