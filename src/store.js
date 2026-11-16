@@ -241,7 +241,8 @@ const DEMO_KIT = Object.freeze({
  */
 export function getShopKits(guildId) {
   const config = ensureGuildConfig(guildId);
-  if (config.kits.length > 0 || config.pluginSyncReceived) return config.kits;
+  const pluginKits = config.kits.filter(kit => kit.pluginManaged === true);
+  if (pluginKits.length > 0 || config.pluginSyncReceived) return pluginKits;
   return [{ ...DEMO_KIT }];
 }
 
