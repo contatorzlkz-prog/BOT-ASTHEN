@@ -22,19 +22,82 @@ function authHeaders(extra = {}) {
   };
 }
 
+async function postResult(requestId, extra = {}) {
+  return fetch(baseUrl + '/plugin/v1/result', {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      request_id: requestId,
+      final: true,
+      success: true,
+      status: 'KIT_DELIVERED',
+      ...extra
+    })
+  });
+}
+
 test('a API recusa chamadas sem a chave correta', async () => {
   const response = await fetch(baseUrl + '/plugin/v1/pull');
   assert.equal(response.status, 401);
 });
 
-test('a fila vazia responde HTTP 204', async () => {
+test('a fila vazia responde HTTP 204 sem ativar Long Polling', async () => {
   const response = await fetch(baseUrl + '/plugin/v1/pull', {
     headers: authHeaders()
   });
   assert.equal(response.status, 204);
 });
 
-test('a API entrega pedidos ao plugin e recebe o resultado final', async () => {
+test('Long Polling acorda imediatamente quando um pedido chega', async () => {
+  const requestId = 'test-long-poll-001';
+  const startedAt = Date.now();
+
+  // Abre o pull primeiro; o bot deve acordá-lo quando deliverKit inserir o pedido.
+  const pullPromise = fetch(baseUrl + '/plugin/v1/pull?limit=5&wait_ms=20000', {
+    headers: authHeaders()
+  });
+  await new Promise(resolve => setTimeout(resolve, 100));
+
+  const pendingResult = deliverKit({
+    requestId,
+    player: 'PlayerTeste',
+    platform: 'java',
+    kit: 'Kit_Ferro',
+    timeoutMs: 5000
+  });
+
+  const pull = await pullPromise;
+  assert.equal(pull.status, 200);
+  assert.ok(Date.now() - startedAt < 2000, 'o pull deveria ser acordado sem esperar os 20 segundos');
+  const payload = await pull.json();
+  assert.deepEqual(payload.requests, [{
+    request_id: requestId,
+    player: 'PlayerTeste',
+    platform: 'java',
+    kit: 'Kit_Ferro'
+  }]);
+
+  const posted = await postResult(requestId, {
+    player: 'PlayerTeste',
+    platform: 'java',
+    kit: 'Kit_Ferro',
+    message: 'Kit entregue.'
+  });
+  assert.equal(posted.status, 200);
+  assert.equal((await pendingResult).status, 'KIT_DELIVERED');
+});
+
+test('Long Polling termina com HTTP 204 quando o prazo expira sem pedido', async () => {
+  const startedAt = Date.now();
+  const response = await fetch(baseUrl + '/plugin/v1/pull?wait_ms=100', {
+    headers: authHeaders()
+  });
+  assert.equal(response.status, 204);
+  assert.ok(Date.now() - startedAt >= 70);
+  assert.ok(Date.now() - startedAt < 2000);
+});
+
+test('a API entrega pedidos ao plugin e recebe o resultado final no modo antigo', async () => {
   const requestId = 'test-request-001';
   const pendingResult = deliverKit({
     requestId,
@@ -58,19 +121,11 @@ test('a API entrega pedidos ao plugin e recebe o resultado final', async () => {
     kit: 'Kit_Ferro'
   });
 
-  const posted = await fetch(baseUrl + '/plugin/v1/result', {
-    method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({
-      request_id: requestId,
-      final: true,
-      success: true,
-      status: 'KIT_DELIVERED',
-      player: 'PlayerTeste',
-      platform: 'java',
-      kit: 'Kit_Ferro',
-      message: 'Kit entregue.'
-    })
+  const posted = await postResult(requestId, {
+    player: 'PlayerTeste',
+    platform: 'java',
+    kit: 'Kit_Ferro',
+    message: 'Kit entregue.'
   });
   assert.equal(posted.status, 200);
   assert.deepEqual(await pendingResult, {
@@ -106,19 +161,11 @@ test('a API aceita Bedrock e valida Java separadamente', async () => {
     kit: 'Kit_Ferro'
   });
 
-  const posted = await fetch(baseUrl + '/plugin/v1/result', {
-    method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({
-      request_id: requestId,
-      final: true,
-      success: true,
-      status: 'KIT_DELIVERED',
-      player: 'Elber Player',
-      platform: 'bedrock',
-      kit: 'Kit_Ferro',
-      message: 'Kit entregue.'
-    })
+  const posted = await postResult(requestId, {
+    player: 'Elber Player',
+    platform: 'bedrock',
+    kit: 'Kit_Ferro',
+    message: 'Kit entregue.'
   });
   assert.equal(posted.status, 200);
   assert.equal((await pendingResult).status, 'KIT_DELIVERED');
