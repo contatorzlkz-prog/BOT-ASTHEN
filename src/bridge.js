@@ -67,6 +67,7 @@ export async function startBridge({
   host = process.env.DKB_HOST?.trim() || '127.0.0.1',
   port = Number(process.env.DKB_PORT || 8787),
   leaseMs = 90000,
+  dataDir = process.env.ASTHEN_DATA_DIR?.trim() || path.resolve(process.cwd(), 'data'),
   onKits = () => {},
   onResult = () => {},
   onDeliveryUpdate = () => {},
@@ -85,7 +86,7 @@ export async function startBridge({
     host,
     port: Number(port),
     leaseMs,
-    dataDir: path.resolve(process.env.ASTHEN_DATA_DIR?.trim() || path.resolve(process.cwd(), 'data')),
+    dataDir: path.resolve(dataDir),
     onResult: result => {
       lastQueueStatus = instance.queueCounts?.() || lastQueueStatus;
       try {
@@ -125,6 +126,9 @@ export async function startBridge({
       host,
       port: listeningPort,
       getJob: requestId => instance.getJob(requestId),
+      queueCounts: () => instance.queueCounts(),
+      longPollCount: () => instance.longPollCount(),
+      pendingCount: () => instance.pendingCount(),
       close: async () => {
         await instance.close();
         if (bridgeInstance === instance) {
