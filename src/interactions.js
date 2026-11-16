@@ -599,7 +599,14 @@ async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = 
     ? getShopKits(interaction.guildId).find(item => item.id === kitId)
     : config.kits.find(item => item.id === kitId);
   if (kit?.demo) {
-    return replyPrivate(interaction, 'Este é apenas um kit de demonstração. Nenhuma compra, cobrança Pix, reserva de estoque ou entrega será criada.', [], [makeKitPreviewEmbed(kit)]);
+    const preview = {
+      content: 'Amostra da loja. Este item não pode ser comprado e não cria cobrança, reserva de estoque ou entrega.',
+      embeds: [makeKitPreviewEmbed(kit)],
+      components: []
+    };
+    return updateExistingMessage
+      ? interaction.update(preview)
+      : interaction.reply({ ...preview, flags: MessageFlags.Ephemeral });
   }
   if (!isKitPurchasable(kit)) return replyPrivate(interaction, 'Este kit está indisponível para compra. Ele continua no catálogo para consulta.');
 
