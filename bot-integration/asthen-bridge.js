@@ -44,6 +44,7 @@ function validPayload(payload) {
     && typeof payload.player === 'string'
     && PLAYER_RE.test(payload.player)
     && (payload.platform === 'java' || payload.platform === 'bedrock')
+    && (payload.platform !== 'java' || JAVA_PLAYER_RE.test(payload.player))
     && typeof payload.kit === 'string'
     && KIT_RE.test(payload.kit);
 }
