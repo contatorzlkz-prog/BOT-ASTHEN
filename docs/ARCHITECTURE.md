@@ -63,6 +63,16 @@ Para mudanças pontuais, use `/kit editar`. Para bloquear compras, use `/kit rem
 
 Em caso de timeout, o bot repete uma vez com o mesmo `request_id`. O plugin deve tratar esse identificador como idempotente para impedir uma segunda entrega da mesma compra.
 
+## Bridge persistente — proposta 2.13.0
+
+A fila de entregas deixa de depender somente de uma Map em memória e passa a manter o diário local em data/bridge-queue.json. O pedido é salvo antes de ser oferecido ao plugin. O registro conserva request_id, payload, ticket/guild, status, lease, tentativas e resultado.
+
+Quando o bot reinicia, leases do processo anterior são liberados para nova consulta pelo plugin com o mesmo request_id. Resultado final é salvo antes do HTTP 2xx. Arquivo corrompido impede a inicialização da Bridge e é preservado para recuperação, em vez de virar fila vazia.
+
+O endpoint POST /plugin/v1/delivery-update recebe a transição autenticada de KIT_PENDING para KIT_DELIVERED. Ele só aceita request_id já conhecido e não reserva estoque novamente. A atualização do ticket é idempotente e pode ser reprocessada depois de um reinício.
+
+A fila deve ser preservada junto com a pasta data/ ao atualizar ou mover o bot. Use apenas uma instância do bot por diretório de dados; não compartilhe o mesmo arquivo de fila entre processos simultâneos.
+
 ## Supabase e backup
 
 O estado local é salvo primeiro em `data/state.json`. O Supabase recebe:
