@@ -1,4 +1,4 @@
-# Integração do ASTHEN BOT 2.10.0 com o Plugin-ASTHEN 1.2.0
+# Integração do ASTHEN BOT 2.12.0 com o Plugin-ASTHEN 1.2.0 (Long Polling no plugin requer 1.3.0)
 
 A integração usa o modo poll: o plugin faz as conexões de saída para buscar pedidos e devolver resultados. O servidor Minecraft não precisa aceitar conexões de entrada.
 
@@ -104,6 +104,7 @@ Authorization: Bearer <DKB_SECRET>
 ~~~
 
 - GET /plugin/v1/pull?limit=5: busca pedidos. Sem pedidos, responde HTTP 204.
+- O BOT-ASTHEN 2.12.0 também aceita GET /plugin/v1/pull?limit=5&wait_ms=20000: mantém a conexão aberta por até 20 segundos, acordando-a imediatamente quando um pedido chega. O bot aceita no máximo 25.000 ms e retorna 204 quando o prazo termina sem pedidos. O plugin 1.2.0 continua compatível, mas só a versão 1.3.0 com suporte a Long Polling enviará wait_ms.
 - POST /plugin/v1/result: recebe resultado final de entrega.
 - POST /plugin/v1/kits: recebe a lista completa dos kits do plugin, incluindo `name`, `enabled`, `items`, `price`, `price_cents` e `for_sale`.
 
@@ -158,3 +159,20 @@ A Shulker Box ocupa um único slot do inventário. Se não houver espaço, o plu
 **Verificação do Plugin-ASTHEN 1.2.0 em 15/11/2026:** o GitHub Actions executou os 67 testes JDK-only (67 passaram, 0 falharam) e concluiu `mvn package` com `BUILD SUCCESS` contra a dependência Paper configurada. Consulte [o build 43659388395](https://github.com/ElbsxS1/Plugin-ASTHEN/actions/runs/43659388395).
 
 Isso confirma os testes automatizados e a compilação, mas não executa um servidor Minecraft. A montagem, abertura, cor, slots e retirada da Shulker Box ainda precisam de teste dentro de um servidor Paper real.
+
+
+## 8. Long Polling — BOT-ASTHEN 2.12.0
+
+O bot agora aceita o parâmetro opcional wait_ms em GET /plugin/v1/pull. Exemplo: /plugin/v1/pull?limit=5&wait_ms=20000.
+
+- Com wait_ms, o bot deixa a requisição HTTP aguardando por até 20 segundos.
+- Quando a equipe aprova uma compra, a fila acorda o pull imediatamente e responde HTTP 200 com os pedidos.
+- Quando nada chega, retorna HTTP 204 ao final do tempo.
+- O limite do bot é 25 segundos por pull.
+- A rota antiga sem wait_ms continua funcionando, então o plugin 1.2.0 não quebra.
+
+Para ativar a economia de consultas, atualize também o plugin para a versão 1.3.0 conforme o [prompt de implementação](PLUGIN-LONG-POLLING-PROMPT.md). O prompt propõe wait-seconds: 20 e http-timeout: 35. O plugin 1.2.0 continua usando polling tradicional até ser atualizado.
+
+## 9. Endereço público fixo
+
+Veja [TUNNEL-SETUP.md](TUNNEL-SETUP.md) para tunnel.to Registered Free e Cloudflare Tunnel. O bot continua em 127.0.0.1:8787; somente o hostname HTTPS configurado no plugin muda conforme o provedor do túnel.
