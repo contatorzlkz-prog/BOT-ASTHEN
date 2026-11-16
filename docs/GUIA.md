@@ -22,7 +22,7 @@ bash linux/start-linux.sh
 
 ## 2. Canais do Discord
 
-Use estes quatro nomes. O bot procura os canais automaticamente quando inicia ou reinicia; emoji e separadores não atrapalham a identificação.
+Use estes quatro nomes. O bot procura os canais automaticamente quando inicia ou reinicia; emoji e separadores não atrapalham a identificação. Quando encontra os nomes padrão, eles têm prioridade sobre IDs manuais antigos.
 
 | Canal | Uso |
 |---|---|
@@ -41,7 +41,8 @@ Os campos `atendimento` e `kits` são opcionais quando os canais já existem com
 
 ### Mensagens dos painéis
 
-- Ao iniciar, o bot procura a mensagem do próprio painel e guarda seu ID. Se ela existe, não edita nem republica.
+- Na primeira inicialização da 2.15.0, cada painel legado é atualizado uma vez para corrigir o layout e o texto. A versão do painel fica salva.
+- Nas próximas inicializações, o bot procura a mensagem do próprio painel e preserva o conteúdo sem editar nem republicar.
 - Se a mensagem tiver sido apagada, o bot publica outra.
 - Se o ID local tiver sido perdido, procura os 50 envios mais recentes do próprio bot para evitar duplicar o painel.
 - Sincronizar kits e editar nome/descrição/imagem não altera a mensagem fixa de `#kits`; o catálogo atualizado aparece quando alguém clica em **Abrir kits**.
