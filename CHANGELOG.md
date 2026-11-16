@@ -1,3 +1,42 @@
+## 2.13.0 — candidato em revisão
+
+> Esta versão está em Pull Request e ainda não é uma release publicada. As alterações só devem ser usadas depois da aprovação da PR e da validação do CI.
+
+### Integridade dos dados e testes
+- Testes do armazenamento usam diretório temporário isolado por execução; npm test não deve gravar no data/state.json da instalação.
+- loadStore() distingue arquivo ausente de arquivo corrompido; em corrupção, preserva o original, cria cópia de recuperação e interrompe a inicialização em vez de salvar estado vazio.
+- Adicionada injeção do diretório de dados por ASTHEN_DATA_DIR, mantendo data/ como padrão de produção.
+
+### Bridge e entrega
+- Jobs de entrega passam a ser persistidos em data/bridge-queue.json antes de serem oferecidos ao plugin.
+- A fila recupera jobs leased após reinício usando o mesmo request_id, mantém payload, tentativas, lease e resultado.
+- Resultados são gravados antes da confirmação HTTP; respostas duplicadas idênticas são idempotentes e conflitos de payload são recusados.
+- Adicionado POST /plugin/v1/delivery-update, autenticado, para atualizar um KIT_PENDING previamente conhecido para KIT_DELIVERED.
+- A Bridge reconcilia resultados já persistidos depois de reiniciar, para atualizar o ticket no Discord.
+- Long Polling de 25 segundos e polling antigo continuam disponíveis.
+- Encerramento da Bridge fecha os sockets HTTP pendentes.
+
+### Tickets e operação
+- Retries concorrentes do mesmo ticket são bloqueados.
+- Novo request_id só pode ser criado depois de falha terminal confirmada; timeout e estado ambíguo reutilizam o mesmo ID.
+- KIT_PENDING e KIT_DELIVERED não oferecem uma nova entrega.
+- Falha ao enviar mensagem no Discord não muda o resultado real da entrega Minecraft.
+- Pedidos aprovados em estado recuperável são reconciliados ao iniciar o bot.
+- Permissões de equipe em tickets privados passam a corresponder à visibilidade real do canal.
+- Fechamento e decisões de pagamento geram histórico estruturado no ticket.
+
+### Loja e Supabase
+- Catálogo comercial e menus administrativos usam paginação de 25 opções, permitindo acessar até 200 kits.
+- Flush do Supabase é serializado e aguarda sincronizações concorrentes; shutdown aguarda o flush por até 20 segundos.
+- Adicionados testes para armazenamento isolado, arquivo corrompido, fila persistente, atualização KIT_PENDING, paginação e flush concorrente.
+
+### Compatibilidade e pendências
+- Plugin-ASTHEN 1.2.0 continua compatível com polling e POST /plugin/v1/result existentes.
+- O endpoint de atualização posterior só será usado quando o Plugin-ASTHEN 1.3.0 implementar a chamada POST /plugin/v1/delivery-update.
+- A fila persistente fica em data/bridge-queue.json. Preserve a pasta data/ durante atualização.
+- Ainda são necessários testes manuais com Discord real e integração Paper/Geyser/Floodgate. A PR não declara esses testes como concluídos.
+
+---
 ## 2.11.0 — 15/11/2026
 
 ### Loja e estoque semanal
