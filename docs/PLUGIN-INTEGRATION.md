@@ -1,4 +1,4 @@
-# Integração do ASTHEN BOT 2.14.0 com Plugin-ASTHEN 1.2.0 / 1.3.0
+# Integração do ASTHEN BOT 2.15.0 com Plugin-ASTHEN 1.2.0 / 1.3.0
 
 A integração usa o modo poll: o plugin faz as conexões de saída para buscar pedidos e devolver resultados. O servidor Minecraft não precisa aceitar conexões de entrada.
 
@@ -112,7 +112,7 @@ Sem plugin conectado ou antes da primeira sincronização, o painel mostra um Ki
 
 ## 5. Contrato HTTP
 
-**Long Polling:** o BOT-ASTHEN 2.14.0 aceita o parâmetro opcional `wait_ms` em GET /plugin/v1/pull. O plugin 1.2.0 não envia esse parâmetro e continua no polling tradicional. O plugin 1.3.0 deve enviar `wait_ms=20000`, aceitar HTTP 204 como resposta normal e usar timeout HTTP de pelo menos 30 segundos (configuração recomendada: 35 segundos).
+**Long Polling:** o BOT-ASTHEN 2.15.0 aceita o parâmetro opcional `wait_ms` em GET /plugin/v1/pull. O plugin 1.2.0 não envia esse parâmetro e continua no polling tradicional. O plugin 1.3.0 deve enviar `wait_ms=20000`, aceitar HTTP 204 como resposta normal e usar timeout HTTP de pelo menos 30 segundos (configuração recomendada: 35 segundos).
 
 Todas as rotas usam:
 
@@ -151,7 +151,7 @@ O mesmo request_id deve ser reutilizado em uma repetição de entrega para evita
 
 ## 7. Supabase
 
-Em instalação nova ou existente, execute o arquivo completo `supabase/SETUP.sql` no SQL Editor. Ele é idempotente e cria as três tabelas e a função de reserva necessárias sem apagar os dados existentes. Não há mais uma tabela de kits separada nem migrações 002–005 para executar. Consulte [o guia do Supabase](SUPABASE.md).
+Em instalação nova ou existente, execute o arquivo completo `supabase/SETUP.sql` no SQL Editor. Ele é idempotente e cria as três tabelas e a função de reserva necessárias sem apagar os dados existentes. Não há mais uma tabela de kits separada nem migrações 002–005 para executar. Consulte [o guia do projeto](GUIA.md#supabase).
 
 ### Preço e disponibilidade — contrato do Plugin-ASTHEN 1.2.0
 
