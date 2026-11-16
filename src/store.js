@@ -58,9 +58,11 @@ function defaultGuildConfig() {
   return {
     supportPanelChannelId: null,
     supportPanelMessageId: null,
+    supportPanelVersion: null,
     supportCategoryId: null,
     shopPanelChannelId: null,
     shopPanelMessageId: null,
+    shopPanelVersion: null,
     shopCategoryId: null,
     logsChannelId: null,
     buyersChannelId: null,
