@@ -12,7 +12,7 @@ on:
       - docs/INSTALLATION.md
       - docs/PLUGIN-INTEGRATION.md
       - docs/ARCHITECTURE.md
-      - supabase/SETUP.sql
+      - supabase/**
       - .github/workflows/release-zip.yml
 
 permissions:
