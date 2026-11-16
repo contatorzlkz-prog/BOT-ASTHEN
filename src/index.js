@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { Client, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
 import { commandDefinitions } from './commands.js';
-import { findTicketByDeliveryRequestId, getGuildConfig, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
+import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
 import { flushSupabaseSync } from './supabase.js';
 import { makeShopPanel, makeSupportPanel } from './ui.js';
 import { handleInteraction } from './interactions.js';
@@ -85,35 +85,53 @@ async function handleBridgeResult(client, event) {
     deliveryStatus: status,
     deliveryResponse: String(result.message || ''),
     deliveryUpdatedAt: new Date().toISOString(),
-    deliveryError: null
+    deliveryError: null,
+    deliveryResultNotificationPending: true
+  });
+  appendTicketHistory(ticket.channelId, {
+    type: 'delivery_result',
+    eventId: 'delivery-result:' + requestId,
+    requestId,
+    status,
+    message: String(result.message || '').slice(0, 500)
   });
 
   // Normal in-process delivery displays its own response. This path is for
   // results recovered after a bot restart or received after the original timeout.
   if (!event.resumed) return;
+  await retryPendingDeliveryNotification(client, ticket.channelId);
+}
 
+async function retryPendingDeliveryNotification(client, channelId) {
+  const ticket = listTickets().find(item => item.channelId === channelId);
+  if (!ticket || ticket.deliveryResultNotificationPending !== true) return;
   const channel = await findTicketChannel(client, ticket);
   if (!channel?.send) {
-    console.warn('[Asthen Bridge] Resultado persistido, mas o canal do ticket não está disponível:', ticket.channelId);
+    console.warn('[Asthen Bridge] Resultado salvo, mas o canal do ticket não está disponível:', ticket.channelId);
     return;
   }
 
-  const pendingReason = status === 'KIT_PENDING' && /offline/i.test(String(result.message || ''))
-    ? 'offline'
-    : 'inventory';
+  const result = {
+    status: String(ticket.deliveryStatus || 'UNKNOWN'),
+    message: String(ticket.deliveryResponse || 'O plugin respondeu à solicitação.'),
+    player: ticket.minecraftNick,
+    platform: ticket.platform,
+    kit: ticket.kitDisplayName || ticket.kitName,
+    pendingReason: ticket.deliveryStatus === 'KIT_PENDING' && /offline/i.test(String(ticket.deliveryResponse || ''))
+      ? 'offline'
+      : 'inventory'
+  };
   await channel.send({
-    content: 'Atualização recuperada da entrega após reinício/timeout da integração.',
-    embeds: [makeDeliveryEmbed({
-      ...result,
-      message: String(result.message || 'O plugin respondeu à solicitação.'),
-      pendingReason,
-      player: result.player || ticket.minecraftNick,
-      platform: result.platform || ticket.platform,
-      kit: ticket.kitDisplayName || ticket.kitName
-    })],
-    components: status === 'KIT_DELIVERED' || status === 'KIT_PENDING'
+    content: 'Resultado da entrega recuperado pela integração.',
+    embeds: [makeDeliveryEmbed(result)],
+    components: ticket.deliveryStatus === 'KIT_DELIVERED' || ticket.deliveryStatus === 'KIT_PENDING'
       ? [makeCloseRow()]
       : []
+  });
+  updateTicket(ticket.channelId, {
+    deliveryResultNotificationPending: false,
+    deliveryResultNotificationSent: true,
+    deliveryNotificationError: null
   });
 }
 
@@ -124,17 +142,27 @@ async function handleBridgeDeliveryUpdate(client, event) {
     console.error('[Asthen Bridge] Atualização de entrega sem ticket local:', requestId);
     return;
   }
-  if (ticket.deliveryStatus === 'KIT_DELIVERED') return;
 
   const update = event.update || {};
+  const alreadySent = ticket.deliveryUpdateNotificationSent === true;
   updateTicket(ticket.channelId, {
     deliveryStatus: 'KIT_DELIVERED',
     deliveryResponse: String(update.message || 'Kit entregue após retirada da pendência.'),
     deliveryUpdatedAt: update.updated_at || new Date().toISOString(),
     deliveryError: null,
-    deliveryCompletedAt: update.updated_at || new Date().toISOString()
+    deliveryCompletedAt: update.updated_at || new Date().toISOString(),
+    deliveryUpdateNotificationPending: !alreadySent
+  });
+  appendTicketHistory(ticket.channelId, {
+    type: 'delivery_update',
+    eventId: 'delivery-update:' + requestId,
+    requestId,
+    status: 'KIT_DELIVERED',
+    message: String(update.message || '').slice(0, 500),
+    at: update.updated_at || new Date().toISOString()
   });
 
+  if (alreadySent) return;
   const channel = await findTicketChannel(client, ticket);
   if (!channel?.send) {
     console.warn('[Asthen Bridge] Kit marcado como entregue, mas o canal do ticket não está disponível:', ticket.channelId);
@@ -153,6 +181,35 @@ async function handleBridgeDeliveryUpdate(client, event) {
     components: [makeCloseRow()],
     allowedMentions: { users: [ticket.userId], roles: [] }
   });
+  updateTicket(ticket.channelId, {
+    deliveryUpdateNotificationPending: false,
+    deliveryUpdateNotificationSent: true
+  });
+}
+
+async function retryPendingTicketNotifications(client) {
+  for (const ticket of listTickets()) {
+    try {
+      if (ticket.deliveryResultNotificationPending === true) {
+        await retryPendingDeliveryNotification(client, ticket.channelId);
+      }
+      if (ticket.deliveryUpdateNotificationPending === true
+          && ticket.deliveryUpdateNotificationSent !== true) {
+        await handleBridgeDeliveryUpdate(client, {
+          request: { request_id: ticket.deliveryRequestId },
+          update: {
+            request_id: ticket.deliveryRequestId,
+            status: 'KIT_DELIVERED',
+            message: ticket.deliveryResponse,
+            updated_at: ticket.deliveryCompletedAt || ticket.deliveryUpdatedAt
+          }
+        });
+      }
+    } catch (error) {
+      console.error('[Asthen] Não foi possível recuperar uma notificação pendente do ticket ' +
+        ticket.channelId + ':', error.message);
+    }
+  }
 }
 
 async function refreshConfiguredPanels(client) {
@@ -219,6 +276,7 @@ async function main() {
     console.log(`Bot online como ${readyClient.user.tag}.`);
     console.log(`Servidores conectados: ${readyClient.guilds.cache.size}`);
     await refreshConfiguredPanels(readyClient);
+    await retryPendingTicketNotifications(readyClient);
   });
 
   client.on(Events.InteractionCreate, async interaction => {
