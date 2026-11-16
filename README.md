@@ -174,8 +174,6 @@ O GitHub Actions executa as mesmas verificações em pull requests e atualizaç�
 
 - [Prompts de manutenção ASTHEN — índice](prompts/README.md)
 - [Prompt completo do Plugin-ASTHEN 1.3.0](prompts/PLUGIN-ASTHEN-1.3.0-CORRECOES.md)
-- [Prompt de correções do BOT-ASTHEN 2.13.0](prompts/BOT-ASTHEN-2.13.0-CORRECOES.md)
-- [Prompt mestre: integração completa bot + plugin](prompts/INTEGRACAO-ASTHEN-COMPLETA.md)
 - [Túneis HTTPS, hostname asthen-bot e migração para VPS](docs/TUNNEL-SETUP.md)
 
 - [Instalação detalhada](docs/INSTALLATION.md)
