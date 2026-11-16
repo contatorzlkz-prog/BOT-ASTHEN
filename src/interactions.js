@@ -2,6 +2,7 @@ import {
   ActionRowBuilder,
   ButtonStyle,
   ModalBuilder,
+  MessageFlags,
   PermissionsBitField,
   TextInputBuilder,
   TextInputStyle
@@ -141,7 +142,7 @@ function weeklyStockErrorMessage(error) {
 }
 
 function replyPrivate(interaction, content, components = [], embeds = []) {
-  const payload = { content, components, embeds, ephemeral: true };
+  const payload = { content, components, embeds, flags: MessageFlags.Ephemeral };
   if (interaction.deferred || interaction.replied) return interaction.followUp(payload);
   return interaction.reply(payload);
 }
@@ -369,7 +370,7 @@ async function handleKitCommand(interaction) {
   return interaction.reply({
     content: 'Os kits são importados automaticamente do Minecraft. Selecione um para editar nome exibido, descrição ou imagem.',
     components: makeKitAdminComponents(pluginKits, 0),
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
 }
 
@@ -444,7 +445,7 @@ async function handleKitEditModal(interaction) {
     content: 'Informação do kit atualizada. Você pode selecionar outro campo para editar.',
     embeds: updated ? [makeKitPreviewEmbed(updated)] : [],
     components: updated ? [makeKitEditFieldMenu(updated)] : [],
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
 }
 
@@ -509,7 +510,7 @@ async function openCatalog(interaction) {
       return interaction.reply({
         content: 'Você já tem um pedido em andamento. Continue a conversa no canal existente.',
         components: [makeChannelLinkRow(channel)],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   }
@@ -541,7 +542,7 @@ async function openCatalog(interaction) {
           content: 'Você já iniciou uma compra. Confira os dados antes de continuar.',
           embeds: [makePurchaseReviewEmbed(existingDraft)],
           components: [makePurchaseReviewControls(existingDraft)],
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       }
       if (existingDraft.minecraftNick) {
@@ -550,7 +551,7 @@ async function openCatalog(interaction) {
         return interaction.reply({
           content: 'Escolha se você joga na edição Java ou Bedrock.',
           components: [makePlatformControls(existingDraft)],
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       }
       existingDraft.stage = 'selected';
@@ -559,7 +560,7 @@ async function openCatalog(interaction) {
         content: CONFIG.shop.previewPrompt,
         embeds: [makeKitPreviewEmbed(existingDraft.kit)],
         components: [makeKitPreviewControls(existingDraft)],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
     deletePurchaseDraft(interaction.guildId, interaction.user.id);
@@ -568,7 +569,7 @@ async function openCatalog(interaction) {
   return interaction.reply({
     content: catalogPromptText(stockedKits),
     components: makeCatalogComponents(stockedKits, 0),
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
 }
 
@@ -645,7 +646,7 @@ async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = 
   };
   return updateExistingMessage
     ? interaction.update(payload)
-    : interaction.reply({ ...payload, ephemeral: true });
+    : interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
 }
 
 async function handleCatalogPage(interaction, requestedPage) {
@@ -1012,7 +1013,7 @@ async function decideOrder(interaction, decision) {
         console.error('[Asthen Stock] Não foi possível reservar o estoque:', error);
         await interaction.followUp({
           content: 'Pagamento não aprovado pelo bot: não consegui reservar uma das 10 unidades semanais no Supabase. Confira a conexão e a migração 005; depois tente novamente.',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -1020,7 +1021,7 @@ async function decideOrder(interaction, decision) {
       if (!reservation.ok) {
         await interaction.followUp({
           content: 'Limite semanal esgotado: as 10 unidades deste kit já foram reservadas nesta semana. Não confirme este pagamento como aprovado; a equipe precisa resolver o pedido com o comprador.',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         try {
           await interaction.message.edit({
@@ -1144,9 +1145,9 @@ async function notifyStaffPrivately(interaction, content) {
   if (!interaction) return;
   try {
     if (interaction.deferred || interaction.replied) {
-      await interaction.followUp({ content, ephemeral: true });
+      await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
     } else {
-      await interaction.reply({ content, ephemeral: true });
+      await interaction.reply({ content, flags: MessageFlags.Ephemeral });
     }
   } catch (error) {
     console.warn('[Asthen] Não foi possível enviar o aviso privado à equipe:', error.message);
@@ -1391,7 +1392,7 @@ async function setLegacyTicketPlatform(interaction, platform) {
   }
   if (platform !== 'java' && platform !== 'bedrock') return replyPrivate(interaction, 'Escolha Java ou Bedrock.');
   updateTicket(interaction.channelId, { platform });
-  await interaction.reply({ content: 'Plataforma salva. A entrega será solicitada agora.', ephemeral: true });
+  await interaction.reply({ content: 'Plataforma salva. A entrega será solicitada agora.', flags: MessageFlags.Ephemeral });
   void processApprovedDelivery(interaction.channel, getTicket(interaction.channelId), { interaction })
     .catch(error => console.error('[Asthen] Falha na entrega de pedido antigo:', error));
 }
@@ -1443,7 +1444,7 @@ async function retryApprovedDelivery(interaction, mode) {
       content: mode === 'new'
         ? 'Uma nova tentativa foi autorizada após falha final confirmada.'
         : 'A tentativa será reenviada com o mesmo identificador, sem criar outra compra.',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   } catch (error) {
     deliveryAttemptsInFlight.delete(ticket.channelId);
@@ -1459,7 +1460,7 @@ async function retryApprovedDelivery(interaction, mode) {
 }
 
 async function openSupportTicket(interaction, kind) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const result = await createPrivateTicket({
     guild: interaction.guild,
     user: interaction.user,
