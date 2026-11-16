@@ -38,7 +38,7 @@ Para vincular manualmente os canais e o cargo da equipe:
 /configurar atendimento:#atendimento kits:#kits logs:#logs compradores:#compradores equipe:@Equipe
 ~~~
 
-O bot preserva as mensagens dos painéis ao reiniciar. Só publica outra quando não encontra a mensagem anterior.
+O bot reconhece os canais pelo nome. Na primeira inicialização da 2.15.0, atualiza os painéis antigos uma vez; depois preserva as mensagens nos reinícios.
 
 ## Loja
 
