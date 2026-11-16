@@ -102,12 +102,18 @@ async function discoverGuildChannels(guild) {
   ];
   for (const key of channelKeys) {
     const current = config[key] ? guild.channels.cache.get(config[key]) : null;
-    if (current?.type === ChannelType.GuildText) continue;
     const detectedId = found[key] || null;
-    if (detectedId !== config[key]) changes[key] = detectedId;
-    if (!detectedId && messageKeys[key]) {
-      changes[messageKeys[key].message] = null;
-      changes[messageKeys[key].version] = null;
+    // An exact standard channel name wins over a stale manual ID.
+    if (detectedId) {
+      if (detectedId !== config[key]) changes[key] = detectedId;
+      continue;
+    }
+    if (config[key] && current?.type !== ChannelType.GuildText) {
+      changes[key] = null;
+      if (messageKeys[key]) {
+        changes[messageKeys[key].message] = null;
+        changes[messageKeys[key].version] = null;
+      }
     }
   }
 
