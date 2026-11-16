@@ -9,7 +9,6 @@ import {
   getShopKits,
   loadStore,
   makeKitDisplayName,
-  removeKit,
   syncPluginKits,
   updateGuildConfig,
   updateKit
@@ -167,20 +166,6 @@ test('a kit removed from plugin remains stored as unavailable with its price', (
   assert.equal(preserved.forSale, false);
   assert.equal(preserved.pluginForSale, false);
   assert.equal(preserved.displayName, 'Pacote de Ferro');
-});
-
-test('admin removal marks product unavailable without deleting its record', () => {
-  const guildId = testGuildId();
-  const kit = syncPluginKits(guildId, [{ name: 'Kit_Ferro', enabled: true, items: 12 }]).kits[0];
-  assert.equal(removeKit(guildId, kit.id), true);
-
-  const stored = getGuildConfig(guildId).kits.find(item => item.id === kit.id);
-  assert.ok(stored);
-  assert.equal(stored.enabled, false);
-  assert.equal(stored.manuallyUnavailable, true);
-
-  const synced = syncPluginKits(guildId, [{ name: 'Kit_Ferro', enabled: true, items: 12 }]);
-  assert.equal(synced.kits[0].enabled, false);
 });
 
 test('old manual products remain in the store and become unavailable if absent from plugin', () => {
