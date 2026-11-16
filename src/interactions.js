@@ -1292,10 +1292,11 @@ async function deliverWithTimeoutRetry(payload) {
 
 async function processApprovedDelivery(channel, ticket, options = {}) {
   if (!ticket?.channelId) throw new Error('Ticket inválido para iniciar entrega.');
-  if (deliveryAttemptsInFlight.has(ticket.channelId)) {
+  const alreadyHeld = deliveryAttemptsInFlight.has(ticket.channelId);
+  if (alreadyHeld && options.lockAlreadyHeld !== true) {
     return { skipped: true, reason: 'delivery_in_flight' };
   }
-  deliveryAttemptsInFlight.add(ticket.channelId);
+  if (!alreadyHeld) deliveryAttemptsInFlight.add(ticket.channelId);
   try {
     return await processApprovedDeliveryInternal(channel, ticket, options);
   } finally {
@@ -1304,6 +1305,23 @@ async function processApprovedDelivery(channel, ticket, options = {}) {
 }
 
 async function processApprovedDeliveryInternal(channel, ticket, { newRequest = false, interaction = null } = {}) {
+  const retryableFinalFailures = new Set([
+    'PLAYER_OFFLINE',
+    'PLATFORM_MISMATCH',
+    'PLATFORM_UNVERIFIABLE',
+    'KIT_NOT_FOUND',
+    'KIT_DISABLED',
+    'INVENTORY_FULL',
+    'DELIVERY_DISABLED',
+    'KIT_CORRUPT',
+    'INVALID_REQUEST'
+  ]);
+  if (ticket.deliveryStatus === 'KIT_PENDING' || ticket.deliveryStatus === 'KIT_DELIVERED') {
+    throw new Error('Este pedido já está pendente/entregue e não pode gerar outra entrega.');
+  }
+  if (newRequest && !retryableFinalFailures.has(ticket.deliveryStatus)) {
+    throw new Error('Não é seguro criar outro request_id para o estado ' + String(ticket.deliveryStatus || 'desconhecido') + '.');
+  }
   if (!ticket.platform) {
     updateTicket(ticket.channelId, {
       deliveryStatus: 'PLATFORM_REQUIRED',
@@ -1441,14 +1459,25 @@ async function retryApprovedDelivery(interaction, mode) {
       '). Reutilize o mesmo identificador ou faça a reconciliação com o Minecraft primeiro.');
   }
 
-  await interaction.reply({
-    content: mode === 'new'
-      ? 'Uma nova tentativa foi autorizada após falha final confirmada.'
-      : 'A tentativa será reenviada com o mesmo identificador, sem criar outra compra.',
-    ephemeral: true
+  deliveryAttemptsInFlight.add(ticket.channelId);
+  try {
+    await interaction.reply({
+      content: mode === 'new'
+        ? 'Uma nova tentativa foi autorizada após falha final confirmada.'
+        : 'A tentativa será reenviada com o mesmo identificador, sem criar outra compra.',
+      ephemeral: true
+    });
+  } catch (error) {
+    deliveryAttemptsInFlight.delete(ticket.channelId);
+    throw error;
+  }
+  void processApprovedDelivery(interaction.channel, ticket, {
+    newRequest: mode === 'new',
+    interaction,
+    lockAlreadyHeld: true
+  }).catch(error => {
+    console.error('[Asthen] Falha ao tentar entregar o kit:', error);
   });
-  void processApprovedDelivery(interaction.channel, ticket, { newRequest: mode === 'new', interaction })
-    .catch(error => console.error('[Asthen] Falha ao tentar entregar o kit:', error));
 }
 
 async function openSupportTicket(interaction, kind) {
