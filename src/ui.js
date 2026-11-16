@@ -82,15 +82,13 @@ export function makeSupportPanel() {
     .setColor(brandColor())
     .setTitle('Atendimento')
     .setDescription(
-      'Precisa de ajuda? Selecione o departamento que melhor combina com o assunto. ' +
-      'O bot abrirá um canal privado, visível somente para você e para a equipe autorizada.\\n\\n' +
-      'Explique o que aconteceu e envie logs ou imagens quando forem úteis. Escolha apenas uma opção; ' +
-      'a equipe continuará o atendimento dentro do próprio canal.'
+      'Precisa de ajuda? Escolha o assunto no menu abaixo. O bot abrirá um canal privado para você e para a equipe de atendimento.\n\n' +
+      'Explique o que aconteceu e envie prints ou logs quando ajudarem. A equipe continuará a conversa nesse canal.'
     );
 
   const menu = new StringSelectMenuBuilder()
     .setCustomId('support:select')
-    .setPlaceholder('Selecione um departamento para abrir ticket...')
+    .setPlaceholder('Selecione o assunto do atendimento...')
     .setMinValues(1)
     .setMaxValues(1)
     .addOptions(supportOptions.map(option => ({
@@ -106,22 +104,19 @@ export function makeSupportPanel() {
 export function makeShopPanel(kits = []) {
   const embed = new EmbedBuilder()
     .setColor(brandColor())
-    .setTitle('Loja de kits')
-    .setDescription(
-      kits.length
-        ? CONFIG.shop.panelDescription
-        : 'A loja ainda não recebeu kits do servidor.'
-    );
+    .setTitle('Kits')
+    .setDescription(CONFIG.shop.panelDescription);
 
+  // The catalogue remains open even when its only entry is the non-purchasable demo.
+  // Actual purchase availability is checked after the customer selects a real kit.
   const button = new ButtonBuilder()
     .setCustomId('shop:catalog')
-    .setLabel(kits.some(canBuyKit) ? 'Escolher kit' : kits.length ? 'Ver catálogo' : 'Loja indisponível')
+    .setLabel('Abrir kits')
     .setStyle(ButtonStyle.Primary)
-    .setDisabled(!kits.length);
+    .setDisabled(false);
 
   return { embeds: [embed], components: [new ActionRowBuilder().addComponents(button)] };
 }
-
 
 export function makeCatalogMenu(kits = [], page = 0) {
   const pageSize = Math.min(25, Math.max(1, Number(CONFIG.shop.maxKits) || 25));
