@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeCatalogMenu, makeCatalogPaginationRow } from '../src/ui.js';
+import { makeCatalogMenu, makeCatalogPaginationRow, makeKitAdminMenu, makeKitAdminPaginationRow } from '../src/ui.js';
 
 function makeKits(count) {
   return Array.from({ length: count }, (_, index) => ({
@@ -49,4 +49,29 @@ test('paginação desabilita anterior na primeira e próxima na última página'
   const last = makeCatalogPaginationRow(7, 8).toJSON().components;
   assert.equal(last[0].disabled, false);
   assert.equal(last[2].disabled, true);
+});
+
+
+test('menus administrativos também exibem todos os 200 kits em páginas de 25', () => {
+  const kits = makeKits(200);
+  const allValues = [];
+
+  for (let page = 0; page < 8; page += 1) {
+    const row = makeKitAdminMenu(kits, 'kit:edit-select', page).toJSON();
+    const menu = row.components[0];
+    assert.equal(menu.options.length, 25);
+    assert.equal(menu.custom_id, 'kit:edit-select');
+    allValues.push(...menu.options.map(option => option.value));
+  }
+
+  assert.equal(allValues.length, 200);
+  assert.equal(new Set(allValues).size, 200);
+});
+
+test('paginação administrativa mantém ação vinculada e desabilita limites', () => {
+  const first = makeKitAdminPaginationRow(0, 2, 'remove').toJSON().components;
+  assert.equal(first[0].custom_id, 'kit:admin-page:remove:-1');
+  assert.equal(first[0].disabled, true);
+  assert.equal(first[2].custom_id, 'kit:admin-page:remove:1');
+  assert.equal(first[2].disabled, false);
 });
