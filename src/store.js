@@ -85,8 +85,8 @@ function ensureGuildConfig(guildId) {
   delete config.pixKey;
   delete config.pixInstructions;
 
-  // Preserve all existing products. Missing plugin kits are marked unavailable by syncPluginKits.
-    config.kits = config.kits.map(kit => ({
+  // Preserve previous plugin records; getShopKits hides legacy manual entries.
+  config.kits = config.kits.map(kit => ({
     ...kit,
     displayName: kit.displayName || makeKitDisplayName(kit.name),
     description: String(kit.description || ''),
