@@ -290,3 +290,13 @@ test('loja ignora cadastros manuais antigos que não vieram do plugin', () => {
   assert.equal(visible.length, 1);
   assert.equal(visible[0].demo, true);
 });
+test('estado antigo de bloqueio manual não sobrepõe a disponibilidade do Minecraft', () => {
+  const guildId = testGuildId();
+  const payload = [{ name: 'Kit_Ferro', enabled: true, items: 12, price: 19.9, price_cents: 1990, for_sale: true }];
+  const first = syncPluginKits(guildId, payload).kits[0];
+  updateKit(guildId, first.id, { manuallyUnavailable: true, enabled: false, forSale: false });
+  const refreshed = syncPluginKits(guildId, payload).kits[0];
+  assert.equal(refreshed.manuallyUnavailable, false);
+  assert.equal(refreshed.enabled, true);
+  assert.equal(refreshed.forSale, true);
+});
