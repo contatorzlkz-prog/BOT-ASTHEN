@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import { Client, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
+import { Client, Events, GatewayIntentBits, MessageFlags, REST, Routes } from 'discord.js';
 import { commandDefinitions } from './commands.js';
-import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
+import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, getShopKits, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
 import { flushSupabaseSync } from './supabase.js';
 import { makeShopPanel, makeSupportPanel } from './ui.js';
 import { handleInteraction, recoverApprovedDeliveries } from './interactions.js';
@@ -237,7 +237,7 @@ async function refreshConfiguredPanels(client) {
       guild,
       config.shopPanelChannelId,
       config.shopPanelMessageId,
-      makeShopPanel(config.kits),
+      makeShopPanel(getShopKits(guild.id)),
       'loja',
       { channel: 'shopPanelChannelId', message: 'shopPanelMessageId' }
     );
@@ -302,7 +302,7 @@ async function main() {
         : error?.message || 'Não foi possível concluir essa ação. Verifique as configurações e tente novamente.';
       try {
         if (interaction.isRepliable()) {
-          const payload = { content: message, ephemeral: true };
+          const payload = { content: message, flags: MessageFlags.Ephemeral };
           if (interaction.deferred || interaction.replied) await interaction.followUp(payload);
           else await interaction.reply(payload);
         }
@@ -365,7 +365,7 @@ async function main() {
               guild,
               config.shopPanelChannelId,
               config.shopPanelMessageId,
-              makeShopPanel(config.kits),
+              makeShopPanel(getShopKits(guild.id)),
               'loja',
               { channel: 'shopPanelChannelId', message: 'shopPanelMessageId' }
             );

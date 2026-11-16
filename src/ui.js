@@ -139,20 +139,22 @@ export function makeCatalogMenu(kits = [], page = 0) {
       const hasWeeklyStock = Number.isInteger(kit.weeklyRemaining);
       const soldOut = hasWeeklyStock && kit.weeklyRemaining <= 0;
       const available = canBuyKit(kit);
-      const reason = soldOut
-        ? 'Limite semanal atingido · volta domingo 00h'
-        : kit.missingFromPlugin
-          ? 'Removido do servidor'
-          : kit.manuallyUnavailable
-            ? 'Indisponível pela equipe'
-            : kit.pluginEnabled === false || kit.enabled === false
-              ? 'Desativado no servidor'
-              : kit.pluginForSale !== true
-                ? (kit.priceCents ? 'Venda desativada no plugin' : 'Preço ainda não definido no Minecraft')
-                : String(kit.price || 'Preço indisponível') +
-                  (hasWeeklyStock ? ' · ' + kit.weeklyRemaining + '/' + (kit.weeklyLimit || 10) + ' esta semana' : '');
+      const reason = kit.demo
+        ? 'Amostra visual · não gera compra nem cobrança'
+        : soldOut
+          ? 'Limite semanal atingido · volta domingo 00h'
+          : kit.missingFromPlugin
+            ? 'Removido do servidor'
+            : kit.manuallyUnavailable
+              ? 'Indisponível pela equipe'
+              : kit.pluginEnabled === false || kit.enabled === false
+                ? 'Desativado no servidor'
+                : kit.pluginForSale !== true
+                  ? (kit.priceCents ? 'Venda desativada no plugin' : 'Preço ainda não definido no Minecraft')
+                  : String(kit.price || 'Preço indisponível') +
+                    (hasWeeklyStock ? ' · ' + kit.weeklyRemaining + '/' + (kit.weeklyLimit || 10) + ' esta semana' : '');
       return {
-        label: (soldOut ? 'Esgotado · ' : available ? '' : 'Indisponível · ')
+        label: (kit.demo ? 'DEMO · ' : soldOut ? 'Esgotado · ' : available ? '' : 'Indisponível · ')
           .concat(displayKitName(kit)).slice(0, 100),
         description: reason.slice(0, 100),
         value: String(kit.id)
@@ -183,13 +185,13 @@ export function makeCatalogPaginationRow(page, totalPages) {
   );
 }
 
-export function makeKitAdminMenu(kits = [], customId = 'kit:admin:select', page = 0) {
+export function makeKitAdminMenu(kits = [], page = 0) {
   const pageSize = 25;
   const totalPages = Math.max(1, Math.ceil(kits.length / pageSize));
   const currentPage = Math.min(totalPages - 1, Math.max(0, Number.isInteger(page) ? page : 0));
   const listed = kits.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   const menu = new StringSelectMenuBuilder()
-    .setCustomId(customId)
+    .setCustomId('kit:edit-select')
     .setPlaceholder('Selecione um kit · página ' + (currentPage + 1) + '/' + totalPages)
     .setMinValues(1)
     .setMaxValues(1)
@@ -201,22 +203,22 @@ export function makeKitAdminMenu(kits = [], customId = 'kit:admin:select', page 
   return new ActionRowBuilder().addComponents(menu);
 }
 
-export function makeKitAdminPaginationRow(page, totalPages, action) {
+export function makeKitAdminPaginationRow(page, totalPages) {
   if (totalPages <= 1) return null;
   const currentPage = Math.min(totalPages - 1, Math.max(0, Number(page) || 0));
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId('kit:admin-page:' + action + ':' + (currentPage - 1))
+      .setCustomId('kit:admin-page:edit:' + (currentPage - 1))
       .setLabel('Anterior')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(currentPage <= 0),
     new ButtonBuilder()
-      .setCustomId('kit:admin-page:' + action + ':info')
+      .setCustomId('kit:admin-page:edit:info')
       .setLabel('Página ' + (currentPage + 1) + '/' + totalPages)
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(true),
     new ButtonBuilder()
-      .setCustomId('kit:admin-page:' + action + ':' + (currentPage + 1))
+      .setCustomId('kit:admin-page:edit:' + (currentPage + 1))
       .setLabel('Próxima')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(currentPage >= totalPages - 1)
@@ -230,27 +232,12 @@ export function makeKitEditFieldMenu(kit) {
     .setMinValues(1)
     .setMaxValues(1)
     .addOptions(
-      { label: 'Nome exibido na loja', description: 'Nome bonito que o cliente verá, sem underscores.', value: 'displayName' },
-      { label: 'Descrição', description: 'Texto que aparece na prévia.', value: 'description' },
-      { label: 'Imagem', description: 'Link HTTPS da imagem do kit.', value: 'imageUrl' },
-      { label: 'Reabrir na loja', description: 'Remove o bloqueio manual; o plugin ainda precisa permitir a venda.', value: 'availability' }
+      { label: 'Nome exibido na loja', description: 'Nome que o cliente verá no catálogo.', value: 'displayName' },
+      { label: 'Descrição', description: 'Texto que aparece na prévia da loja.', value: 'description' },
+      { label: 'Imagem', description: 'Link HTTPS da imagem do kit.', value: 'imageUrl' }
     );
   return new ActionRowBuilder().addComponents(menu);
 }
-
-export function makeKitRemoveControls(kitId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('kit:remove:confirm:' + kitId)
-      .setLabel('Marcar indisponível')
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId('kit:remove:cancel')
-      .setLabel('Cancelar')
-      .setStyle(ButtonStyle.Secondary)
-  );
-}
-
 
 export function makeKitPreviewEmbed(kit) {
   const embed = new EmbedBuilder()

@@ -82,6 +82,7 @@ function startBridge(opts) {
   const pendingPulls = new Set();
   let lastKits = [];
   let closing = false;
+  let lastUnauthorizedWarningAt = 0;
 
   function persistJobs() {
     fs.mkdirSync(dataDir, { recursive: true });
@@ -476,7 +477,13 @@ function startBridge(opts) {
     try {
       const match = /^Bearer\s+(.+)$/i.exec(String(req.headers.authorization || '').trim());
       if (!match || !safeEqual(match[1].trim(), token)) {
-        log.warn && log.warn('[asthen-bridge] chamada recusada: token inválido');
+        const now = Date.now();
+        // A public tunnel may receive scanners or a plugin still using an old
+        // secret. Keep the first warning but avoid flooding the Windows console.
+        if (now - lastUnauthorizedWarningAt >= 60_000) {
+          log.warn && log.warn('[asthen-bridge] solicitação recusada: DKB_SECRET ausente ou diferente do segredo configurado no bot.');
+          lastUnauthorizedWarningAt = now;
+        }
         return sendJson(res, 401, { success: false, status: 'UNAUTHORIZED' });
       }
 

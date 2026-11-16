@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { scheduleSupabaseSync, scheduleSupabaseKitsSync, initializeSupabaseSync } from './supabase.js';
+import { scheduleSupabaseSync, initializeSupabaseSync } from './supabase.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +10,7 @@ const dataFile = path.join(dataDir, 'state.json');
 
 const emptyState = () => ({ guilds: {}, tickets: {}, purchaseDrafts: {} });
 let state = emptyState();
+const pluginSyncedGuildsThisSession = new Set();
 
 function normalizeKitName(name) {
   return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -64,8 +65,7 @@ function defaultGuildConfig() {
     logsChannelId: null,
     buyersChannelId: null,
     staffRoleId: null,
-    kits: [],
-    hiddenPluginKits: []
+    kits: []
   };
 }
 
@@ -79,14 +79,14 @@ function ensureGuildConfig(guildId) {
   }
 
   if (!Array.isArray(config.kits)) config.kits = [];
-  if (!Array.isArray(config.hiddenPluginKits)) config.hiddenPluginKits = [];
+  delete config.hiddenPluginKits;
+  delete config.pluginSyncReceived;
 
   // Pix is fixed for this store; discard values left by the old /pix command.
   delete config.pixKey;
   delete config.pixInstructions;
 
-  // Preserve all existing products. Missing plugin kits are marked unavailable by syncPluginKits.
-  config.hiddenPluginKits = [];
+  // Preserve previous plugin records; getShopKits hides legacy manual entries.
   config.kits = config.kits.map(kit => ({
     ...kit,
     displayName: kit.displayName || makeKitDisplayName(kit.name),
@@ -97,18 +97,18 @@ function ensureGuildConfig(guildId) {
       ? Number(kit.priceCents) : null,
     pluginForSale: kit.pluginForSale === true,
     forSale: kit.forSale === true,
-    manuallyUnavailable: kit.manuallyUnavailable === true,
+    manuallyUnavailable: false,
     missingFromPlugin: kit.missingFromPlugin === true,
     pluginEnabled: typeof kit.pluginEnabled === 'boolean'
       ? kit.pluginEnabled
-      : kit.missingFromPlugin === true ? false : kit.manuallyUnavailable === true ? true : kit.enabled !== false,
+      : kit.missingFromPlugin === true ? false : kit.enabled !== false,
     storeConfigured: typeof kit.storeConfigured === 'boolean'
       ? kit.storeConfigured
       : Boolean(String(kit.description || '').trim()
         || String(kit.imageUrl || '').trim()
         || (String(kit.displayName || '').trim()
           && kit.displayName !== makeKitDisplayName(kit.name))),
-    enabled: kit.enabled !== false && kit.manuallyUnavailable !== true
+    enabled: kit.enabled !== false
   }));
 
   return config;
@@ -188,7 +188,6 @@ export function saveStore({ syncRemote = true } = {}) {
     if (syncRemote) {
       const snapshot = JSON.parse(contents);
       scheduleSupabaseSync(snapshot);
-      scheduleSupabaseKitsSync(snapshot);
     }
   } catch (error) {
     try { fs.rmSync(temporaryFile, { force: true }); } catch {}
@@ -209,13 +208,41 @@ export async function initializeStoreSync() {
     },
     saveLocal: () => saveStore({ syncRemote: false })
   });
-  const snapshot = JSON.parse(JSON.stringify(state));
-  scheduleSupabaseKitsSync(snapshot);
   return result;
 }
 
 export function getGuildConfig(guildId) {
   return ensureGuildConfig(guildId);
+}
+
+const DEMO_KIT = Object.freeze({
+  id: 'asthen-demo-kit',
+  name: 'ASTHEN_DEMO_KIT',
+  displayName: 'Kit Demonstração',
+  description: 'Amostra visual da loja ASTHEN. Este item é apenas demonstrativo: não gera compra, Pix, estoque nem entrega no Minecraft.',
+  price: 'Apenas demonstração',
+  priceCents: null,
+  pluginForSale: false,
+  forSale: false,
+  pluginEnabled: false,
+  enabled: false,
+  manuallyUnavailable: false,
+  missingFromPlugin: false,
+  storeConfigured: true,
+  itemCount: 0,
+  demo: true
+});
+
+/**
+ * Shows one non-purchasable sample only until the first plugin catalog sync.
+ * The demo never enters state.json, Supabase, the inventory, or delivery queue.
+ */
+export function getShopKits(guildId) {
+  const config = ensureGuildConfig(guildId);
+  const pluginKits = config.kits.filter(kit => kit.pluginManaged === true);
+  return pluginSyncedGuildsThisSession.has(guildId) && pluginKits.length > 0
+    ? pluginKits
+    : [{ ...DEMO_KIT }];
 }
 
 export function updateGuildConfig(guildId, changes) {
@@ -225,20 +252,10 @@ export function updateGuildConfig(guildId, changes) {
   return config;
 }
 
-export function addKit(guildId, kit) {
-  const config = ensureGuildConfig(guildId);
-  if (config.kits.length >= 200) throw new Error('O catálogo já atingiu o limite de 200 kits.');
-  if (config.kits.some(item => normalizeKitName(item.name) === normalizeKitName(kit.name))) {
-    throw new Error('Já existe um kit com esse identificador.');
-  }
-  config.kits.push({
-    ...kit,
-    displayName: kit.displayName || makeKitDisplayName(kit.name),
-    pluginManaged: Boolean(kit.pluginManaged)
-  });
-  saveStore();
-}
-
+/**
+ * Reconcile the plugin's complete list without deleting historical products.
+ * Missing products remain in the store as unavailable. Plugin 1.2.0 is authoritative for price and sale status.
+ */
 export function updateKit(guildId, kitId, changes) {
   const config = ensureGuildConfig(guildId);
   const index = config.kits.findIndex(kit => kit.id === kitId);
@@ -248,26 +265,6 @@ export function updateKit(guildId, kitId, changes) {
   return config.kits[index];
 }
 
-export function removeKit(guildId, kitId) {
-  const config = ensureGuildConfig(guildId);
-  const index = config.kits.findIndex(kit => kit.id === kitId);
-  if (index < 0) return false;
-
-  // The old remove action now disables the product without deleting its data.
-  config.kits[index] = {
-    ...config.kits[index],
-    enabled: false,
-    forSale: false,
-    manuallyUnavailable: true
-  };
-  saveStore();
-  return true;
-}
-
-/**
- * Reconcile the plugin's complete list without deleting historical products.
- * Missing products remain in the store as unavailable. Plugin 1.2.0 is authoritative for price and sale status.
- */
 export function syncPluginKits(guildId, pluginKits) {
   const config = ensureGuildConfig(guildId);
   const incoming = Array.isArray(pluginKits)
@@ -275,7 +272,8 @@ export function syncPluginKits(guildId, pluginKits) {
       && /^[A-Za-z0-9_-]{1,32}$/.test(item.name))
     : null;
   if (!incoming) return { changed: false, kits: config.kits };
-
+  const firstSyncThisGuild = !pluginSyncedGuildsThisSession.has(guildId);
+  pluginSyncedGuildsThisSession.add(guildId);
   const incomingByName = new Map();
   for (const item of incoming) incomingByName.set(normalizeKitName(item.name), item);
 
@@ -286,7 +284,7 @@ export function syncPluginKits(guildId, pluginKits) {
     const key = normalizeKitName(item.name);
     const old = existingByName.get(key);
     const pluginEnabled = item.enabled === true;
-    const manuallyUnavailable = old?.manuallyUnavailable === true;
+    const manuallyUnavailable = false;
     const hasSaleContract = Object.prototype.hasOwnProperty.call(item, 'for_sale')
       || Object.prototype.hasOwnProperty.call(item, 'price_cents');
 
@@ -305,7 +303,7 @@ export function syncPluginKits(guildId, pluginKits) {
       ? item.for_sale === true && pluginEnabled && priceCents !== null
       : pluginEnabled && Number.isSafeInteger(priceCents) && priceCents > 0;
     const price = formatBrlCents(priceCents);
-    const forSale = pluginForSale && !manuallyUnavailable;
+    const forSale = pluginForSale;
     const wasConfigured = typeof old?.storeConfigured === 'boolean'
       ? old.storeConfigured
       : Boolean(old && (
@@ -324,7 +322,7 @@ export function syncPluginKits(guildId, pluginKits) {
       forSale,
       description: String(old?.description || ''),
       imageUrl: String(old?.imageUrl || ''),
-      enabled: pluginEnabled && !manuallyUnavailable,
+      enabled: pluginEnabled,
       pluginEnabled,
       manuallyUnavailable,
       missingFromPlugin: false,
@@ -339,6 +337,7 @@ export function syncPluginKits(guildId, pluginKits) {
     .map(kit => ({
       ...kit,
       enabled: false,
+      manuallyUnavailable: false,
       forSale: false,
       pluginForSale: false,
       pluginEnabled: false,
@@ -346,12 +345,11 @@ export function syncPluginKits(guildId, pluginKits) {
     }));
 
   const next = [...syncedKits, ...missingKits];
-  const beforeJson = JSON.stringify({ kits: config.kits, hidden: config.hiddenPluginKits });
-  const afterJson = JSON.stringify({ kits: next, hidden: [] });
-  if (beforeJson === afterJson) return { changed: false, kits: config.kits };
+  const beforeJson = JSON.stringify({ kits: config.kits });
+  const afterJson = JSON.stringify({ kits: next });
+  if (beforeJson === afterJson) return { changed: firstSyncThisGuild, kits: config.kits };
 
   config.kits = next;
-  config.hiddenPluginKits = [];
   saveStore();
   return { changed: true, kits: config.kits };
 }

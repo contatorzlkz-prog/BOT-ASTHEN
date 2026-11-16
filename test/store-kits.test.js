@@ -6,9 +6,9 @@ import path from 'node:path';
 import {
   getGuildConfig,
   getStoreDataDir,
+  getShopKits,
   loadStore,
   makeKitDisplayName,
-  removeKit,
   syncPluginKits,
   updateGuildConfig,
   updateKit
@@ -168,20 +168,6 @@ test('a kit removed from plugin remains stored as unavailable with its price', (
   assert.equal(preserved.displayName, 'Pacote de Ferro');
 });
 
-test('admin removal marks product unavailable without deleting its record', () => {
-  const guildId = testGuildId();
-  const kit = syncPluginKits(guildId, [{ name: 'Kit_Ferro', enabled: true, items: 12 }]).kits[0];
-  assert.equal(removeKit(guildId, kit.id), true);
-
-  const stored = getGuildConfig(guildId).kits.find(item => item.id === kit.id);
-  assert.ok(stored);
-  assert.equal(stored.enabled, false);
-  assert.equal(stored.manuallyUnavailable, true);
-
-  const synced = syncPluginKits(guildId, [{ name: 'Kit_Ferro', enabled: true, items: 12 }]);
-  assert.equal(synced.kits[0].enabled, false);
-});
-
 test('old manual products remain in the store and become unavailable if absent from plugin', () => {
   const guildId = testGuildId();
   updateGuildConfig(guildId, {
@@ -265,4 +251,51 @@ test('a corrupt state.json is preserved and copied instead of being replaced by 
   const backups = readdirSync(directory).filter(name => name.startsWith('state.json.corrupt-') && name.endsWith('.bak'));
   assert.equal(backups.length, 1);
   assert.equal(readFileSync(path.join(directory, backups[0]), 'utf8'), corrupt);
+});
+
+test('loja mostra um único kit demo até receber a primeira sincronização do plugin', () => {
+  const guildId = testGuildId();
+  updateGuildConfig(guildId, { kits: [] });
+  const demo = getShopKits(guildId);
+  assert.equal(demo.length, 1);
+  assert.equal(demo[0].demo, true);
+  assert.equal(demo[0].id, 'asthen-demo-kit');
+  assert.equal(demo[0].forSale, false);
+  assert.equal(demo[0].pluginForSale, false);
+
+  const synced = syncPluginKits(guildId, [
+    { name: 'Kit_Ferro', enabled: true, items: 12, price: 9.9, price_cents: 990, for_sale: true }
+  ]);
+  const visible = getShopKits(guildId);
+  assert.equal(synced.changed, true);
+  assert.equal(visible.length, 1);
+  assert.equal(visible[0].name, 'Kit_Ferro');
+  assert.equal(visible[0].demo, undefined);
+});
+
+test('kit demo continua disponível quando o plugin ainda não tem kits reais', () => {
+  const guildId = testGuildId();
+  const emptySync = syncPluginKits(guildId, []);
+  assert.equal(emptySync.changed, true);
+  assert.equal(getShopKits(guildId)[0].demo, true);
+});
+
+test('loja ignora cadastros manuais antigos que não vieram do plugin', () => {
+  const guildId = testGuildId();
+  updateGuildConfig(guildId, {
+    kits: [{ id: 'old-manual', name: 'Kit_Antigo', displayName: 'Antigo', enabled: true }],
+  });
+  const visible = getShopKits(guildId);
+  assert.equal(visible.length, 1);
+  assert.equal(visible[0].demo, true);
+});
+test('estado antigo de bloqueio manual não sobrepõe a disponibilidade do Minecraft', () => {
+  const guildId = testGuildId();
+  const payload = [{ name: 'Kit_Ferro', enabled: true, items: 12, price: 19.9, price_cents: 1990, for_sale: true }];
+  const first = syncPluginKits(guildId, payload).kits[0];
+  updateKit(guildId, first.id, { manuallyUnavailable: true, enabled: false, forSale: false });
+  const refreshed = syncPluginKits(guildId, payload).kits[0];
+  assert.equal(refreshed.manuallyUnavailable, false);
+  assert.equal(refreshed.enabled, true);
+  assert.equal(refreshed.forSale, true);
 });

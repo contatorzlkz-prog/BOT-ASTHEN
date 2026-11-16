@@ -2,6 +2,7 @@ import {
   ActionRowBuilder,
   ButtonStyle,
   ModalBuilder,
+  MessageFlags,
   PermissionsBitField,
   TextInputBuilder,
   TextInputStyle
@@ -16,7 +17,7 @@ import {
   getTicket,
   listTickets,
   makeKitDisplayName,
-  removeKit,
+  getShopKits,
   savePurchaseDraft,
   updateGuildConfig,
   updateKit,
@@ -31,7 +32,6 @@ import {
   makeKitAdminMenu,
   makeKitAdminPaginationRow,
   makeKitEditFieldMenu,
-  makeKitRemoveControls,
   makeKitPreviewEmbed,
   makeKitPreviewControls,
   makeDeliveryEmbed,
@@ -115,13 +115,25 @@ function makeCatalogComponents(kits, page = 0) {
   return components;
 }
 
-function makeKitAdminComponents(kits, action, page = 0) {
+function makeKitAdminComponents(kits, page = 0) {
   const totalPages = Math.max(1, Math.ceil(kits.length / 25));
-  const customId = 'kit:' + action + '-select';
-  const components = [makeKitAdminMenu(kits, customId, page)];
-  const pagination = makeKitAdminPaginationRow(page, totalPages, action);
+  const components = [makeKitAdminMenu(kits, page)];
+  const pagination = makeKitAdminPaginationRow(page, totalPages);
   if (pagination) components.push(pagination);
   return components;
+}
+
+async function withCurrentStock(guildId, kits) {
+  const hasPurchasableKit = kits.some(kit => !kit.demo && isKitPurchasable(kit));
+  if (!hasPurchasableKit) return kits;
+  const snapshot = await getWeeklyKitStock(guildId);
+  return kits.map(kit => kit.demo ? kit : withWeeklyStock([kit], snapshot)[0]);
+}
+
+function catalogPromptText(kits) {
+  return kits.some(kit => !kit.demo && isKitPurchasable(kit))
+    ? CONFIG.shop.catalogPrompt + '\n\nCada kit tem até 10 unidades por semana. O estoque reinicia domingo às 00:00 (horário de Brasília).'
+    : CONFIG.shop.catalogPrompt;
 }
 
 function weeklyStockErrorMessage(error) {
@@ -130,7 +142,7 @@ function weeklyStockErrorMessage(error) {
 }
 
 function replyPrivate(interaction, content, components = [], embeds = []) {
-  const payload = { content, components, embeds, ephemeral: true };
+  const payload = { content, components, embeds, flags: MessageFlags.Ephemeral };
   if (interaction.deferred || interaction.replied) return interaction.followUp(payload);
   return interaction.reply(payload);
 }
@@ -322,218 +334,74 @@ function makeKitEditModal(kit, field) {
     .addComponents(new ActionRowBuilder().addComponents(input));
 }
 
-function makeKitCreateModal(kit) {
-  const shortName = String(kit.name || 'Kit').slice(0, 32);
-  const displayName = new TextInputBuilder()
-    .setCustomId('displayName')
-    .setLabel('Nome que aparecerá na loja')
-    .setPlaceholder('Ex.: Kit do Guerreiro')
-    .setStyle(TextInputStyle.Short)
-    .setMaxLength(80)
-    .setRequired(true)
-    .setValue(String(kit.displayName || makeKitDisplayName(kit.name)).slice(0, 80));
-
-  const description = new TextInputBuilder()
-    .setCustomId('description')
-    .setLabel('Descrição para o comprador')
-    .setPlaceholder('Explique o que o kit oferece.')
-    .setStyle(TextInputStyle.Paragraph)
-    .setMaxLength(800)
-    .setRequired(false);
-
-  const imageUrl = new TextInputBuilder()
-    .setCustomId('imageUrl')
-    .setLabel('Link HTTPS da imagem (opcional)')
-    .setPlaceholder('https://site.com/imagem.png')
-    .setStyle(TextInputStyle.Short)
-    .setMaxLength(500)
-    .setRequired(false);
-  if (kit.description) description.setValue(String(kit.description).slice(0, 800));
-  if (kit.imageUrl) imageUrl.setValue(String(kit.imageUrl).slice(0, 500));
-
-  return new ModalBuilder()
-    .setCustomId('kit:create-modal:' + kit.id)
-    .setTitle(('Cadastrar ' + shortName).slice(0, 45))
-    .addComponents(
-      new ActionRowBuilder().addComponents(displayName),
-      new ActionRowBuilder().addComponents(description),
-      new ActionRowBuilder().addComponents(imageUrl)
-    );
-}
-
 async function handleKitCommand(interaction) {
   if (!isAdministrator(interaction)) {
     return replyPrivate(interaction, 'Somente membros com a permissão Administrador podem usar os comandos /kit.');
   }
 
   const subcommand = interaction.options.getSubcommand();
-  const config = getGuildConfig(interaction.guildId);
+  const pluginKits = getGuildConfig(interaction.guildId).kits.filter(kit => kit.pluginManaged === true);
 
   if (subcommand === 'listar') {
-    if (!config.kits.length) {
-      return replyPrivate(interaction, 'Nenhum kit foi recebido do Minecraft ainda. Crie o kit pelo plugin e confira /bridge status.');
+    if (!pluginKits.length) {
+      return replyPrivate(interaction, 'Nenhum kit real foi sincronizado do Minecraft ainda. Crie o kit no Plugin-ASTHEN e confira /bridge status.');
     }
-    const lines = config.kits.slice(0, 22).map((kit, index) => {
-      const pluginState = kit.missingFromPlugin
+    const lines = pluginKits.slice(0, 22).map((kit, index) => {
+      const minecraftState = kit.missingFromPlugin
         ? 'removido do Minecraft'
-        : kit.pluginEnabled === false ? 'desativado no Minecraft'
-          : kit.manuallyUnavailable ? 'indisponível na loja'
-            : kit.enabled === false ? 'indisponível' : 'ativo';
+        : kit.pluginEnabled === false ? 'desativado no Minecraft' : 'ativo';
       const saleState = kit.manuallyUnavailable
         ? 'bloqueado pela equipe'
-        : kit.missingFromPlugin
-          ? 'removido do Minecraft'
-          : kit.pluginEnabled === false
-            ? 'desativado no Minecraft'
-            : kit.pluginForSale !== true
-              ? (kit.priceCents ? 'fora de venda no plugin' : 'sem preço no Minecraft')
-              : kit.forSale === true ? 'à venda' : 'indisponível';
-      const metadataState = kit.storeConfigured ? 'dados da loja prontos' : 'dados da loja pendentes';
+        : kit.pluginForSale !== true
+          ? (kit.priceCents ? 'fora de venda no plugin' : 'sem preço no Minecraft')
+          : kit.forSale === true ? 'à venda' : 'indisponível';
       return (index + 1) + '. **' + String(kit.displayName || makeKitDisplayName(kit.name)) + '** — ' +
-        String(kit.price || 'sem preço') + '\nMinecraft: ' + pluginState +
-        ' · Venda: ' + saleState + ' · Cadastro: ' + metadataState +
-        '\nID do plugin: `' + kit.name + '`';
+        String(kit.price || 'sem preço') + '\nMinecraft: ' + minecraftState +
+        ' · Loja: ' + saleState + '\nID: `' + kit.name + '`';
     });
-    const remaining = config.kits.length > 22 ? '\n... e mais ' + (config.kits.length - 22) + ' kit(s).' : '';
+    const remaining = pluginKits.length > 22 ? '\n... e mais ' + (pluginKits.length - 22) + ' kit(s).' : '';
     return replyPrivate(interaction, lines.join('\n\n').slice(0, 1850) + remaining);
   }
 
-  if (!config.kits.length) {
-    return replyPrivate(interaction, 'Nenhum kit foi sincronizado. Crie o kit real no Minecraft pelo Plugin-ASTHEN e aguarde a lista em /bridge status. Defina o preço no jogo com /dk price <nome> <valor>; depois use /kit criar para cadastrar nome exibido, descrição e imagem no Discord.');
+  if (!pluginKits.length) {
+    return replyPrivate(interaction, 'Nenhum kit real foi sincronizado. Crie-o no Minecraft pelo Plugin-ASTHEN e aguarde a próxima sincronização.');
   }
 
-  if (subcommand === 'criar') {
-    const pending = config.kits.filter(kit =>
-      kit.pluginManaged === true
-      && kit.pluginEnabled !== false
-      && kit.missingFromPlugin !== true
-      && kit.storeConfigured !== true
-    );
-    if (!pending.length) {
-      return replyPrivate(interaction, 'Todos os kits ativos recebidos do plugin já têm cadastro comercial. Use /kit editar para alterar um produto existente.');
-    }
-    return interaction.reply({
-      content: 'Selecione um kit que já existe no Minecraft. O preço é definido no jogo com /dk price <nome> <valor>. Esta etapa cadastra apenas nome exibido, descrição e imagem no Discord.',
-      components: makeKitAdminComponents(pending, 'create', 0),
-      ephemeral: true
-    });
-  }
-
-  const customId = subcommand === 'editar' ? 'kit:edit-select' : 'kit:remove-select';
-  const prompt = subcommand === 'editar'
-    ? 'Selecione o kit e depois escolha qual informação comercial deseja alterar.'
-    : 'Selecione o kit que deseja marcar como indisponível na loja.';
   return interaction.reply({
-    content: prompt,
-    components: makeKitAdminComponents(config.kits, subcommand === 'editar' ? 'edit' : 'remove', 0),
-    ephemeral: true
+    content: 'Os kits são importados automaticamente do Minecraft. Selecione um para editar nome exibido, descrição ou imagem.',
+    components: makeKitAdminComponents(pluginKits, 0),
+    flags: MessageFlags.Ephemeral
   });
 }
 
-async function handleKitAdminPage(interaction, action, requestedPage) {
+async function handleKitAdminPage(interaction, requestedPage) {
   if (!isAdministrator(interaction)) {
-    return replyPrivate(interaction, 'Somente administradores podem gerenciar kits.');
+    return replyPrivate(interaction, 'Somente administradores podem editar kits.');
   }
-  if (!['create', 'edit', 'remove'].includes(action)
-      || !Number.isInteger(requestedPage) || requestedPage < 0) {
-    return replyPrivate(interaction, 'Página de administração inválida. Abra o menu novamente.');
+  if (!Number.isInteger(requestedPage) || requestedPage < 0) {
+    return replyPrivate(interaction, 'Página inválida. Abra /kit editar novamente.');
   }
-
-  const config = getGuildConfig(interaction.guildId);
-  const kits = action === 'create'
-    ? config.kits.filter(kit =>
-      kit.pluginManaged === true
-      && kit.pluginEnabled !== false
-      && kit.missingFromPlugin !== true
-      && kit.storeConfigured !== true)
-    : config.kits;
+  const kits = getGuildConfig(interaction.guildId).kits.filter(kit => kit.pluginManaged === true);
   const totalPages = Math.max(1, Math.ceil(kits.length / 25));
   if (!kits.length || requestedPage >= totalPages) {
-    return replyPrivate(interaction, 'Esta página não existe mais. Atualize o menu de administração.');
+    return replyPrivate(interaction, 'Esta página não existe mais. Atualize a lista em /kit editar.');
   }
-
-  const content = action === 'create'
-    ? 'Selecione um kit que já existe no Minecraft. O preço é definido no jogo com /dk price <nome> <valor>. Esta etapa cadastra apenas nome exibido, descrição e imagem no Discord.'
-    : action === 'edit'
-      ? 'Selecione o kit e depois escolha qual informação comercial deseja alterar.'
-      : 'Selecione o kit que deseja marcar como indisponível na loja.';
-
   return interaction.update({
-    content,
+    content: 'Selecione um kit sincronizado do Minecraft para editar.',
     embeds: [],
-    components: makeKitAdminComponents(kits, action, requestedPage)
+    components: makeKitAdminComponents(kits, requestedPage)
   });
 }
 
-async function handleKitCreateSelection(interaction) {
-  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem cadastrar kits na loja.');
+async function handleKitAdminSelection(interaction) {
+  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem editar kits.');
   const kitId = interaction.values[0];
-  const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
-  if (!kit || kit.pluginManaged !== true || kit.pluginEnabled === false || kit.missingFromPlugin) {
-    return replyPrivate(interaction, 'Esse kit não está ativo no Minecraft. Crie ou ative o kit no plugin e aguarde a sincronização.');
-  }
-  if (kit.storeConfigured === true) {
-    return replyPrivate(interaction, 'Esse kit já tem cadastro na loja. Use /kit editar para alterar seus dados.');
-  }
-  return interaction.showModal(makeKitCreateModal(kit));
-}
-
-async function handleKitCreateModal(interaction) {
-  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem cadastrar kits na loja.');
-  const kitId = interaction.customId.split(':')[2];
-  const current = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
-  if (!current || current.pluginManaged !== true || current.pluginEnabled === false || current.missingFromPlugin) {
-    return replyPrivate(interaction, 'O kit deixou de existir ou foi desativado no Minecraft. Sincronize o plugin novamente antes de cadastrar.');
-  }
-  if (current.storeConfigured === true) {
-    return replyPrivate(interaction, 'Esse kit já foi cadastrado. Use /kit editar para atualizar os dados.');
-  }
-
-  const displayName = interaction.fields.getTextInputValue('displayName').trim();
-  const description = interaction.fields.getTextInputValue('description').trim();
-  const rawImageUrl = interaction.fields.getTextInputValue('imageUrl').trim();
-  const imageUrl = normalizeImageUrl(rawImageUrl);
-
-  if (displayName.length < 2) return replyPrivate(interaction, 'O nome exibido precisa ter pelo menos 2 caracteres.');
-  if (rawImageUrl && !imageUrl) return replyPrivate(interaction, 'A imagem precisa ser um link HTTPS válido.');
-
-  const updated = updateKit(interaction.guildId, kitId, {
-    displayName,
-    description,
-    imageUrl: imageUrl || '',
-    storeConfigured: true,
-    enabled: current.pluginEnabled !== false,
-    manuallyUnavailable: false,
-    forSale: current.pluginForSale === true
-  });
-  await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
-  return interaction.reply({
-    content: 'Cadastro comercial salvo. O preço e a disponibilidade de venda continuam sendo controlados pelo Plugin-ASTHEN.',
-    embeds: updated ? [makeKitPreviewEmbed(updated)] : [],
-    ephemeral: true
-  });
-}
-
-async function handleKitAdminSelection(interaction, action) {
-  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem gerenciar kits.');
-  const kitId = interaction.values[0];
-  const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
-  if (!kit) return replyPrivate(interaction, 'Este kit não está mais no catálogo. Atualize a lista e tente novamente.');
-
-  if (action === 'edit') {
-    return interaction.update({
-      content: 'Kit selecionado: **' + String(kit.displayName || makeKitDisplayName(kit.name)) +
-        '**. Escolha o que deseja editar.',
-      embeds: [makeKitPreviewEmbed(kit)],
-      components: [makeKitEditFieldMenu(kit)]
-    });
-  }
-
+  const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId && item.pluginManaged === true);
+  if (!kit) return replyPrivate(interaction, 'Este kit não está mais sincronizado. Confira /bridge status.');
   return interaction.update({
-    content: 'Confirma a remoção de **' + String(kit.displayName || makeKitDisplayName(kit.name)) +
-      '** do catálogo da loja? O kit e os itens do servidor Minecraft não serão apagados.',
-    embeds: [],
-    components: [makeKitRemoveControls(kit.id)]
+    content: 'Kit selecionado: **' + String(kit.displayName || makeKitDisplayName(kit.name)) + '**. Escolha o que deseja editar.',
+    embeds: [makeKitPreviewEmbed(kit)],
+    components: [makeKitEditFieldMenu(kit)]
   });
 }
 
@@ -541,27 +409,10 @@ async function handleKitEditFieldSelection(interaction) {
   if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem editar kits.');
   const kitId = interaction.customId.split(':')[2];
   const field = interaction.values[0];
-  const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
-  if (!kit) return replyPrivate(interaction, 'Este kit não está mais no catálogo.');
-  if (field === 'availability') {
-    if (kit.missingFromPlugin || kit.pluginEnabled === false) {
-      return replyPrivate(interaction, 'Não é possível reabrir: o kit foi removido ou está desativado no Minecraft.');
-    }
-    updateKit(interaction.guildId, kit.id, {
-      manuallyUnavailable: false,
-      enabled: true,
-      forSale: kit.pluginForSale === true
-    });
-    const freshConfig = getGuildConfig(interaction.guildId);
-    const shopChannel = await fetchTextChannel(interaction.guild, freshConfig.shopPanelChannelId);
-    if (shopChannel) {
-      updateGuildConfig(interaction.guildId, await updatePanel(interaction.guild, freshConfig, 'shop', shopChannel));
-    }
-    return interaction.update({
-      content: 'O bloqueio manual foi removido. A venda só será reaberta se o Plugin-ASTHEN mantiver o kit ativo, com preço e com for_sale=true.',
-      embeds: [],
-      components: []
-    });
+  const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId && item.pluginManaged === true);
+  if (!kit) return replyPrivate(interaction, 'Este kit não está mais sincronizado com o Minecraft.');
+  if (!['displayName', 'description', 'imageUrl'].includes(field)) {
+    return replyPrivate(interaction, 'Campo de edição inválido.');
   }
   return interaction.showModal(makeKitEditModal(kit, field));
 }
@@ -569,7 +420,7 @@ async function handleKitEditFieldSelection(interaction) {
 async function handleKitEditModal(interaction) {
   if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem editar kits.');
   const [, , field, kitId] = interaction.customId.split(':');
-  const current = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
+  const current = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId && item.pluginManaged === true);
   if (!current) return replyPrivate(interaction, 'Este kit não está mais no catálogo.');
 
   const value = interaction.fields.getTextInputValue('value').trim();
@@ -594,23 +445,7 @@ async function handleKitEditModal(interaction) {
     content: 'Informação do kit atualizada. Você pode selecionar outro campo para editar.',
     embeds: updated ? [makeKitPreviewEmbed(updated)] : [],
     components: updated ? [makeKitEditFieldMenu(updated)] : [],
-    ephemeral: true
-  });
-}
-
-async function confirmKitRemoval(interaction, kitId) {
-  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem marcar kits como indisponíveis.');
-  const config = getGuildConfig(interaction.guildId);
-  const kit = config.kits.find(item => item.id === kitId);
-  if (!kit) return interaction.update({ content: 'Este kit já foi removido.', embeds: [], components: [] });
-
-  removeKit(interaction.guildId, kitId);
-  await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
-  return interaction.update({
-    content: '**' + String(kit.displayName || makeKitDisplayName(kit.name)) +
-      '** agora está marcado como indisponível. O produto, o preço e o histórico foram preservados.',
-    embeds: [],
-    components: []
+    flags: MessageFlags.Ephemeral
   });
 }
 
@@ -625,7 +460,7 @@ async function syncShopPanel(guild, config = getGuildConfig(guild.id)) {
     return false;
   }
 
-  const payload = makeShopPanel(config.kits);
+  const payload = makeShopPanel(getShopKits(guild.id));
   let message = await fetchPanelMessage(channel, config.shopPanelMessageId);
   if (message) {
     try {
@@ -665,7 +500,8 @@ function makeMinecraftNickModal(customId, currentNick = '') {
 
 async function openCatalog(interaction) {
   const config = getGuildConfig(interaction.guildId);
-  if (!config.kits.length) return replyPrivate(interaction, 'A loja ainda não recebeu kits do servidor.');
+  const catalogKits = getShopKits(interaction.guildId);
+  if (!catalogKits.length) return replyPrivate(interaction, 'A loja ainda não recebeu kits do servidor.');
 
   const existing = findOpenTicket(interaction.guildId, interaction.user.id, 'shop');
   if (existing) {
@@ -674,18 +510,17 @@ async function openCatalog(interaction) {
       return interaction.reply({
         content: 'Você já tem um pedido em andamento. Continue a conversa no canal existente.',
         components: [makeChannelLinkRow(channel)],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   }
 
-  let stockSnapshot;
+  let stockedKits;
   try {
-    stockSnapshot = await getWeeklyKitStock(interaction.guildId);
+    stockedKits = await withCurrentStock(interaction.guildId, catalogKits);
   } catch (error) {
     return replyPrivate(interaction, weeklyStockErrorMessage(error));
   }
-  const stockedKits = withWeeklyStock(config.kits, stockSnapshot);
   const existingDraft = getPurchaseDraft(interaction.guildId, interaction.user.id);
   if (existingDraft) {
     const currentKit = stockedKits.find(kit => kit.id === existingDraft.kit?.id);
@@ -707,7 +542,7 @@ async function openCatalog(interaction) {
           content: 'Você já iniciou uma compra. Confira os dados antes de continuar.',
           embeds: [makePurchaseReviewEmbed(existingDraft)],
           components: [makePurchaseReviewControls(existingDraft)],
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       }
       if (existingDraft.minecraftNick) {
@@ -716,7 +551,7 @@ async function openCatalog(interaction) {
         return interaction.reply({
           content: 'Escolha se você joga na edição Java ou Bedrock.',
           components: [makePlatformControls(existingDraft)],
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       }
       existingDraft.stage = 'selected';
@@ -725,16 +560,16 @@ async function openCatalog(interaction) {
         content: CONFIG.shop.previewPrompt,
         embeds: [makeKitPreviewEmbed(existingDraft.kit)],
         components: [makeKitPreviewControls(existingDraft)],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
     deletePurchaseDraft(interaction.guildId, interaction.user.id);
   }
 
   return interaction.reply({
-    content: CONFIG.shop.catalogPrompt + '\n\nCada kit tem até 10 unidades por semana. O estoque reinicia domingo às 00:00 (horário de Brasília).',
+    content: catalogPromptText(stockedKits),
     components: makeCatalogComponents(stockedKits, 0),
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
 }
 
@@ -760,7 +595,19 @@ async function continuePurchase(interaction) {
 
 async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = false) {
   const config = getGuildConfig(interaction.guildId);
-  const kit = config.kits.find(item => item.id === kitId);
+  const kit = kitId === 'asthen-demo-kit'
+    ? getShopKits(interaction.guildId).find(item => item.id === kitId)
+    : config.kits.find(item => item.id === kitId);
+  if (kit?.demo) {
+    const preview = {
+      content: 'Amostra da loja. Este item não pode ser comprado e não cria cobrança, reserva de estoque ou entrega.',
+      embeds: [makeKitPreviewEmbed(kit)],
+      components: []
+    };
+    return updateExistingMessage
+      ? interaction.update(preview)
+      : interaction.reply({ ...preview, flags: MessageFlags.Ephemeral });
+  }
   if (!isKitPurchasable(kit)) return replyPrivate(interaction, 'Este kit está indisponível para compra. Ele continua no catálogo para consulta.');
 
   let stockSnapshot;
@@ -806,7 +653,7 @@ async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = 
   };
   return updateExistingMessage
     ? interaction.update(payload)
-    : interaction.reply({ ...payload, ephemeral: true });
+    : interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
 }
 
 async function handleCatalogPage(interaction, requestedPage) {
@@ -814,14 +661,13 @@ async function handleCatalogPage(interaction, requestedPage) {
     return replyPrivate(interaction, 'Página de catálogo inválida. Abra a loja novamente.');
   }
 
-  const config = getGuildConfig(interaction.guildId);
-  let stockSnapshot;
+  const catalogKits = getShopKits(interaction.guildId);
+  let stockedKits;
   try {
-    stockSnapshot = await getWeeklyKitStock(interaction.guildId);
+    stockedKits = await withCurrentStock(interaction.guildId, catalogKits);
   } catch (error) {
     return replyPrivate(interaction, weeklyStockErrorMessage(error));
   }
-  const stockedKits = withWeeklyStock(config.kits, stockSnapshot);
   const pageSize = Math.min(25, Math.max(1, Number(CONFIG.shop.maxKits) || 25));
   const totalPages = Math.max(1, Math.ceil(stockedKits.length / pageSize));
   if (requestedPage >= totalPages) {
@@ -829,7 +675,7 @@ async function handleCatalogPage(interaction, requestedPage) {
   }
 
   return interaction.update({
-    content: CONFIG.shop.catalogPrompt + '\n\nCada kit tem até 10 unidades por semana. O estoque reinicia domingo às 00:00 (horário de Brasília).',
+    content: catalogPromptText(stockedKits),
     embeds: [],
     components: makeCatalogComponents(stockedKits, requestedPage)
   });
@@ -853,13 +699,12 @@ async function switchPurchaseKit(interaction, requestedRevision) {
   if (!draft || draft.revision !== requestedRevision) {
     return replyPrivate(interaction, 'Esta prévia ficou desatualizada. Abra o catálogo novamente.');
   }
-  const config = getGuildConfig(interaction.guildId);
-  if (!config.kits.length) return replyPrivate(interaction, 'A loja ainda não recebeu kits do servidor.');
+  const catalogKits = getShopKits(interaction.guildId);
+  if (!catalogKits.length) return replyPrivate(interaction, 'A loja ainda não recebeu kits do servidor.');
   try {
-    const stockSnapshot = await getWeeklyKitStock(interaction.guildId);
-    const stockedKits = withWeeklyStock(config.kits, stockSnapshot);
+    const stockedKits = await withCurrentStock(interaction.guildId, catalogKits);
     return interaction.update({
-      content: CONFIG.shop.catalogPrompt + '\n\nCada kit tem até 10 unidades por semana. O estoque reinicia domingo às 00:00 (horário de Brasília).',
+      content: catalogPromptText(stockedKits),
       embeds: [],
       components: makeCatalogComponents(stockedKits, 0)
     });
@@ -1175,7 +1020,7 @@ async function decideOrder(interaction, decision) {
         console.error('[Asthen Stock] Não foi possível reservar o estoque:', error);
         await interaction.followUp({
           content: 'Pagamento não aprovado pelo bot: não consegui reservar uma das 10 unidades semanais no Supabase. Confira a conexão e a migração 005; depois tente novamente.',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -1183,7 +1028,7 @@ async function decideOrder(interaction, decision) {
       if (!reservation.ok) {
         await interaction.followUp({
           content: 'Limite semanal esgotado: as 10 unidades deste kit já foram reservadas nesta semana. Não confirme este pagamento como aprovado; a equipe precisa resolver o pedido com o comprador.',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         try {
           await interaction.message.edit({
@@ -1307,9 +1152,9 @@ async function notifyStaffPrivately(interaction, content) {
   if (!interaction) return;
   try {
     if (interaction.deferred || interaction.replied) {
-      await interaction.followUp({ content, ephemeral: true });
+      await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
     } else {
-      await interaction.reply({ content, ephemeral: true });
+      await interaction.reply({ content, flags: MessageFlags.Ephemeral });
     }
   } catch (error) {
     console.warn('[Asthen] Não foi possível enviar o aviso privado à equipe:', error.message);
@@ -1554,7 +1399,7 @@ async function setLegacyTicketPlatform(interaction, platform) {
   }
   if (platform !== 'java' && platform !== 'bedrock') return replyPrivate(interaction, 'Escolha Java ou Bedrock.');
   updateTicket(interaction.channelId, { platform });
-  await interaction.reply({ content: 'Plataforma salva. A entrega será solicitada agora.', ephemeral: true });
+  await interaction.reply({ content: 'Plataforma salva. A entrega será solicitada agora.', flags: MessageFlags.Ephemeral });
   void processApprovedDelivery(interaction.channel, getTicket(interaction.channelId), { interaction })
     .catch(error => console.error('[Asthen] Falha na entrega de pedido antigo:', error));
 }
@@ -1606,7 +1451,7 @@ async function retryApprovedDelivery(interaction, mode) {
       content: mode === 'new'
         ? 'Uma nova tentativa foi autorizada após falha final confirmada.'
         : 'A tentativa será reenviada com o mesmo identificador, sem criar outra compra.',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   } catch (error) {
     deliveryAttemptsInFlight.delete(ticket.channelId);
@@ -1622,7 +1467,7 @@ async function retryApprovedDelivery(interaction, mode) {
 }
 
 async function openSupportTicket(interaction, kind) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const result = await createPrivateTicket({
     guild: interaction.guild,
     user: interaction.user,
@@ -1669,9 +1514,8 @@ export async function handleInteraction(interaction) {
     if (interaction.customId.startsWith('shop:page:')) {
       return handleCatalogPage(interaction, Number(interaction.customId.split(':')[2]));
     }
-    if (interaction.customId.startsWith('kit:admin-page:')) {
-      const [, , action, page] = interaction.customId.split(':');
-      return handleKitAdminPage(interaction, action, Number(page));
+    if (interaction.customId.startsWith('kit:admin-page:edit:')) {
+      return handleKitAdminPage(interaction, Number(interaction.customId.split(':')[3]));
     }
     if (interaction.customId.startsWith('shop:buy:')) {
       return beginPurchaseWithKit(interaction, interaction.customId.split(':')[2]);
@@ -1709,12 +1553,6 @@ export async function handleInteraction(interaction) {
     if (interaction.customId.startsWith('delivery:retry:')) {
       return retryApprovedDelivery(interaction, interaction.customId.split(':')[2]);
     }
-    if (interaction.customId.startsWith('kit:remove:confirm:')) {
-      return confirmKitRemoval(interaction, interaction.customId.split(':')[3]);
-    }
-    if (interaction.customId === 'kit:remove:cancel') {
-      return interaction.update({ content: 'Remoção cancelada.', embeds: [], components: [] });
-    }
   }
 
   if (interaction.isStringSelectMenu() && interaction.customId === 'support:select') {
@@ -1724,21 +1562,14 @@ export async function handleInteraction(interaction) {
   if (interaction.isStringSelectMenu() && interaction.customId.startsWith('shop:select')) {
     return handleCatalogSelection(interaction);
   }
-  if (interaction.isStringSelectMenu() && interaction.customId === 'kit:create-select') {
-    return handleKitCreateSelection(interaction);
-  }
   if (interaction.isStringSelectMenu() && interaction.customId === 'kit:edit-select') {
-    return handleKitAdminSelection(interaction, 'edit');
-  }
-  if (interaction.isStringSelectMenu() && interaction.customId === 'kit:remove-select') {
-    return handleKitAdminSelection(interaction, 'remove');
+    return handleKitAdminSelection(interaction);
   }
   if (interaction.isStringSelectMenu() && interaction.customId.startsWith('kit:edit-field:')) {
     return handleKitEditFieldSelection(interaction);
   }
 
   if (interaction.isModalSubmit()) {
-    if (interaction.customId.startsWith('kit:create-modal:')) return handleKitCreateModal(interaction);
     if (interaction.customId.startsWith('kit:edit-modal:')) return handleKitEditModal(interaction);
     if (interaction.customId === 'shop:nick:submit' || interaction.customId.startsWith('shop:nick:edit:')) {
       return handleNickSubmit(interaction);

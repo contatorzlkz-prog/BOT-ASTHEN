@@ -31,7 +31,7 @@ test('admin commands are compact and Pix is no longer a slash command', () => {
   const names = commandDefinitions.map(item => item.toJSON().name);
   assert.deepEqual(names, ['configurar', 'kit', 'bridge']);
   assert.equal(command('pix'), undefined);
-  assert.deepEqual(command('kit').options.map(option => option.name), ['criar', 'listar', 'editar', 'remover']);
+  assert.deepEqual(command('kit').options.map(option => option.name), ['listar', 'editar']);
   assert.deepEqual(command('bridge').options.map(option => option.name), ['status']);
   assert.equal(command('kit').default_member_permissions, '8');
 });

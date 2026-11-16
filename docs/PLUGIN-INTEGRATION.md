@@ -1,4 +1,4 @@
-# Integração do ASTHEN BOT 2.13.0 com Plugin-ASTHEN 1.2.0 / 1.3.0
+# Integração do ASTHEN BOT 2.14.0 com Plugin-ASTHEN 1.2.0 / 1.3.0
 
 A integração usa o modo poll: o plugin faz as conexões de saída para buscar pedidos e devolver resultados. O servidor Minecraft não precisa aceitar conexões de entrada.
 
@@ -99,24 +99,20 @@ Depois de alterar o arquivo, execute /dk reload se a versão do plugin oferecer 
 
 O administrador cria o kit real no Minecraft usando o comando do Plugin-ASTHEN (por exemplo, `/dk create Kit_Ferro`, conforme a versão instalada). O plugin envia a lista completa em `POST /plugin/v1/kits` e o bot importa os novos identificadores.
 
-Depois, um administrador do Discord pode:
-- `/dk price <nome> <valor>` no Minecraft: definir o preço em reais. Use vírgula ou ponto, por exemplo `29,90`.
-- `/dk price <nome> remover`: tirar o kit da venda sem apagar o kit nem seus itens.
+Depois da sincronização, os kits aparecem automaticamente no catálogo do Discord. Um administrador pode:
+- `/dk price <nome> <valor>` no Minecraft: definir o preço em reais.
+- `/dk price <nome> remover`: tirar o kit da venda sem apagar seus itens.
 - `/dk enable <nome>` e `/dk disable <nome>`: ativar/desativar o kit no servidor.
-- `/kit criar` no Discord: cadastrar nome exibido, descrição e imagem HTTPS. O preço não é editado no bot.
-- `/kit listar`: ver o estado, preço e disponibilidade sincronizados do Minecraft.
-- `/kit editar`: alterar nome comercial, descrição, imagem ou bloqueio manual da loja.
-- `/kit remover`: marcar o produto como indisponível no Discord sem apagar seu cadastro, histórico ou o arquivo do Minecraft.
+- `/kit listar`: conferir os kits, preços e estado recebidos do Minecraft.
+- `/kit editar`: alterar somente nome exibido, descrição e imagem comercial.
 
-Todos os comandos `/kit` exigem a permissão **Administrador** no Discord.
+Não existe cadastro ou remoção de kits pelo Discord. A criação, os itens, o preço e o estado oficial de venda pertencem ao Plugin-ASTHEN. O Discord só ajusta a apresentação comercial.
 
-**Separação importante:** o plugin é a fonte oficial dos itens, preço e estado de venda. `/kit criar` apenas configura a apresentação comercial no Discord; ele não altera os itens nem o preço do Minecraft.
-
-Para apagar o kit real, use a função de exclusão do plugin. Quando a lista seguinte não contiver mais esse identificador, o bot mantém o produto no catálogo e marca como indisponível. Produtos antigos e pedidos não são apagados.
+Sem plugin conectado ou antes da primeira sincronização, o painel mostra um Kit Demonstração. Ele é apenas visual: não abre compra, não gera Pix, não reserva estoque e não entra na fila de entrega. A primeira lista do plugin remove o demo.
 
 ## 5. Contrato HTTP
 
-**Long Polling:** o BOT-ASTHEN 2.12.0 e a proposta 2.13.0 aceitam o parâmetro opcional `wait_ms` em GET /plugin/v1/pull. O plugin 1.2.0 não envia esse parâmetro e continua no polling tradicional. O plugin 1.3.0 deve enviar `wait_ms=20000`, aceitar HTTP 204 como resposta normal e usar timeout HTTP de pelo menos 30 segundos (configuração recomendada: 35 segundos).
+**Long Polling:** o BOT-ASTHEN 2.14.0 aceita o parâmetro opcional `wait_ms` em GET /plugin/v1/pull. O plugin 1.2.0 não envia esse parâmetro e continua no polling tradicional. O plugin 1.3.0 deve enviar `wait_ms=20000`, aceitar HTTP 204 como resposta normal e usar timeout HTTP de pelo menos 30 segundos (configuração recomendada: 35 segundos).
 
 Todas as rotas usam:
 
@@ -125,20 +121,20 @@ Authorization: Bearer <DKB_SECRET>
 ~~~
 
 - GET /plugin/v1/pull?limit=5: busca pedidos. Sem pedidos, responde HTTP 204.
-- O BOT-ASTHEN 2.12.0 também aceita GET /plugin/v1/pull?limit=5&wait_ms=20000: mantém a conexão aberta por até 20 segundos, acordando-a imediatamente quando um pedido chega. O bot aceita no máximo 25.000 ms e retorna 204 quando o prazo termina sem pedidos. O plugin 1.2.0 continua compatível, mas só a versão 1.3.0 com suporte a Long Polling enviará wait_ms.
+- O BOT-ASTHEN 2.14.0 também aceita GET /plugin/v1/pull?limit=5&wait_ms=20000: mantém a conexão aberta por até 20 segundos, acordando-a imediatamente quando um pedido chega. O bot aceita no máximo 25.000 ms e retorna 204 quando o prazo termina sem pedidos. O plugin 1.2.0 continua compatível, mas só a versão 1.3.0 com suporte a Long Polling enviará wait_ms.
 - POST /plugin/v1/result: recebe resultado final de entrega.
 - POST /plugin/v1/kits: recebe a lista completa dos kits do plugin, incluindo `name`, `enabled`, `items`, `price`, `price_cents` e `for_sale`.
-- POST /plugin/v1/delivery-update: disponível na proposta BOT-ASTHEN 2.13.0 para registrar a transição posterior `KIT_PENDING` → `KIT_DELIVERED`. Exige `request_id` previamente conhecido e não reserva estoque novamente. O Plugin-ASTHEN 1.2.0 ainda não chama essa rota.
+- POST /plugin/v1/delivery-update: disponível na proposta BOT-ASTHEN 2.14.0 para registrar a transição posterior `KIT_PENDING` → `KIT_DELIVERED`. Exige `request_id` previamente conhecido e não reserva estoque novamente. O Plugin-ASTHEN 1.2.0 ainda não chama essa rota.
 
 A API do bot envia request_id, player, a plataforma escolhida pelo cliente (java ou bedrock) e o identificador exato do kit. O plugin continua responsável por entregar os itens.
 
-### Fila persistente e status posterior — proposta 2.13.0
+### Fila persistente e status posterior — BOT-ASTHEN 2.14.0
 
-A proposta 2.13.0 mantém os pedidos de entrega em data/bridge-queue.json. Preserve toda a pasta data/ ao atualizar o bot. Se o processo reiniciar, os pedidos sem resultado voltam a ser oferecidos ao plugin usando o mesmo request_id.
+O BOT-ASTHEN 2.14.0 mantém os pedidos de entrega em data/bridge-queue.json. Preserve toda a pasta data/ ao atualizar o bot. Se o processo reiniciar, os pedidos sem resultado voltam a ser oferecidos ao plugin usando o mesmo request_id.
 
 Quando o plugin responde KIT_PENDING, esse é o resultado final inicial. Depois que o jogador retirar o kit, o Plugin-ASTHEN 1.3.0 poderá enviar POST /plugin/v1/delivery-update com o mesmo request_id e status KIT_DELIVERED. O bot valida a transição e atualiza o ticket. Não envie um segundo resultado final por POST /plugin/v1/result.
 
-Essa atualização posterior exige os dois lados atualizados: BOT-ASTHEN 2.13.0 e Plugin-ASTHEN 1.3.0. Com Plugin-ASTHEN 1.2.0, a entrega inicial continua funcionando, mas o Discord não recebe a mudança posterior de KIT_PENDING para KIT_DELIVERED.
+Essa atualização posterior exige os dois lados atualizados: BOT-ASTHEN 2.14.0 e Plugin-ASTHEN 1.3.0. Com Plugin-ASTHEN 1.2.0, a entrega inicial continua funcionando, mas o Discord não recebe a mudança posterior de KIT_PENDING para KIT_DELIVERED.
 
 ## 6. Fluxo de compra
 

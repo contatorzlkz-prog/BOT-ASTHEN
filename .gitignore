@@ -1,8 +1,11 @@
 .env
 .env.*
 node_modules/
-data/state.json
+data/*.json
 data/*.tmp
+data/*.bak
+data/*.corrupt-*.bak
+data/*.invalid-*.bak
 npm-debug.log*
 .DS_Store
 Thumbs.db

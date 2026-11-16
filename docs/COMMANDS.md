@@ -1,92 +1,73 @@
-# Comandos do ASTHEN BOT 2.11.0
+# Comandos do ASTHEN BOT 2.14.0
 
-## Quem pode usar
+## Permissões
 
-- **`/kit`:** somente membros com a permissão Discord **Administrador**.
-- **`/configurar` e `/bridge status`:** administradores ou membros com **Gerenciar servidor**.
-- **Ações de pedidos:** administradores ou membros com o cargo da equipe configurado em `/configurar`.
+- `/kit listar` e `/kit editar`: somente Administrador.
+- `/configurar` e `/bridge status`: Administrador ou Gerenciar servidor.
+- Aprovação/recusa de pedidos: Administrador ou cargo da equipe configurado.
 
-## Configurar canais
+## Configurar o servidor
 
 ~~~text
 /configurar suporte:#suporte loja:#loja logs:#logs compradores:#compradores equipe:@Equipe
 ~~~
 
-| Campo | Para que serve |
+| Campo | Finalidade |
 |---|---|
-| `suporte` | Publica o painel de atendimento. |
-| `loja` | Publica o botão que abre o catálogo. |
-| `logs` | Recebe registros privados de aprovação, recusa e fechamento. |
-| `compradores` | Recebe avisos de compras confirmadas. |
-| `equipe` | Cargo autorizado a confirmar/recusar pagamentos, repetir entregas e fechar tickets. |
+| `suporte` | Painel de atendimento. |
+| `loja` | Painel da loja de kits sincronizados do Minecraft. |
+| `logs` | Registros privados de aprovação, recusa e fechamento. |
+| `compradores` | Avisos de compras confirmadas. |
+| `equipe` | Cargo autorizado a revisar pagamentos e fechar tickets. |
 
-## Gerenciar kits
+## Kits
 
-### Primeiro: criar o kit real no Minecraft
+Os kits reais são criados exclusivamente no Minecraft pelo Plugin-ASTHEN. Quando o plugin sincroniza a lista, os produtos aparecem automaticamente na loja do Discord.
 
-Use o comando de criação do Plugin-ASTHEN dentro do servidor Paper. Por exemplo, nas versões que usam o comando `/dk create`:
+### No Minecraft
+
+Crie o kit no Paper com o comando do Plugin-ASTHEN e configure o preço no jogo:
 
 ~~~text
-/dk create Kit_Ferro
+/dk price Kit_Ferro 19,90
 ~~~
 
-O plugin guarda os itens do kit e envia a lista ao bot. Aguarde a sincronização; confira com `/bridge status`.
-
-### `/kit criar`
-
-Cadastra na loja do Discord um kit real que já foi recebido do plugin.
-
-1. Escolha um kit ainda não cadastrado comercialmente.
-2. Preencha o nome que o cliente verá.
-3. Escreva uma descrição curta e útil.
-4. Cole um link HTTPS para a imagem, se tiver.
-
-O preço é definido no Minecraft com `/dk price <nome> <valor>`, por exemplo `/dk price Kit_Ferro 19,90`. Para remover o preço, use `/dk price <nome> remover`. Kit sem preço fica fora da venda.
-
-O nome técnico do plugin não é alterado. A imagem é opcional.
-
-**Esse comando não cria os itens dentro do Minecraft.** Ele apenas configura a apresentação comercial de um kit que já existe no plugin.
+Kit sem preço ou desativado pelo plugin aparece como indisponível. O bot não altera os itens nem o preço.
 
 ### `/kit listar`
 
-Mostra o nome comercial, preço recebido em centavos do plugin, estado no Minecraft, situação da venda e estado dos dados comerciais.
+Lista os kits recebidos do Minecraft, seu estado e a disponibilidade de venda.
 
 ### `/kit editar`
 
-1. Selecione um kit.
-2. Escolha o campo que deseja alterar.
-3. Preencha o novo valor.
+Selecione um kit sincronizado e altere somente:
 
-Campos disponíveis: nome exibido, descrição, imagem HTTPS e bloqueio manual na loja. O preço e a ativação real são controlados no Minecraft com `/dk price`, `/dk enable` e `/dk disable`.
+- Nome exibido para o comprador.
+- Descrição comercial.
+- Imagem HTTPS.
 
-### `/kit remover`
+Não existe `/kit criar` nem `/kit remover`. A criação e o estado real da venda pertencem ao Plugin-ASTHEN.
 
-Marca o produto como indisponível para novas compras. Não apaga o cadastro do bot, a linha do Supabase, os itens no Minecraft ou os pedidos antigos.
+### Kit Demonstração
 
-Se o plugin desativar ou remover um kit, o bot também o mantém visível como indisponível. Para permitir a compra novamente, o kit precisa existir e estar ativo no plugin.
+Antes da primeira sincronização do Minecraft, a loja mostra um único produto de demonstração. Ele serve apenas para conferir a aparência da loja; não permite abrir pedido, gerar Pix, reservar estoque ou entregar itens. O demo some quando o plugin envia a primeira lista.
 
 ## Integração
 
 ### `/bridge status`
 
-Mostra:
-- se a API local está online;
-- quantos pedidos aguardam resposta;
-- quantos kits chegaram do plugin;
-- quando a lista de kits foi recebida pela última vez;
-- se o Supabase está configurado e quando sincronizou pela última vez.
+Mostra se a API local está online, quantidade de pedidos aguardando resposta, quantidade de kits sincronizados, horário da última sincronização e estado do Supabase.
 
-A chave `DKB_SECRET` nunca é mostrada no Discord. Copie-a diretamente do `.env` local do bot e configure o mesmo valor em `bridge.secret` no `config.yml` do plugin.
+O segredo `DKB_SECRET` não é exibido no Discord. Copie o valor diretamente do `.env` do bot e configure o mesmo valor em `bridge.secret` no `config.yml` do plugin.
 
-## Pagamento
+## Pagamentos
 
-Não existe comando `/pix`. A chave e o QR Code ficam na própria mensagem de pagamento. A equipe confere o comprovante manualmente antes de aprovar o pedido.
+Não existe `/pix`. A mensagem do pedido já contém QR Code, chave e botão para copiar. A equipe confere o comprovante manualmente antes de aprovar.
 
+## Estoque semanal
 
-## Estoque semanal da loja
-
-- Cada kit tem até 10 unidades por semana, por servidor Discord.
-- O catálogo e a prévia mostram quantas unidades ainda estão disponíveis.
-- Abrir ticket não consome uma unidade. O estoque é reservado quando a equipe confirma o pagamento.
-- O limite reinicia automaticamente no domingo às 00:00 (horário de Brasília).
-- O estoque fica no Supabase. A aprovação é bloqueada quando a conexão ou a migração 005 estiver indisponível.
+- Até 10 unidades por kit, por servidor Discord.
+- Abrir catálogo ou ticket não consome uma unidade.
+- A reserva ocorre ao aprovar o pagamento.
+- O estoque reinicia no domingo às 00:00, horário de Brasília.
+- A reserva é persistida no Supabase e é idempotente por ticket.

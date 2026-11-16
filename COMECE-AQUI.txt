@@ -2,28 +2,32 @@ ASTHEN BOT — INÍCIO RÁPIDO
 
 1. Extraia o ZIP.
 2. Execute INSTALAR.bat.
-3. Informe o token e o Application ID do seu próprio bot Discord.
+3. Informe o token e o Application ID do seu bot Discord.
 4. Execute INICIAR.bat.
-5. No Discord, configure os canais:
+5. No Discord, use /configurar para escolher os canais e o cargo da equipe.
 
-/configurar suporte:#suporte loja:#loja logs:#logs compradores:#compradores equipe:@Equipe
+KITS DA LOJA
 
-COMO CADASTRAR KITS
+1. Crie os kits reais no Minecraft pelo Plugin-ASTHEN.
+2. Defina preço e disponibilidade no Minecraft, por exemplo: /dk price Kit_Ferro 29,90.
+3. Aguarde o plugin sincronizar. Os kits aparecem automaticamente na loja do Discord.
+4. Use /kit listar para conferir os kits e /kit editar para mudar nome exibido, descrição ou imagem.
 
-1. Crie o kit real dentro do servidor Minecraft pelo Plugin-ASTHEN.
-2. Aguarde o plugin sincronizar a lista com o bot. Use /bridge status para conferir.
-3. No Minecraft, defina o preço com /dk price Kit_Ferro 29,90. Sem preço, o kit não fica à venda.
-4. No Discord, um administrador usa /kit criar para preencher nome comercial, descrição e link HTTPS da imagem.
-5. Use /kit editar para mudar os dados comerciais; o preço continua sendo controlado no Minecraft.
+Não existe cadastro de kit pelo Discord. O bot não altera os itens, preço ou disponibilidade oficial do Minecraft.
+
+SEM PLUGIN CONECTADO
+
+A loja mostra um Kit Demonstração para conferir o visual. Esse demo não abre pedido, não gera Pix, não reserva estoque e não entrega itens. Ele desaparece na primeira sincronização do plugin.
+
+SUPABASE
+
+1. Abra o SQL Editor do Supabase.
+2. Execute o arquivo completo supabase/SETUP.sql.
+3. No .env, preencha SUPABASE_URL e SUPABASE_SECRET_KEY.
 
 IMPORTANTE
-- /kit criar configura somente a apresentação na loja Discord. O preço e os itens reais continuam no Plugin-ASTHEN.
-- O plugin 1.2.0 entrega o kit dentro de uma Shulker Box. Esta parte ainda precisa de teste em jogo.
-- Só membros com a permissão Administrador podem usar /kit.
-- O pagamento é conferido manualmente pela equipe.
-- Não existe mais o comando /pix.
-- .env e data/state.json devem ser mantidos ao atualizar. Nunca compartilhe o .env.
 
-SUPABASE (OPCIONAL)
-Abra o SQL Editor do Supabase e execute o arquivo supabase/SETUP.sql.
-Depois configure SUPABASE_URL e SUPABASE_SECRET_KEY no .env.
+- Mantenha .env e toda a pasta data ao atualizar.
+- Nunca compartilhe o .env, DKB_SECRET ou a chave do Supabase.
+- O pagamento é conferido manualmente pela equipe.
+- A aprovação depende do Supabase para reservar o estoque semanal.

@@ -132,15 +132,15 @@ Comandos do plugin:
 
 O bot usa `price_cents` em vez de recalcular o valor a partir do decimal `price`. Quando recebe `price_cents: null` ou `for_sale: false`, deve limpar o preço de venda anterior e impedir novas compras. Nunca pode manter um preço antigo do Discord como substituto do preço removido no plugin.
 
-O bot também aplica um bloqueio manual adicional com `/kit remover`. Reabrir no Discord remove somente esse bloqueio; não pode sobrepor `enabled: false` ou `for_sale: false` enviados pelo plugin.
+O BOT-ASTHEN 2.14.0 não aplica bloqueio manual nem remove kits pelo Discord. O estado de venda vem exclusivamente de `enabled` e `for_sale` enviados pelo plugin.
 
 ## 5. Fluxo de cadastro comercial
 
 1. Um administrador cria o kit real no Paper segurando a Shulker Box preenchida e usa `/dk create <nome>`.
 2. Define o preço e a ativação no Minecraft, com os comandos do plugin.
 3. O plugin envia a lista para `POST /plugin/v1/kits`.
-4. No Discord, um administrador usa `/kit criar` para definir nome exibido, descrição e imagem HTTPS.
-5. Use `/kit editar` para alterar esses dados e `/kit listar` para conferir o estado.
+4. O bot importa o kit automaticamente e ele aparece na loja Discord.
+5. No Discord, um administrador usa `/kit editar` para definir nome exibido, descrição e imagem HTTPS; `/kit listar` confere o estado.
 6. O identificador técnico recebido do plugin não deve ser alterado pelo nome comercial.
 
 A sincronização precisa preservar os campos comerciais criados no Discord, mas substituir o preço e a disponibilidade de acordo com o contrato enviado pelo plugin.
@@ -176,7 +176,6 @@ O bot deve considerar sucesso somente para `KIT_DELIVERED` ou `KIT_PENDING`. Par
 - [ ] `price_cents` é mostrado corretamente, inclusive em valores como 29,90.
 - [ ] `/dk price <nome> remover` torna o produto indisponível no Discord.
 - [ ] `/dk disable` bloqueia novas compras; `/dk enable` reabre quando existe preço.
-- [ ] `/kit remover` bloqueia a loja sem apagar os itens no Minecraft.
 - [ ] Um pagamento de teste gera uma única entrega.
 - [ ] A Shulker Box chega com nome, cor e itens nos slots esperados.
 - [ ] Com inventário cheio, o kit fica pendente e `/dk claim` entrega a caixa completa.

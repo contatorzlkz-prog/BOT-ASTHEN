@@ -6,11 +6,11 @@ Bot de Discord para o servidor Minecraft ASTHEN: atendimento privado, loja de ki
 ![Discord.js](https://img.shields.io/badge/discord.js-14-5865F2?logo=discord&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-estoque_persistente-3ECF8E?logo=supabase&logoColor=white)
 [![Checks](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/vers%C3%A3o-2.13.0-7C5CFC)
+![Version](https://img.shields.io/badge/vers%C3%A3o-2.14.0-7C5CFC)
 
 <p align="center">
-  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/latest/download/ASTHEN-BOT-v2.13.0.zip">
-    <img src="assets/download-zip.svg" alt="Baixar ASTHEN BOT 2.13.0 em ZIP" width="264" height="58">
+  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/latest/download/ASTHEN-BOT-v2.14.0.zip">
+    <img src="assets/download-zip.svg" alt="Baixar ASTHEN BOT 2.14.0 em ZIP" width="264" height="58">
   </a>
 </p>
 
@@ -18,9 +18,9 @@ Bot de Discord para o servidor Minecraft ASTHEN: atendimento privado, loja de ki
   <strong>Windows 10/11 · Node.js 22 ou mais recente · Paper + Plugin-ASTHEN</strong>
 </p>
 
-## Versão 2.13.0
+## Versão 2.14.0
 
-O código está integrado ao `main` e a [release 2.13.0](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/tag/v2.13.0) já contém o ZIP de instalação. O bot mantém compatibilidade com o Plugin-ASTHEN 1.2.0; a atualização automática posterior de `KIT_PENDING` para `KIT_DELIVERED` exige o Plugin-ASTHEN 1.3.0.
+A versão 2.14.0 mantém a fila persistente e simplifica a loja: os kits são criados no Minecraft, sincronizados automaticamente e editados no Discord. Sem plugin conectado, a loja exibe um Kit Demonstração que não gera compras nem cobranças.
 
 ## Começar
 
@@ -39,14 +39,14 @@ O **Plugin-ASTHEN é a origem dos kits reais e dos itens entregues no Minecraft*
 1. Um administrador cria o kit real dentro do Minecraft pelo Plugin-ASTHEN.
 2. O plugin envia a lista de kits para a API do bot.
 3. No Minecraft, o administrador define o preço com `/dk price Kit_Ferro 29,90` e ativa o kit.
-4. No Discord, usa `/kit criar` para cadastrar nome exibido, descrição e imagem HTTPS. O preço não é preenchido no bot.
-5. O bot recebe `price_cents` e `for_sale` do plugin; só oferece kits autorizados para venda.
+4. O Plugin-ASTHEN sincroniza o kit automaticamente com o bot. Ele aparece na loja sem cadastro manual pelo Discord.
+5. No Discord, `/kit editar` permite alterar apenas o nome exibido, a descrição e a imagem. O preço e a disponibilidade continuam vindo do Minecraft.
 6. O comprador confere a prévia, informa o nick e seleciona Java ou Bedrock.
 7. O bot abre o ticket privado com o QR Pix, a chave e o valor. A equipe confere o comprovante.
 8. Após a aprovação, o bot reserva uma unidade do estoque semanal no Supabase e solicita a entrega ao plugin.
-9. O plugin entrega a Shulker Box; se o jogador estiver offline, a entrega fica pendente para quando entrar (com kits.require-online: false).
+9. O plugin entrega a Shulker Box; se o jogador estiver offline, a entrega fica pendente para quando entrar (com `kits.require-online: false`).
 
-**Importante:** `/kit criar` cadastra o produto na loja do Discord. Ele não cria espadas, armaduras ou outros itens dentro do Minecraft. Os itens reais continuam sendo configurados no plugin.
+**Importante:** não existe cadastro de kits pelo Discord. Um kit só entra na loja depois de ser criado e sincronizado pelo Plugin-ASTHEN. O nome, a descrição e a imagem comercial podem ser ajustados no Discord.
 
 ## Administrar kits no Discord
 
@@ -54,10 +54,8 @@ Todos os comandos `/kit` exigem a permissão **Administrador**.
 
 | Comando | O que faz |
 |---|---|
-| `/kit criar` | Cadastra na loja um kit que já chegou do plugin. Preenche nome exibido, descrição e imagem. |
-| `/kit listar` | Mostra os kits, o estado no Minecraft e se o cadastro comercial está pronto. |
-| `/kit editar` | Altera individualmente nome exibido, descrição, imagem ou bloqueio manual na loja. |
-| `/kit remover` | Marca o produto como indisponível na loja sem apagar o cadastro ou o kit no Minecraft. |
+| `/kit listar` | Lista os kits sincronizados do Minecraft e o estado de venda. |
+| `/kit editar` | Altera nome exibido, descrição ou imagem de um kit recebido do plugin. |
 
 O identificador técnico do plugin não muda. Por exemplo, o Minecraft pode continuar usando `Kit_Ferro`, enquanto o cliente vê **Kit Ferro**.
 
@@ -121,32 +119,24 @@ Isso não substitui o teste dentro do jogo. A entrega em Shulker Box ainda preci
 
 ## Supabase
 
-O Supabase é obrigatório para aprovar vendas na versão 2.11.0, pois o limite semanal precisa ser protegido por uma transação no banco. Ele guarda o snapshot, o catálogo e o controle persistente do estoque semanal.
+Para iniciar o bot, o projeto Supabase precisa de três tabelas e uma função SQL. Abra o SQL Editor e execute o arquivo completo `supabase/SETUP.sql`.
 
-**Instalação nova:** abra o SQL Editor e execute o arquivo supabase/SETUP.sql. Ele cria:
-- asthen_bot_state: snapshot de configurações, tickets e compras em preparação.
-- asthen_bot_kits: catálogo comercial por servidor Discord.
-- asthen_bot_weekly_stock: contador semanal de unidades reservadas por kit.
-- asthen_bot_stock_reservations: registro idempotente das compras que consumiram uma unidade.
+- `asthen_bot_state`: snapshot geral, incluindo a lista recebida do Minecraft, configurações e tickets.
+- `asthen_bot_weekly_stock`: saldo reservado por kit e semana.
+- `asthen_bot_stock_reservations`: registro idempotente das compras aprovadas.
+- `reserve_asthen_weekly_kit_stock(...)`: função que reserva uma unidade sem ultrapassar o limite.
 
-**Projeto que já usa a versão 2.10.0:** execute supabase/005_asthen_bot_weekly_kit_stock.sql.
+A tabela `asthen_bot_kits` não é necessária nesta versão. O bot não grava mais os kits numa tabela separada; eles ficam no snapshot e são sincronizados pelo Plugin-ASTHEN. Se a tabela antiga existir no projeto, pode deixá-la lá: não é preciso apagá-la.
 
-**Projeto antigo vindo da 2.7.0:** execute as migrações 003_asthen_bot_kit_catalog_status.sql, 004_asthen_bot_plugin_sale_contract.sql e, por último, 005_asthen_bot_weekly_kit_stock.sql, nessa ordem.
-
-O estoque é de 10 unidades por kit, por servidor Discord, e a reserva acontece quando a equipe confirma o pagamento. O banco calcula uma janela nova a cada domingo às 00:00, usando o fuso America/Sao_Paulo (horário de Brasília). Não existe reinício manual nem cron: a chave de cada semana é a data do domingo.
-
-A reserva é feita por uma função SQL atômica e idempotente. Dois compradores simultâneos não conseguem consumir a mesma última unidade, e repetir a aprovação do mesmo ticket não desconta duas vezes. Se o Supabase estiver indisponível ou a migração 005 não existir, o bot bloqueia a aprovação em vez de vender sem registrar o estoque.
-
-Configure no .env:
+Configure no `.env` somente:
 
 ~~~env
 SUPABASE_URL=https://seu-projeto.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_sua_chave
 SUPABASE_TABLE=asthen_bot_state
-SUPABASE_KITS_TABLE=asthen_bot_kits
 ~~~
 
-Use uma Secret API Key somente no backend do bot. Não a coloque no cliente, em páginas públicas ou no GitHub. Veja a configuração em docs/SUPABASE.md.
+A chave é usada apenas no backend. Sem plugin conectado, a loja exibe um Kit Demonstração não comprável e não consulta estoque. Consulte [o guia Supabase](docs/SUPABASE.md) para detalhes.
 
 ## Estrutura do projeto
 

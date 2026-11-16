@@ -57,7 +57,7 @@ test('menus administrativos também exibem todos os 200 kits em páginas de 25',
   const allValues = [];
 
   for (let page = 0; page < 8; page += 1) {
-    const row = makeKitAdminMenu(kits, 'kit:edit-select', page).toJSON();
+    const row = makeKitAdminMenu(kits, page).toJSON();
     const menu = row.components[0];
     assert.equal(menu.options.length, 25);
     assert.equal(menu.custom_id, 'kit:edit-select');
@@ -69,9 +69,25 @@ test('menus administrativos também exibem todos os 200 kits em páginas de 25',
 });
 
 test('paginação administrativa mantém ação vinculada e desabilita limites', () => {
-  const first = makeKitAdminPaginationRow(0, 2, 'remove').toJSON().components;
-  assert.equal(first[0].custom_id, 'kit:admin-page:remove:-1');
+  const first = makeKitAdminPaginationRow(0, 2).toJSON().components;
+  assert.equal(first[0].custom_id, 'kit:admin-page:edit:-1');
   assert.equal(first[0].disabled, true);
-  assert.equal(first[2].custom_id, 'kit:admin-page:remove:1');
+  assert.equal(first[2].custom_id, 'kit:admin-page:edit:1');
   assert.equal(first[2].disabled, false);
+});
+
+test('kit demo aparece identificado e informa que não gera compra', () => {
+  const demo = {
+    id: 'asthen-demo-kit',
+    name: 'ASTHEN_DEMO_KIT',
+    displayName: 'Kit Demonstração',
+    demo: true,
+    enabled: false,
+    pluginEnabled: false,
+    pluginForSale: false,
+    forSale: false
+  };
+  const option = makeCatalogMenu([demo]).toJSON().components[0].options[0];
+  assert.match(option.label, /^DEMO/);
+  assert.match(option.description, /não gera compra nem cobrança/i);
 });
