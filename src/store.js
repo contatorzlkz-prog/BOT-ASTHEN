@@ -394,6 +394,24 @@ export function updateTicket(channelId, changes) {
   return ticket;
 }
 
+export function appendTicketHistory(channelId, event) {
+  const ticket = state.tickets[channelId];
+  if (!ticket || !event || typeof event.type !== 'string') return null;
+  if (!Array.isArray(ticket.history)) ticket.history = [];
+  if (event.eventId && ticket.history.some(item => item.eventId === event.eventId)) {
+    return ticket.history[ticket.history.findIndex(item => item.eventId === event.eventId)];
+  }
+  const entry = {
+    ...event,
+    at: event.at || new Date().toISOString()
+  };
+  ticket.history.push(entry);
+  // Keep the structured audit trail bounded while retaining recent operational events.
+  if (ticket.history.length > 500) ticket.history.splice(0, ticket.history.length - 500);
+  saveStore();
+  return entry;
+}
+
 function purchaseDraftKey(guildId, userId) {
   return guildId + ':' + userId;
 }
