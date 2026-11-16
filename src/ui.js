@@ -8,6 +8,8 @@ import {
 import { CONFIG, hexToInt } from './config.js';
 import { PIX_KEY_DEFAULT } from './pix.js';
 
+export const PANEL_LAYOUT_VERSION = '2.15.0';
+
 const brandColor = () => hexToInt(CONFIG.brand.color);
 
 function safeImageUrl(value) {
