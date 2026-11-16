@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   getGuildConfig,
   getStoreDataDir,
+  getShopKits,
   loadStore,
   makeKitDisplayName,
   removeKit,
@@ -265,4 +266,43 @@ test('a corrupt state.json is preserved and copied instead of being replaced by 
   const backups = readdirSync(directory).filter(name => name.startsWith('state.json.corrupt-') && name.endsWith('.bak'));
   assert.equal(backups.length, 1);
   assert.equal(readFileSync(path.join(directory, backups[0]), 'utf8'), corrupt);
+});
+
+test('loja mostra um único kit demo até receber a primeira sincronização do plugin', () => {
+  const guildId = testGuildId();
+  updateGuildConfig(guildId, { kits: [], pluginSyncReceived: false });
+  const demo = getShopKits(guildId);
+  assert.equal(demo.length, 1);
+  assert.equal(demo[0].demo, true);
+  assert.equal(demo[0].id, 'asthen-demo-kit');
+  assert.equal(demo[0].forSale, false);
+  assert.equal(demo[0].pluginForSale, false);
+
+  const synced = syncPluginKits(guildId, [
+    { name: 'Kit_Ferro', enabled: true, items: 12, price: 9.9, price_cents: 990, for_sale: true }
+  ]);
+  const visible = getShopKits(guildId);
+  assert.equal(synced.changed, true);
+  assert.equal(visible.length, 1);
+  assert.equal(visible[0].name, 'Kit_Ferro');
+  assert.equal(visible[0].demo, undefined);
+});
+
+test('kit demo nunca aparece depois que o plugin já sincronizou, mesmo com lista vazia', () => {
+  const guildId = testGuildId();
+  syncPluginKits(guildId, [{ name: 'Kit_Ferro', enabled: true, items: 1, price: null, price_cents: null, for_sale: false }]);
+  const emptySync = syncPluginKits(guildId, []);
+  assert.equal(emptySync.changed, true);
+  assert.deepEqual(getShopKits(guildId), []);
+});
+
+test('loja ignora cadastros manuais antigos que não vieram do plugin', () => {
+  const guildId = testGuildId();
+  updateGuildConfig(guildId, {
+    kits: [{ id: 'old-manual', name: 'Kit_Antigo', displayName: 'Antigo', enabled: true }],
+    pluginSyncReceived: false
+  });
+  const visible = getShopKits(guildId);
+  assert.equal(visible.length, 1);
+  assert.equal(visible[0].demo, true);
 });
