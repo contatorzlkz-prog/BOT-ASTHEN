@@ -282,6 +282,8 @@ async function main() {
   console.log('Comandos do Discord atualizados: ' + body.length);
 
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  let bridgeServer = null;
+  let shutdownPromise = null;
   client.once(Events.ClientReady, async readyClient => {
     console.log(`Bot online como ${readyClient.user.tag}.`);
     console.log(`Servidores conectados: ${readyClient.guilds.cache.size}`);
@@ -312,8 +314,6 @@ async function main() {
 
   await client.login(token);
 
-  let bridgeServer = null;
-  let shutdownPromise = null;
   const shutdown = signal => {
     if (shutdownPromise) return shutdownPromise;
     shutdownPromise = (async () => {
