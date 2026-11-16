@@ -1037,8 +1037,11 @@ async function closeTicket(interaction) {
   if (ticket.status !== 'open' || closingTickets.has(interaction.channelId)) {
     return replyPrivate(interaction, 'Este ticket já está sendo fechado.');
   }
+  if (deliveryAttemptsInFlight.has(interaction.channelId)) {
+    return replyPrivate(interaction, 'A entrega ainda está sendo processada. Aguarde a confirmação antes de fechar este pedido.');
+  }
   if (ticket.type === 'shop' && ticket.orderStatus === 'approved'
-      && ['PLATFORM_REQUIRED', 'QUEUED', 'TIMEOUT', 'WAITING', 'KIT_PENDING'].includes(ticket.deliveryStatus)) {
+      && (!ticket.deliveryStatus || ['PLATFORM_REQUIRED', 'QUEUED', 'TIMEOUT', 'WAITING', 'KIT_PENDING'].includes(ticket.deliveryStatus))) {
     return replyPrivate(interaction,
       'Não é possível fechar este pedido enquanto a entrega estiver pendente ou sem confirmação. ' +
       'Estado atual: ' + ticket.deliveryStatus + '. Aguarde a atualização do Minecraft ou faça a reconciliação com a equipe.');
@@ -1461,6 +1464,7 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
     // The Minecraft result is already final. Never relabel a delivered kit as WAITING
     // merely because Discord failed to publish the embed.
     updateTicket(ticket.channelId, {
+      deliveryResultNotificationPending: true,
       deliveryResultNotificationSent: false,
       deliveryNotificationError: String(notificationError.message || 'Falha ao notificar o ticket.')
     });
