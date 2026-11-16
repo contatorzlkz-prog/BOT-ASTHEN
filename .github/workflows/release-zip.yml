@@ -1,11 +1,17 @@
 name: release-zip
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
       - package.json
       - VERSION.txt
+      - README.md
+      - CHANGELOG.md
+      - docs/INSTALLATION.md
+      - docs/PLUGIN-INTEGRATION.md
+      - docs/ARCHITECTURE.md
       - supabase/SETUP.sql
       - .github/workflows/release-zip.yml
 
