@@ -1,4 +1,4 @@
-# Integração do ASTHEN BOT 2.13.0 com Plugin-ASTHEN 1.2.0 / 1.3.0
+# Integração do ASTHEN BOT 2.14.0 com Plugin-ASTHEN 1.2.0 / 1.3.0
 
 A integração usa o modo poll: o plugin faz as conexões de saída para buscar pedidos e devolver resultados. O servidor Minecraft não precisa aceitar conexões de entrada.
 
@@ -121,10 +121,10 @@ Authorization: Bearer <DKB_SECRET>
 ~~~
 
 - GET /plugin/v1/pull?limit=5: busca pedidos. Sem pedidos, responde HTTP 204.
-- O BOT-ASTHEN 2.12.0 também aceita GET /plugin/v1/pull?limit=5&wait_ms=20000: mantém a conexão aberta por até 20 segundos, acordando-a imediatamente quando um pedido chega. O bot aceita no máximo 25.000 ms e retorna 204 quando o prazo termina sem pedidos. O plugin 1.2.0 continua compatível, mas só a versão 1.3.0 com suporte a Long Polling enviará wait_ms.
+- O BOT-ASTHEN 2.14.0 também aceita GET /plugin/v1/pull?limit=5&wait_ms=20000: mantém a conexão aberta por até 20 segundos, acordando-a imediatamente quando um pedido chega. O bot aceita no máximo 25.000 ms e retorna 204 quando o prazo termina sem pedidos. O plugin 1.2.0 continua compatível, mas só a versão 1.3.0 com suporte a Long Polling enviará wait_ms.
 - POST /plugin/v1/result: recebe resultado final de entrega.
 - POST /plugin/v1/kits: recebe a lista completa dos kits do plugin, incluindo `name`, `enabled`, `items`, `price`, `price_cents` e `for_sale`.
-- POST /plugin/v1/delivery-update: disponível na proposta BOT-ASTHEN 2.13.0 para registrar a transição posterior `KIT_PENDING` → `KIT_DELIVERED`. Exige `request_id` previamente conhecido e não reserva estoque novamente. O Plugin-ASTHEN 1.2.0 ainda não chama essa rota.
+- POST /plugin/v1/delivery-update: disponível na proposta BOT-ASTHEN 2.14.0 para registrar a transição posterior `KIT_PENDING` → `KIT_DELIVERED`. Exige `request_id` previamente conhecido e não reserva estoque novamente. O Plugin-ASTHEN 1.2.0 ainda não chama essa rota.
 
 A API do bot envia request_id, player, a plataforma escolhida pelo cliente (java ou bedrock) e o identificador exato do kit. O plugin continua responsável por entregar os itens.
 
