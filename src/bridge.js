@@ -10,6 +10,7 @@ let boundHost = null;
 let boundPort = null;
 let lastKits = [];
 let lastKitsSyncAt = null;
+let lastQueueStatus = null;
 
 function persistSecret(secret) {
   const envPath = path.resolve(process.cwd(), '.env');
@@ -54,6 +55,8 @@ export function getBridgeStatus() {
     host: boundHost,
     port: boundPort,
     pending: bridgeInstance?.pendingCount?.() || 0,
+    queue: bridgeInstance?.queueCounts?.() || lastQueueStatus,
+    longPolls: bridgeInstance?.longPollCount?.() || 0,
     kits: (bridgeInstance?.kits?.() || lastKits).map(kit => ({ ...kit })),
     lastKitsSyncAt
   };
@@ -65,6 +68,8 @@ export async function startBridge({
   port = Number(process.env.DKB_PORT || 8787),
   leaseMs = 15000,
   onKits = () => {},
+  onResult = () => {},
+  onDeliveryUpdate = () => {},
   log = console
 } = {}) {
   if (bridgeInstance) throw new Error('A API de integração já está em execução.');
@@ -80,6 +85,23 @@ export async function startBridge({
     host,
     port: Number(port),
     leaseMs,
+    dataDir: path.resolve(process.env.ASTHEN_DATA_DIR?.trim() || path.resolve(process.cwd(), 'data')),
+    onResult: result => {
+      lastQueueStatus = instance.queueCounts?.() || lastQueueStatus;
+      try {
+        onResult(result);
+      } catch (error) {
+        log.error('[Asthen Bridge] Não foi possível processar o resultado do plugin:', error);
+      }
+    },
+    onDeliveryUpdate: update => {
+      lastQueueStatus = instance.queueCounts?.() || lastQueueStatus;
+      try {
+        onDeliveryUpdate(update);
+      } catch (error) {
+        log.error('[Asthen Bridge] Não foi possível processar a atualização posterior:', error);
+      }
+    },
     onKits: kits => {
       lastKits = Array.isArray(kits) ? kits.map(kit => ({ ...kit })) : [];
       lastKitsSyncAt = new Date().toISOString();
@@ -95,6 +117,7 @@ export async function startBridge({
   try {
     const listeningPort = await instance.listening;
     bridgeInstance = instance;
+    lastQueueStatus = instance.queueCounts?.() || null;
     activeSecret = token;
     boundHost = host;
     boundPort = listeningPort;
@@ -103,7 +126,10 @@ export async function startBridge({
       port: listeningPort,
       close: async () => {
         await instance.close();
-        if (bridgeInstance === instance) bridgeInstance = null;
+        if (bridgeInstance === instance) {
+          lastQueueStatus = instance.queueCounts?.() || lastQueueStatus;
+          bridgeInstance = null;
+        }
       }
     };
   } catch (error) {
