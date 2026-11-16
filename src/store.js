@@ -263,6 +263,7 @@ export function syncPluginKits(guildId, pluginKits) {
       && /^[A-Za-z0-9_-]{1,32}$/.test(item.name))
     : null;
   if (!incoming) return { changed: false, kits: config.kits };
+  const firstSyncThisSession = !pluginSyncReceivedThisSession;
   pluginSyncReceivedThisSession = true;
   const incomingByName = new Map();
   for (const item of incoming) incomingByName.set(normalizeKitName(item.name), item);
@@ -337,7 +338,7 @@ export function syncPluginKits(guildId, pluginKits) {
   const next = [...syncedKits, ...missingKits];
   const beforeJson = JSON.stringify({ kits: config.kits });
   const afterJson = JSON.stringify({ kits: next });
-  if (beforeJson === afterJson) return { changed: false, kits: config.kits };
+  if (beforeJson === afterJson) return { changed: firstSyncThisSession, kits: config.kits };
 
   config.kits = next;
   saveStore();
