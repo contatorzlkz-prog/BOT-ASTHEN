@@ -33,14 +33,14 @@ O arquivo contém o token do Discord e, opcionalmente, a chave secreta do Supaba
 
 ## Atualizar uma instalação existente
 
-Não apague a pasta `data` nem substitua o arquivo `.env` sem fazer uma cópia. Eles guardam o estado local, o segredo estável da bridge e, na proposta 2.13.0, a fila persistente em `data/bridge-queue.json`. Se instalar em outra pasta, copie `.env` e toda a pasta `data` antes de iniciar a versão nova. Não copie somente `state.json` e esqueça a fila.
+Não apague a pasta `data` nem substitua o arquivo `.env` sem fazer uma cópia. Eles guardam o estado local, o segredo estável da bridge e, na versão 2.13.0, a fila persistente em `data/bridge-queue.json`. Se instalar em outra pasta, copie `.env` e toda a pasta `data` antes de iniciar a versão nova. Não copie somente `state.json` e esqueça a fila.
 
 ## Kits da loja
 
 Crie primeiro o kit real pelo Plugin-ASTHEN dentro do Paper usando uma Shulker Box. Defina o preço no jogo com `/dk price <nome> <valor>`; kit sem preço não está à venda. Quando o bot receber a lista, um administrador pode usar `/kit criar` para configurar nome comercial, descrição e imagem. O comando não altera os itens nem o preço do Minecraft.
-### Versão 2.13.0 em revisão
+### Versão 2.13.0
 
-A proposta 2.13.0 está na [PR #3](https://github.com/contatorzlkz-prog/BOT-ASTHEN/pull/3), ainda sem release estável. Ela preserva o arquivo state.json corrompido em vez de sobrescrevê-lo, isola testes e mantém jobs da Bridge em data/bridge-queue.json.
+A versão 2.13.0 foi integrada ao main e está disponível na [release oficial](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/tag/v2.13.0). Ela preserva o arquivo state.json corrompido em vez de sobrescrevê-lo, isola testes e mantém jobs da Bridge em data/bridge-queue.json.
 
 Antes de atualizar uma instalação existente, faça backup completo de `.env` e `data/`. Se a fila persistente estiver corrompida, não apague o arquivo: a inicialização interrompe a Bridge e preserva uma cópia para diagnóstico.
 
