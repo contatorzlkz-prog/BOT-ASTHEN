@@ -96,18 +96,18 @@ function ensureGuildConfig(guildId) {
       ? Number(kit.priceCents) : null,
     pluginForSale: kit.pluginForSale === true,
     forSale: kit.forSale === true,
-    manuallyUnavailable: kit.manuallyUnavailable === true,
+    manuallyUnavailable: false,
     missingFromPlugin: kit.missingFromPlugin === true,
     pluginEnabled: typeof kit.pluginEnabled === 'boolean'
       ? kit.pluginEnabled
-      : kit.missingFromPlugin === true ? false : kit.manuallyUnavailable === true ? true : kit.enabled !== false,
+      : kit.missingFromPlugin === true ? false : kit.enabled !== false,
     storeConfigured: typeof kit.storeConfigured === 'boolean'
       ? kit.storeConfigured
       : Boolean(String(kit.description || '').trim()
         || String(kit.imageUrl || '').trim()
         || (String(kit.displayName || '').trim()
           && kit.displayName !== makeKitDisplayName(kit.name))),
-    enabled: kit.enabled !== false && kit.manuallyUnavailable !== true
+    enabled: kit.enabled !== false
   }));
 
   return config;
@@ -270,7 +270,7 @@ export function syncPluginKits(guildId, pluginKits) {
     const key = normalizeKitName(item.name);
     const old = existingByName.get(key);
     const pluginEnabled = item.enabled === true;
-    const manuallyUnavailable = old?.manuallyUnavailable === true;
+    const manuallyUnavailable = false;
     const hasSaleContract = Object.prototype.hasOwnProperty.call(item, 'for_sale')
       || Object.prototype.hasOwnProperty.call(item, 'price_cents');
 
@@ -289,7 +289,7 @@ export function syncPluginKits(guildId, pluginKits) {
       ? item.for_sale === true && pluginEnabled && priceCents !== null
       : pluginEnabled && Number.isSafeInteger(priceCents) && priceCents > 0;
     const price = formatBrlCents(priceCents);
-    const forSale = pluginForSale && !manuallyUnavailable;
+    const forSale = pluginForSale;
     const wasConfigured = typeof old?.storeConfigured === 'boolean'
       ? old.storeConfigured
       : Boolean(old && (
@@ -308,7 +308,7 @@ export function syncPluginKits(guildId, pluginKits) {
       forSale,
       description: String(old?.description || ''),
       imageUrl: String(old?.imageUrl || ''),
-      enabled: pluginEnabled && !manuallyUnavailable,
+      enabled: pluginEnabled,
       pluginEnabled,
       manuallyUnavailable,
       missingFromPlugin: false,
@@ -323,6 +323,7 @@ export function syncPluginKits(guildId, pluginKits) {
     .map(kit => ({
       ...kit,
       enabled: false,
+      manuallyUnavailable: false,
       forSale: false,
       pluginForSale: false,
       pluginEnabled: false,
