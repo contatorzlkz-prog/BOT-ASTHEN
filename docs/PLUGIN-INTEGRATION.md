@@ -1,4 +1,4 @@
-# Integração do ASTHEN BOT 2.13.0 (candidato) com Plugin-ASTHEN 1.2.0 / 1.3.0
+# Integração do ASTHEN BOT 2.13.0 com Plugin-ASTHEN 1.2.0 / 1.3.0
 
 A integração usa o modo poll: o plugin faz as conexões de saída para buscar pedidos e devolver resultados. O servidor Minecraft não precisa aceitar conexões de entrada.
 
