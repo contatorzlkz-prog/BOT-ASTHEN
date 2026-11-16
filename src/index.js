@@ -159,6 +159,7 @@ async function handleBridgeDeliveryUpdate(client, event) {
     requestId,
     status: 'KIT_DELIVERED',
     message: String(update.message || '').slice(0, 500),
+    eventId: 'delivery-update:' + requestId,
     at: update.updated_at || new Date().toISOString()
   });
 
