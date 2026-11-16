@@ -124,7 +124,7 @@ Authorization: Bearer <DKB_SECRET>
 - O BOT-ASTHEN 2.14.0 também aceita GET /plugin/v1/pull?limit=5&wait_ms=20000: mantém a conexão aberta por até 20 segundos, acordando-a imediatamente quando um pedido chega. O bot aceita no máximo 25.000 ms e retorna 204 quando o prazo termina sem pedidos. O plugin 1.2.0 continua compatível, mas só a versão 1.3.0 com suporte a Long Polling enviará wait_ms.
 - POST /plugin/v1/result: recebe resultado final de entrega.
 - POST /plugin/v1/kits: recebe a lista completa dos kits do plugin, incluindo `name`, `enabled`, `items`, `price`, `price_cents` e `for_sale`.
-- POST /plugin/v1/delivery-update: disponível na proposta BOT-ASTHEN 2.14.0 para registrar a transição posterior `KIT_PENDING` → `KIT_DELIVERED`. Exige `request_id` previamente conhecido e não reserva estoque novamente. O Plugin-ASTHEN 1.2.0 ainda não chama essa rota.
+- POST /plugin/v1/delivery-update: disponível no BOT-ASTHEN 2.14.0 para registrar a transição posterior `KIT_PENDING` → `KIT_DELIVERED`. Exige `request_id` previamente conhecido e não reserva estoque novamente. O Plugin-ASTHEN 1.2.0 ainda não chama essa rota.
 
 A API do bot envia request_id, player, a plataforma escolhida pelo cliente (java ou bedrock) e o identificador exato do kit. O plugin continua responsável por entregar os itens.
 
@@ -151,7 +151,7 @@ O mesmo request_id deve ser reutilizado em uma repetição de entrega para evita
 
 ## 7. Supabase
 
-Em uma instalação nova, execute todo o arquivo supabase/SETUP.sql. Em um banco que já usa 2.10.0, execute supabase/005_asthen_bot_weekly_kit_stock.sql. Se estiver vindo da 2.7.0, aplique 003, 004 e 005 nessa ordem. Consulte SUPABASE.md.
+Em instalação nova ou existente, execute o arquivo completo `supabase/SETUP.sql` no SQL Editor. Ele é idempotente e cria as três tabelas e a função de reserva necessárias sem apagar os dados existentes. Não há mais uma tabela de kits separada nem migrações 002–005 para executar. Consulte [o guia do Supabase](SUPABASE.md).
 
 ### Preço e disponibilidade — contrato do Plugin-ASTHEN 1.2.0
 
@@ -187,7 +187,7 @@ A Shulker Box ocupa um único slot do inventário. Se não houver espaço, o plu
 Isso confirma os testes automatizados e a compilação, mas não executa um servidor Minecraft. A montagem, abertura, cor, slots e retirada da Shulker Box ainda precisam de teste dentro de um servidor Paper real.
 
 
-## 8. Long Polling — BOT-ASTHEN 2.12.0
+## 8. Long Polling — BOT-ASTHEN 2.14.0
 
 O bot agora aceita o parâmetro opcional wait_ms em GET /plugin/v1/pull. Exemplo: /plugin/v1/pull?limit=5&wait_ms=20000.
 
@@ -197,7 +197,7 @@ O bot agora aceita o parâmetro opcional wait_ms em GET /plugin/v1/pull. Exemplo
 - O limite do bot é 25 segundos por pull.
 - A rota antiga sem wait_ms continua funcionando, então o plugin 1.2.0 não quebra.
 
-Para ativar a economia de consultas, atualize também o plugin para a versão 1.3.0 conforme o [prompt de implementação](PLUGIN-LONG-POLLING-PROMPT.md). O prompt propõe wait-seconds: 20 e http-timeout: 35. O plugin 1.2.0 continua usando polling tradicional até ser atualizado.
+Para ativar a economia de consultas, atualize também o plugin para a versão 1.3.0 conforme o [prompt completo do Plugin-ASTHEN](../prompts/PLUGIN-ASTHEN-1.3.0-CORRECOES.md). Ele configura `wait-seconds: 20` e `http-timeout: 35`. O plugin 1.2.0 continua usando polling tradicional até ser atualizado.
 
 ## 9. Endereço público fixo
 
