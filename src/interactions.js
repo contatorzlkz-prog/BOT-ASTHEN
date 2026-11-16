@@ -8,6 +8,7 @@ import {
 } from 'discord.js';
 import { randomUUID } from 'node:crypto';
 import {
+  appendTicketHistory,
   deletePurchaseDraft,
   findOpenTicket,
   getGuildConfig,
@@ -1341,27 +1342,94 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
     deliveryRequestId: requestId,
     deliveryStatus: 'QUEUED',
     deliveryUpdatedAt: new Date().toISOString(),
-    deliveryError: null
+    deliveryError: null,
+    deliveryResultNotificationSent: false
   }) || ticket;
+  appendTicketHistory(ticket.channelId, {
+    type: 'delivery_queued',
+    eventId: 'delivery-queued:' + requestId,
+    requestId,
+    player: current.minecraftNick,
+    platform: current.platform,
+    kit: current.kitName,
+    newAttempt: newRequest === true
+  });
 
-  await channel.send('Pagamento confirmado. A entrega do kit está sendo solicitada ao Minecraft.');
+  // A falha ao publicar uma mensagem de progresso não pode impedir a entrega.
   try {
-    const result = await deliverWithTimeoutRetry({
+    await channel.send('Pagamento confirmado. A entrega do kit está sendo solicitada ao Minecraft.');
+  } catch (notificationError) {
+    console.error('[Asthen] Não foi possível publicar o aviso inicial da entrega:', notificationError.message);
+  }
+
+  let result;
+  try {
+    result = await deliverWithTimeoutRetry({
       requestId,
       player: current.minecraftNick,
       platform: current.platform,
       kit: current.kitName,
+      guildId: current.guildId,
+      ticketId: current.channelId,
       timeoutMs: 60000
     });
-    const status = String(result.status || 'UNKNOWN');
+  } catch (error) {
+    const timedOut = error.code === 'BRIDGE_TIMEOUT';
+    const nextStatus = timedOut ? 'TIMEOUT' : 'WAITING';
     updateTicket(ticket.channelId, {
-      deliveryStatus: status,
-      deliveryResponse: String(result.message || ''),
-      deliveryUpdatedAt: new Date().toISOString(),
-      deliveryError: null
+      deliveryStatus: nextStatus,
+      deliveryError: String(error.message || 'Falha ao solicitar a entrega.'),
+      deliveryUpdatedAt: new Date().toISOString()
     });
+    appendTicketHistory(ticket.channelId, {
+      type: 'delivery_transport_error',
+      requestId,
+      status: nextStatus,
+      message: String(error.message || '').slice(0, 500)
+    });
+    try {
+      await channel.send({
+        content: timedOut
+          ? 'O Minecraft não respondeu nas duas tentativas automáticas. O mesmo identificador foi mantido e o pedido continua salvo. A equipe pode consultar ou tentar novamente com o mesmo ID.'
+          : 'A conexão com o Minecraft está indisponível. O pedido permanece salvo para recuperação; não crie outra compra.',
+        components: [makeDeliveryRetryControls('same')]
+      });
+    } catch (notificationError) {
+      console.error('[Asthen] Não foi possível publicar o aviso de falha de conexão:', notificationError.message);
+    }
+    try {
+      await notifyStaffPrivately(
+        interaction,
+        (timedOut ? 'A entrega excedeu o tempo limite nas duas tentativas automáticas.' : 'Não foi possível alcançar a Bridge do Minecraft.') +
+        ' O pedido foi preservado com o mesmo identificador. Detalhe técnico: ' +
+        String(error.message || 'Sem resposta.')
+      );
+    } catch (staffError) {
+      console.error('[Asthen] Não foi possível notificar a equipe sobre a falha de conexão:', staffError.message);
+    }
+    return;
+  }
 
-    const success = status === 'KIT_DELIVERED' || status === 'KIT_PENDING';
+  const status = String(result.status || 'UNKNOWN');
+  const resultAt = new Date().toISOString();
+  updateTicket(ticket.channelId, {
+    deliveryStatus: status,
+    deliveryResponse: String(result.message || ''),
+    deliveryUpdatedAt: resultAt,
+    deliveryError: null,
+    deliveryResultNotificationSent: false
+  });
+  appendTicketHistory(ticket.channelId, {
+    type: 'delivery_result',
+    eventId: 'delivery-result:' + requestId,
+    requestId,
+    status,
+    message: String(result.message || '').slice(0, 500),
+    at: resultAt
+  });
+
+  const success = status === 'KIT_DELIVERED' || status === 'KIT_PENDING';
+  try {
     await channel.send({
       embeds: [makeDeliveryEmbed({
         ...result,
@@ -1373,33 +1441,34 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
       })],
       components: success ? [makeCloseRow()] : [makeDeliveryRetryControls(result.final === true ? 'new' : 'same')]
     });
+    updateTicket(ticket.channelId, { deliveryResultNotificationSent: true, deliveryNotificationError: null });
+  } catch (notificationError) {
+    // The Minecraft result is already final. Never relabel a delivered kit as WAITING
+    // merely because Discord failed to publish the embed.
+    updateTicket(ticket.channelId, {
+      deliveryResultNotificationSent: false,
+      deliveryNotificationError: String(notificationError.message || 'Falha ao notificar o ticket.')
+    });
+    console.error('[Asthen] A entrega foi processada, mas o embed do resultado não pôde ser publicado:', notificationError.message);
+    try {
+      await notifyStaffPrivately(interaction, 'A entrega respondeu com status ' + status +
+        ', mas a mensagem de resultado não foi publicada no ticket. Request ID: ' + requestId);
+    } catch (staffError) {
+      console.error('[Asthen] Não foi possível notificar a equipe sobre a falha de mensagem:', staffError.message);
+    }
+  }
 
-    if (!success) {
+  if (!success) {
+    try {
       await notifyStaffPrivately(
         interaction,
         'A entrega não foi concluída. Status: ' + status + '. ' +
         String(result.message || 'Confira a configuração do plugin.') +
         '\nO pedido foi preservado.'
       );
+    } catch (staffError) {
+      console.error('[Asthen] Não foi possível notificar a equipe sobre o resultado da entrega:', staffError.message);
     }
-  } catch (error) {
-    const timedOut = error.code === 'BRIDGE_TIMEOUT';
-    updateTicket(ticket.channelId, {
-      deliveryStatus: timedOut ? 'TIMEOUT' : 'WAITING',
-      deliveryError: String(error.message || 'Falha ao solicitar a entrega.'),
-      deliveryUpdatedAt: new Date().toISOString()
-    });
-    await channel.send({
-      content: timedOut
-        ? 'O Minecraft não respondeu nas duas tentativas automáticas. O mesmo identificador da compra foi mantido. A equipe pode tentar novamente sem criar outra compra.'
-        : 'Pagamento confirmado, mas a conexão com o Minecraft está indisponível. O pedido foi preservado e a equipe está acompanhando.',
-      components: [makeDeliveryRetryControls('same')]
-    });
-    await notifyStaffPrivately(
-      interaction,
-      (timedOut ? 'A entrega excedeu o tempo limite nas duas tentativas automáticas.' : 'Não foi possível alcançar a bridge do Minecraft.') +
-      ' O mesmo identificador foi preservado. Detalhe técnico: ' + String(error.message || 'Sem resposta.')
-    );
   }
 }
 
