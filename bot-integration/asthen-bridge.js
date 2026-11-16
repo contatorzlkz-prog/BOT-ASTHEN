@@ -50,7 +50,7 @@ function startBridge(opts) {
     token,
     port = Number(process.env.DKB_PORT || 8787),
     host = '127.0.0.1',
-    leaseMs = 15_000,
+    leaseMs = 90_000,
     maxLongPollMs = DEFAULT_MAX_LONG_POLL_MS,
     maxBody = 64 * 1024,
     maxLongPollConnections = 8,
@@ -148,11 +148,11 @@ function startBridge(opts) {
       });
     }
 
-    // A lease belongs to a process that may have crashed. It expires naturally;
-    // keep the same request id and payload so the plugin can safely retry.
-    const now = Date.now();
+    // The Bridge is a single-process service. On startup, every persisted lease
+    // belongs to the previous process and must be made available immediately.
+    // The request_id and payload stay unchanged, preserving idempotency.
     for (const job of jobs.values()) {
-      if (job.status === 'LEASED' && job.leaseUntil <= now) {
+      if (job.status === 'LEASED') {
         job.status = 'QUEUED';
         job.leasedAt = 0;
         job.leaseUntil = 0;
@@ -543,6 +543,29 @@ function startBridge(opts) {
   const listening = new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, host, () => resolve(server.address().port));
+  });
+
+  // Reconcile durable results with the Discord ticket store after a process restart.
+  // Pending delivery updates supersede the earlier KIT_PENDING notification.
+  listening.then(() => {
+    for (const job of jobs.values()) {
+      if (job.deliveryUpdate) {
+        notifyCallback(onDeliveryUpdate, 'onDeliveryUpdate replay', {
+          request: job.payload,
+          initialResult: job.result,
+          update: job.deliveryUpdate,
+          replayed: true
+        });
+      } else if (job.result) {
+        notifyCallback(onResult, 'onResult replay', {
+          request: job.payload,
+          result: job.result,
+          resumed: true
+        });
+      }
+    }
+  }).catch(error => {
+    log.error && log.error('[asthen-bridge] falha ao reconciliar resultados persistidos:', error);
   });
 
   function deliverKit(request) {
