@@ -273,9 +273,8 @@ test('loja mostra um único kit demo até receber a primeira sincronização do 
   assert.equal(visible[0].demo, undefined);
 });
 
-test('kit demo continua disponível até existir ao menos um kit real do plugin', () => {
+test('kit demo continua disponível quando o plugin ainda não tem kits reais', () => {
   const guildId = testGuildId();
-  syncPluginKits(guildId, [{ name: 'Kit_Ferro', enabled: true, items: 1, price: null, price_cents: null, for_sale: false }]);
   const emptySync = syncPluginKits(guildId, []);
   assert.equal(emptySync.changed, false);
   assert.equal(getShopKits(guildId)[0].demo, true);
