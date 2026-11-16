@@ -255,7 +255,7 @@ test('a corrupt state.json is preserved and copied instead of being replaced by 
 
 test('loja mostra um único kit demo até receber a primeira sincronização do plugin', () => {
   const guildId = testGuildId();
-  updateGuildConfig(guildId, { kits: [], pluginSyncReceived: false });
+  updateGuildConfig(guildId, { kits: [] });
   const demo = getShopKits(guildId);
   assert.equal(demo.length, 1);
   assert.equal(demo[0].demo, true);
@@ -273,19 +273,18 @@ test('loja mostra um único kit demo até receber a primeira sincronização do 
   assert.equal(visible[0].demo, undefined);
 });
 
-test('kit demo nunca aparece depois que o plugin já sincronizou, mesmo com lista vazia', () => {
+test('kit demo continua disponível até existir ao menos um kit real do plugin', () => {
   const guildId = testGuildId();
   syncPluginKits(guildId, [{ name: 'Kit_Ferro', enabled: true, items: 1, price: null, price_cents: null, for_sale: false }]);
   const emptySync = syncPluginKits(guildId, []);
-  assert.equal(emptySync.changed, true);
-  assert.deepEqual(getShopKits(guildId), []);
+  assert.equal(emptySync.changed, false);
+  assert.equal(getShopKits(guildId)[0].demo, true);
 });
 
 test('loja ignora cadastros manuais antigos que não vieram do plugin', () => {
   const guildId = testGuildId();
   updateGuildConfig(guildId, {
     kits: [{ id: 'old-manual', name: 'Kit_Antigo', displayName: 'Antigo', enabled: true }],
-    pluginSyncReceived: false
   });
   const visible = getShopKits(guildId);
   assert.equal(visible.length, 1);
