@@ -45,7 +45,8 @@ import {
   makePurchaseReviewEmbed,
   makeShopPanel,
   makeSupportPanel,
-  makeSupportTicketEmbed
+  makeSupportTicketEmbed,
+  PANEL_LAYOUT_VERSION
 } from './ui.js';
 import { archiveAndDeleteTicket, createPrivateTicket } from './tickets.js';
 import { CONFIG } from './config.js';
@@ -173,6 +174,7 @@ async function updatePanel(guild, config, kind, channel) {
   const isShop = kind === 'shop';
   const channelKey = isShop ? 'shopPanelChannelId' : 'supportPanelChannelId';
   const messageKey = isShop ? 'shopPanelMessageId' : 'supportPanelMessageId';
+  const versionKey = isShop ? 'shopPanelVersion' : 'supportPanelVersion';
   const oldChannelId = config[channelKey];
   const oldMessageId = config[messageKey];
   const payload = isShop ? makeShopPanel() : makeSupportPanel();
@@ -210,7 +212,8 @@ async function updatePanel(guild, config, kind, channel) {
 
   return {
     [channelKey]: channel.id,
-    [messageKey]: message.id
+    [messageKey]: message.id,
+    [versionKey]: PANEL_LAYOUT_VERSION
   };
 }
 
