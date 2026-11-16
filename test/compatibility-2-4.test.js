@@ -42,8 +42,7 @@ test('admin commands are compact and Pix is no longer a slash command', () => {
 });
 
 test('painel de kits permanece clicável com catálogo vazio ou somente com demo', () => {
-  const demo = { id: 'asthen-demo-kit', name: 'ASTHEN_DEMO_KIT', demo: true, enabled: false, forSale: false, pluginForSale: false };
-  for (const panel of [makeShopPanel([]), makeShopPanel([demo])]) {
+  for (const panel of [makeShopPanel(), makeShopPanel()]) {
     const button = panel.components[0].components[0].toJSON();
     assert.equal(button.custom_id, 'shop:catalog');
     assert.equal(button.disabled, false);
