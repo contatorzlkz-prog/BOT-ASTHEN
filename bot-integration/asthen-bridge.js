@@ -17,6 +17,13 @@ const PLAYER_RE = /^[A-Za-z0-9_. ]{1,32}$/;
 const JAVA_PLAYER_RE = /^[A-Za-z0-9_]{3,16}$/;
 const DEFAULT_MAX_LONG_POLL_MS = 25_000;
 const TERMINAL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const FINAL_STATUSES = new Set([
+  'OK', 'KIT_DELIVERED', 'KIT_PENDING', 'INVALID_REQUEST', 'UNAUTHORIZED',
+  'NOT_FOUND', 'METHOD_NOT_ALLOWED', 'PAYLOAD_TOO_LARGE', 'RATE_LIMITED',
+  'PLAYER_OFFLINE', 'PLATFORM_MISMATCH', 'PLATFORM_UNVERIFIABLE',
+  'KIT_NOT_FOUND', 'KIT_DISABLED', 'KIT_CORRUPT', 'INVENTORY_FULL',
+  'DELIVERY_DISABLED', 'DUPLICATE_REQUEST', 'TIMEOUT', 'INTERNAL_ERROR'
+]);
 
 function sha(value) {
   return crypto.createHash('sha256').update(String(value)).digest();
@@ -362,9 +369,20 @@ function startBridge(opts) {
     if (job.result) {
       if (String(job.result.status || '') === String(body.status || '')
           && job.result.final === true) {
+        notifyCallback(onResult, 'onResult duplicate replay', {
+          request: job.payload,
+          result: job.result,
+          resumed: true
+        });
         return { status: 200, body: { success: true, duplicate: true } };
       }
       return { status: 409, body: { success: false, status: 'RESULT_CONFLICT' } };
+    }
+
+    if ((body.player && body.player !== job.payload.player)
+        || (body.platform && body.platform !== job.payload.platform)
+        || (body.kit && body.kit !== job.payload.kit)) {
+      return { status: 409, body: { success: false, status: 'PAYLOAD_MISMATCH' } };
     }
 
     const hadWaiter = resultWaiters.has(job.requestId);
@@ -493,7 +511,9 @@ function startBridge(opts) {
       if (req.method === 'POST' && url.pathname === '/plugin/v1/result') {
         const body = await readJson(req);
         if (typeof body.request_id !== 'string' || !ID_RE.test(body.request_id) || body.final !== true
-            || typeof body.status !== 'string') {
+            || typeof body.status !== 'string' || !FINAL_STATUSES.has(body.status)
+            || (body.message !== undefined && typeof body.message !== 'string')
+            || (body.message && body.message.length > 1000)) {
           return sendJson(res, 400, { success: false, status: 'INVALID_RESULT' });
         }
         const accepted = acceptFinalResult(body);
@@ -593,14 +613,22 @@ function startBridge(opts) {
 
     let job = jobs.get(requestId);
     if (job) {
-      if (JSON.stringify(job.payload) !== JSON.stringify(payload)) {
-        return Promise.reject(Object.assign(new Error('requestId já existe com outro conteúdo; não será criada uma segunda entrega'), {
+      if (JSON.stringify(job.payload) !== JSON.stringify(payload)
+          || (job.guildId && guildId && job.guildId !== guildId)
+          || (job.ticketId && ticketId && job.ticketId !== ticketId)) {
+        return Promise.reject(Object.assign(new Error('requestId já existe com outro conteúdo ou ticket; não será criada uma segunda entrega'), {
           code: 'REQUEST_ID_CONFLICT',
           requestId
         }));
       }
       if (job.result) return Promise.resolve(clone(job.result));
-      return attachResultWaiter(job, timeoutMs);
+      const promise = attachResultWaiter(job, timeoutMs);
+      try {
+        wakePendingPulls();
+      } catch (error) {
+        log.error && log.error('[asthen-bridge] não foi possível acordar um pull com pedido persistido:', error.message);
+      }
+      return promise;
     }
 
     job = {
