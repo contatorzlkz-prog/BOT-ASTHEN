@@ -1,6 +1,9 @@
-## 2.13.0 — candidato em revisão
+## 2.13.0 — 16/11/2026
 
-> Esta versão está em Pull Request e ainda não é uma release publicada. As alterações só devem ser usadas depois da aprovação da PR e da validação do CI.
+- Código integrado em `main` pela PR #3.
+- CI da PR: verificações de sintaxe e slash commands aprovadas; 48 testes automatizados passaram.
+- Release publicada com o pacote `ASTHEN-BOT-v2.13.0.zip`.
+- O teste manual no Discord real e o ciclo conjunto com Paper/Geyser/Floodgate ainda precisam ser feitos no servidor de teste.
 
 ### Integridade dos dados e testes
 - Testes do armazenamento usam diretório temporário isolado por execução; npm test não deve gravar no data/state.json da instalação.
