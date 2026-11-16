@@ -10,7 +10,7 @@ const dataFile = path.join(dataDir, 'state.json');
 
 const emptyState = () => ({ guilds: {}, tickets: {}, purchaseDrafts: {} });
 let state = emptyState();
-let pluginSyncReceivedThisSession = false;
+const pluginSyncedGuildsThisSession = new Set();
 
 function normalizeKitName(name) {
   return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -240,7 +240,7 @@ const DEMO_KIT = Object.freeze({
 export function getShopKits(guildId) {
   const config = ensureGuildConfig(guildId);
   const pluginKits = config.kits.filter(kit => kit.pluginManaged === true);
-  return pluginSyncReceivedThisSession && pluginKits.length > 0
+  return pluginSyncedGuildsThisSession.has(guildId) && pluginKits.length > 0
     ? pluginKits
     : [{ ...DEMO_KIT }];
 }
@@ -272,8 +272,8 @@ export function syncPluginKits(guildId, pluginKits) {
       && /^[A-Za-z0-9_-]{1,32}$/.test(item.name))
     : null;
   if (!incoming) return { changed: false, kits: config.kits };
-  const firstSyncThisSession = !pluginSyncReceivedThisSession;
-  pluginSyncReceivedThisSession = true;
+  const firstSyncThisGuild = !pluginSyncedGuildsThisSession.has(guildId);
+  pluginSyncedGuildsThisSession.add(guildId);
   const incomingByName = new Map();
   for (const item of incoming) incomingByName.set(normalizeKitName(item.name), item);
 
@@ -347,7 +347,7 @@ export function syncPluginKits(guildId, pluginKits) {
   const next = [...syncedKits, ...missingKits];
   const beforeJson = JSON.stringify({ kits: config.kits });
   const afterJson = JSON.stringify({ kits: next });
-  if (beforeJson === afterJson) return { changed: firstSyncThisSession, kits: config.kits };
+  if (beforeJson === afterJson) return { changed: firstSyncThisGuild, kits: config.kits };
 
   config.kits = next;
   saveStore();
