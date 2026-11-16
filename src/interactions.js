@@ -23,6 +23,7 @@ import {
 import {
   makeBuyerAnnouncement,
   makeCatalogMenu,
+  makeCatalogPaginationRow,
   makeChannelLinkRow,
   makeCloseRow,
   makeKitAdminMenu,
@@ -100,6 +101,15 @@ function withWeeklyStock(kits, snapshot) {
       weeklyWeekStart: snapshot.weekStart
     };
   });
+}
+
+function makeCatalogComponents(kits, page = 0) {
+  const pageSize = Math.min(25, Math.max(1, Number(CONFIG.shop.maxKits) || 25));
+  const totalPages = Math.max(1, Math.ceil(kits.length / pageSize));
+  const components = [makeCatalogMenu(kits, page)];
+  const pagination = makeCatalogPaginationRow(page, totalPages);
+  if (pagination) components.push(pagination);
+  return components;
 }
 
 function weeklyStockErrorMessage(error) {
@@ -676,7 +686,7 @@ async function openCatalog(interaction) {
 
   return interaction.reply({
     content: CONFIG.shop.catalogPrompt + '\n\nCada kit tem até 10 unidades por semana. O estoque reinicia domingo às 00:00 (horário de Brasília).',
-    components: [makeCatalogMenu(stockedKits)],
+    components: makeCatalogComponents(stockedKits, 0),
     ephemeral: true
   });
 }
@@ -752,6 +762,32 @@ async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = 
     : interaction.reply({ ...payload, ephemeral: true });
 }
 
+async function handleCatalogPage(interaction, requestedPage) {
+  if (!Number.isInteger(requestedPage) || requestedPage < 0) {
+    return replyPrivate(interaction, 'Página de catálogo inválida. Abra a loja novamente.');
+  }
+
+  const config = getGuildConfig(interaction.guildId);
+  let stockSnapshot;
+  try {
+    stockSnapshot = await getWeeklyKitStock(interaction.guildId);
+  } catch (error) {
+    return replyPrivate(interaction, weeklyStockErrorMessage(error));
+  }
+  const stockedKits = withWeeklyStock(config.kits, stockSnapshot);
+  const pageSize = Math.min(25, Math.max(1, Number(CONFIG.shop.maxKits) || 25));
+  const totalPages = Math.max(1, Math.ceil(stockedKits.length / pageSize));
+  if (requestedPage >= totalPages) {
+    return replyPrivate(interaction, 'Esta página não existe mais. Abra o catálogo novamente.');
+  }
+
+  return interaction.update({
+    content: CONFIG.shop.catalogPrompt + '\n\nCada kit tem até 10 unidades por semana. O estoque reinicia domingo às 00:00 (horário de Brasília).',
+    embeds: [],
+    components: makeCatalogComponents(stockedKits, requestedPage)
+  });
+}
+
 async function handleCatalogSelection(interaction) {
   return beginPurchaseWithKit(interaction, interaction.values[0], true);
 }
@@ -778,7 +814,7 @@ async function switchPurchaseKit(interaction, requestedRevision) {
     return interaction.update({
       content: CONFIG.shop.catalogPrompt + '\n\nCada kit tem até 10 unidades por semana. O estoque reinicia domingo às 00:00 (horário de Brasília).',
       embeds: [],
-      components: [makeCatalogMenu(stockedKits)]
+      components: makeCatalogComponents(stockedKits, 0)
     });
   } catch (error) {
     return replyPrivate(interaction, weeklyStockErrorMessage(error));
@@ -1460,6 +1496,9 @@ export async function handleInteraction(interaction) {
     }
 
     if (interaction.customId === 'shop:catalog') return openCatalog(interaction);
+    if (interaction.customId.startsWith('shop:page:')) {
+      return handleCatalogPage(interaction, Number(interaction.customId.split(':')[2]));
+    }
     if (interaction.customId.startsWith('shop:buy:')) {
       return beginPurchaseWithKit(interaction, interaction.customId.split(':')[2]);
     }
@@ -1508,7 +1547,7 @@ export async function handleInteraction(interaction) {
     return openSupportTicket(interaction, interaction.values[0]);
   }
 
-  if (interaction.isStringSelectMenu() && interaction.customId === 'shop:select') {
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('shop:select')) {
     return handleCatalogSelection(interaction);
   }
   if (interaction.isStringSelectMenu() && interaction.customId === 'kit:create-select') {
