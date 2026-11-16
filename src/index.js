@@ -81,6 +81,8 @@ async function handleBridgeResult(client, event) {
 
   const result = event.result || {};
   const status = String(result.status || 'UNKNOWN');
+  if (ticket.deliveryResultNotificationSent === true) return;
+
   updateTicket(ticket.channelId, {
     deliveryStatus: status,
     deliveryResponse: String(result.message || ''),
@@ -154,12 +156,19 @@ async function handleBridgeDeliveryUpdate(client, event) {
     deliveryUpdateNotificationPending: !alreadySent
   });
   appendTicketHistory(ticket.channelId, {
+    type: 'delivery_result',
+    eventId: 'delivery-result:' + requestId,
+    requestId,
+    status: 'KIT_PENDING',
+    message: String(event.initialResult?.message || ticket.deliveryResponse || '').slice(0, 500),
+    at: ticket.deliveryUpdatedAt || new Date().toISOString()
+  });
+  appendTicketHistory(ticket.channelId, {
     type: 'delivery_update',
     eventId: 'delivery-update:' + requestId,
     requestId,
     status: 'KIT_DELIVERED',
     message: String(update.message || '').slice(0, 500),
-    eventId: 'delivery-update:' + requestId,
     at: update.updated_at || new Date().toISOString()
   });
 
