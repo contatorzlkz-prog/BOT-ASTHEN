@@ -1,83 +1,122 @@
-# Túneis HTTPS para o ASTHEN BOT
+# Túneis HTTPS do ASTHEN BOT
 
-Este guia explica como conectar o Plugin-ASTHEN à API do BOT-ASTHEN quando os dois estão em computadores diferentes, sem abrir a porta 8787 no roteador.
+Este guia padroniza o endereço público usado pelo Plugin-ASTHEN para chegar à API do BOT-ASTHEN, sem abrir a porta 8787 no roteador.
+
+## Padrão do projeto
+
+O nome reservado para a máquina que hospeda o bot será:
+
+**asthen-bot**
+
+Com Tailscale Funnel, o endereço terá este formato:
+
+~~~text
+https://asthen-bot.NOME-DO-TAILNET.ts.net
+~~~
+
+O trecho depois de asthen-bot é o nome DNS do tailnet mostrado no painel Tailscale, em DNS. O endereço completo só pode ser copiado depois de entrar na conta e ativar o Funnel. Não invente nem substitua esse sufixo por um exemplo.
+
+A regra é manter:
+- Máquina que hospeda o bot: nome Tailscale asthen-bot.
+- API local do bot: 127.0.0.1:8787.
+- Túnel: encaminhar HTTPS público para a API local na porta 8787.
+- Plugin Minecraft: usar a URL HTTPS completa em bridge.poll.url.
+- Segredo: DKB_SECRET no .env do bot deve ser igual a bridge.secret no config.yml do plugin.
+
+O computador do Minecraft não precisa instalar Tailscale para acessar um endereço do Funnel: o Funnel publica a aplicação na internet. Instale o Tailscale somente na máquina que hospeda o bot.
 
 ## Qual opção usar?
 
-| Situação | Opção recomendada |
+| Situação | Opção |
 |---|---|
-| Testar agora entre dois PCs Windows, sem domínio próprio | **Tailscale Funnel** |
-| Teste rápido no Windows sem configurar conta de túnel | Cloudflare Quick Tunnel |
-| VPS Linux com hostname reservado | tunnel.to Registered Free |
-| Hostname próprio no Cloudflare | Cloudflare Named Tunnel + domínio próprio |
+| Testar entre dois PCs Windows, sem domínio próprio | **Tailscale Funnel com o nome asthen-bot** |
+| Teste rápido sem conta de túnel | Cloudflare Quick Tunnel, endereço temporário |
+| VPS Linux com hostname registrado gratuito | tunnel.to Registered Free |
+| Domínio próprio já disponível | Cloudflare Named Tunnel |
 
-**Não use o subdomínio seusite.netlify.app como domínio do Cloudflare Tunnel.** Esse endereço é um subdomínio entregue e gerenciado pela própria Netlify. Vocês não controlam a zona DNS netlify.app e não podem criar nela os registros DNS necessários para um Cloudflare Named Tunnel. A documentação da Netlify identifica *.netlify.app como o subdomínio padrão da plataforma.
+O endereço seusite.netlify.app não pode ser usado como domínio próprio de um Named Tunnel. O domínio netlify.app é administrado pela Netlify; vocês controlam somente o subdomínio do site, não a zona DNS necessária para apontar um domínio à Cloudflare.
 
-## Arquitetura do ASTHEN
+## Arquitetura da integração
 
-- O bot continua ouvindo localmente em 127.0.0.1:8787.
-- O túnel é executado na mesma máquina que o bot e encaminha HTTPS público para http://127.0.0.1:8787.
-- O plugin do Minecraft consulta a URL HTTPS pública em bridge.poll.url.
-- O plugin acrescenta os caminhos /plugin/v1/pull, /plugin/v1/result e /plugin/v1/kits; por isso configure somente a URL-base.
-- DKB_SECRET continua protegendo todas as rotas. Não desative a autenticação.
+~~~text
+Plugin-ASTHEN (PC/host Minecraft)
+          |
+          | HTTPS de saída
+          v
+https://asthen-bot.NOME-DO-TAILNET.ts.net
+          |
+          | Tailscale Funnel
+          v
+BOT-ASTHEN (PC Windows ou VPS)
+http://127.0.0.1:8787
+~~~
 
-No .env do bot, mantenha:
+O plugin acrescenta os caminhos /plugin/v1/pull, /plugin/v1/result e /plugin/v1/kits. Por isso, bridge.poll.url deve conter somente a URL-base, sem /plugin/v1.
+
+No .env do bot:
 
 ~~~env
 DKB_HOST=127.0.0.1
 DKB_PORT=8787
 ~~~
 
-O token do provedor do túnel e o DKB_SECRET são credenciais diferentes. Não publique nenhum deles.
+O token do Tailscale, o token de outro provedor de túnel e DKB_SECRET são credenciais diferentes. Não publique nenhum deles no GitHub.
 
 ---
 
-## Opção 1 — Tailscale Funnel (recomendado para os dois Windows)
+## 1. Tailscale Funnel no Windows — configuração inicial
 
-O Tailscale Funnel fornece um endereço HTTPS público *.ts.net para um serviço local. Não exige domínio próprio, está disponível em todos os planos Tailscale e funciona mesmo quando a pessoa que acessa o endereço não tem Tailscale instalado. A URL usa o nome DNS do dispositivo e permanece estável para aquele dispositivo. Funnel tem limites de banda definidos pelo serviço e está em beta, então monitore o uso e teste o Long Polling antes de depender dele em produção.
+### Instalar e entrar no tailnet
 
-### O que instalar
-
-Instale o Tailscale somente no PC que executa o BOT-ASTHEN:
-
-https://tailscale.com/download/windows
-
-O PC do seu amigo, onde roda o Paper/Plugin-ASTHEN, não precisa instalar Tailscale. Ele acessará a URL HTTPS pública como qualquer outro cliente.
-
-### Configurar no PC do bot
-
-1. Instale o Tailscale no Windows.
-2. Abra o Tailscale e entre com uma conta.
-3. Confirme que o bot está funcionando e que o console mostra a API ativa em http://127.0.0.1:8787.
+1. Instale o Tailscale no PC que executa o BOT-ASTHEN: https://tailscale.com/download/windows
+2. Entre na sua conta Tailscale e conclua a configuração do tailnet.
+3. Confirme que o BOT-ASTHEN está ativo e que o console mostra a API em http://127.0.0.1:8787.
 4. Abra o PowerShell como Administrador.
-5. Ative o Funnel para a porta local 8787:
+
+### Padronizar o nome da máquina
+
+Execute:
+
+~~~powershell
+tailscale set --hostname=asthen-bot
+~~~
+
+Esse nome precisa estar livre no tailnet. Se já existir outro dispositivo com esse nome, abra o painel de administração do Tailscale, entre em Machines e renomeie o dispositivo antigo para asthen-windows antes de continuar.
+
+O nome DNS completo é formado pelo nome da máquina mais o nome DNS do tailnet. Por exemplo, se o tailnet for exemplo.ts.net, o hostname será asthen-bot.exemplo.ts.net.
+
+### Ativar o Funnel
+
+Com a API do bot ativa, execute no PowerShell como Administrador:
 
 ~~~powershell
 tailscale funnel --bg 8787
 ~~~
 
-6. Na primeira ativação, siga a tela de aprovação do Tailscale para habilitar Funnel, HTTPS e a permissão correspondente no tailnet.
-7. O comando exibirá um endereço parecido com:
+Na primeira ativação, o Tailscale pode pedir para habilitar HTTPS/Funnel no tailnet. Aprove a configuração solicitada.
+
+O comando exibirá um endereço semelhante a:
 
 ~~~text
-https://nome-do-pc.nome-do-tailnet.ts.net
+https://asthen-bot.NOME-DO-TAILNET.ts.net
 ~~~
 
-8. Confira o estado:
+Copie o endereço real que aparecer no seu terminal. Confira o estado com:
 
 ~~~powershell
 tailscale funnel status
+tailscale status
 ~~~
 
-O parâmetro --bg mantém o Funnel em segundo plano. A documentação do Tailscale informa que a configuração em segundo plano é retomada quando o dispositivo reinicia ou o serviço Tailscale é reiniciado. O próprio Tailscale também precisa estar configurado para iniciar com o Windows.
+O parâmetro --bg grava a configuração do Funnel em segundo plano. Fechar a janela do PowerShell não encerra o Funnel. A configuração é retomada quando o dispositivo reinicia ou quando o serviço Tailscale reinicia, desde que o Tailscale esteja instalado e iniciado no Windows.
 
-### Configurar no Plugin-ASTHEN
+**Atenção:** isso não mantém o próprio BOT-ASTHEN aberto. O processo do bot também precisa estar em execução. Se fechar o console do bot e ele não estiver configurado como serviço ou tarefa automática, o túnel continuará existindo, mas não haverá API respondendo atrás dele.
 
-No computador do Minecraft, abra o arquivo:
+### No computador do Minecraft
 
-plugins/DiscordKitBridge/config.yml
+No arquivo plugins/DiscordKitBridge/config.yml, use a URL real copiada do comando.
 
-Use a URL que apareceu no PowerShell:
+Para o Plugin-ASTHEN 1.2.0 (polling tradicional):
 
 ~~~yaml
 bridge:
@@ -85,7 +124,25 @@ bridge:
   mode: "poll"
   secret: "MESMO_DKB_SECRET_DO_BOT"
   poll:
-    url: "https://nome-do-pc.nome-do-tailnet.ts.net"
+    url: "https://asthen-bot.NOME-DO-TAILNET.ts.net"
+    interval-seconds: 3
+    max-per-poll: 5
+    http-timeout: 10
+~~~
+
+Não acrescente /plugin/v1 à URL. Copie DKB_SECRET localmente do .env do bot para bridge.secret. Nunca coloque o segredo no GitHub ou em mensagens públicas.
+
+O Plugin-ASTHEN 1.2.0 ainda não envia wait_ms. Portanto, ele continuará usando polling tradicional até receber a atualização 1.3.0.
+
+Depois que o Plugin-ASTHEN 1.3.0 implementar Long Polling para o BOT-ASTHEN 2.12.0, a configuração recomendada será:
+
+~~~yaml
+bridge:
+  enabled: true
+  mode: "poll"
+  secret: "MESMO_DKB_SECRET_DO_BOT"
+  poll:
+    url: "https://asthen-bot.NOME-DO-TAILNET.ts.net"
     interval-seconds: 3
     max-per-poll: 5
     http-timeout: 35
@@ -94,199 +151,189 @@ bridge:
       wait-seconds: 20
 ~~~
 
-A parte long-poll só será reconhecida depois que o plugin for atualizado para a versão que implementa Long Polling (o prompt de atualização está em PLUGIN-LONG-POLLING-PROMPT.md). O bot 2.12.0 já entende o parâmetro wait_ms, mas o plugin 1.2.0 ainda usa o polling antigo.
+A seção long-poll só funciona depois que a versão 1.3.0 estiver instalada. Não espere economia de consultas enquanto o plugin 1.2.0 continuar instalado.
 
-### Testar se a API está chegando
+### Testar a rota
 
-1. Deixe o bot ligado.
-2. Deixe o Tailscale ativo e confira tailscale funnel status.
-3. Abra o endereço público no navegador. A API deve responder com erro de autenticação/HTTP 401, pois o navegador não envia Authorization: Bearer. Isso é esperado e confirma que a requisição chegou ao bot.
-4. Copie DKB_SECRET localmente do .env para bridge.secret no plugin. Não envie o segredo em Discord, prints ou GitHub.
-5. Inicie/recarregue o Paper e confira os logs do plugin.
+1. Deixe o bot e o Tailscale ativos.
+2. Execute tailscale funnel status e copie a URL exibida.
+3. Abra a raiz do endereço no navegador. A API exige Authorization: Bearer; por isso um HTTP 401 na raiz pode ser esperado e confirma que a requisição chegou à API.
+4. Confirme que o segredo no bot e no plugin é idêntico.
+5. Inicie ou recarregue o Paper e confira os logs do plugin.
 
-### Segurança
+O navegador não testa uma compra completa. A validação final exige o plugin autenticado e uma compra de teste controlada.
 
-O Funnel torna a rota pública para qualquer pessoa que tenha o endereço. A API do ASTHEN exige DKB_SECRET, então mantenha um segredo forte e privado, não abra outras portas e não coloque a chave nos logs ou no repositório. Não transforme a API em um endpoint público sem autenticação.
+### O que fica disponível 24 horas?
 
-### Limite importante para migração
+- Fechar a janela do PowerShell: o Funnel em segundo plano continua.
+- Fechar o console do bot: a API para, a menos que o próprio bot esteja rodando como serviço/tarefa.
+- Reiniciar o Windows: o Funnel pode retomar em segundo plano, mas o Tailscale e o bot precisam iniciar automaticamente.
+- Desligar o PC ou perder a internet: a URL fica indisponível até a máquina voltar.
+- Usar uma VPS ligada 24 horas: o endpoint pode ficar disponível 24 horas se o bot e o Funnel também iniciarem automaticamente.
 
-O hostname *.ts.net pertence ao dispositivo registrado no tailnet. Ao trocar o PC por uma VPS, o nome do dispositivo pode mudar; portanto, não prometa que a URL atual continuará igual automaticamente. Para o teste entre os dois Windows, é uma ótima opção. Na migração, pode ser necessário atualizar bridge.poll.url uma vez ou planejar a troca do nome DNS do dispositivo.
-
-Documentação oficial:
-- Funnel: https://tailscale.com/docs/features/tailscale-funnel
-- Comando e opção --bg: https://tailscale.com/docs/reference/tailscale-cli/funnel
-- Plano Personal: https://tailscale.com/pricing
+Funnel não transforma um PC desligado em servidor. Ele fornece o endereço e o encaminhamento HTTPS; disponibilidade depende da máquina de origem, do bot e da conexão.
 
 ---
 
-## Opção 2 — Cloudflare Tunnel gratuito
+## 2. Migrar do Windows para uma VPS sem trocar a URL Tailscale
 
-Sim, o Cloudflare Tunnel está disponível no plano Free. A diferença é:
+É possível reutilizar o mesmo hostname, desde que a VPS entre no **mesmo tailnet** e o nome asthen-bot seja liberado no PC antigo antes de ser atribuído à VPS.
 
-- **Quick Tunnel:** não exige domínio e fornece um endereço trycloudflare.com aleatório. É ótimo para teste, mas o endereço muda quando o túnel é recriado.
-- **Named Tunnel:** mantém um ID estável, mas para publicar uma URL pública própria como bot.seudominio.com, você precisa controlar um domínio e configurá-lo na Cloudflare.
+A URL completa é formada por:
+1. Nome da máquina: asthen-bot.
+2. Nome DNS do tailnet: por exemplo, exemplo.ts.net.
 
-A URL seusite.netlify.app não resolve essa exigência, pois a zona netlify.app pertence à Netlify.
+Não altere o nome DNS do tailnet. A migração transfere somente o nome da máquina.
 
-### Teste rápido no Windows (Quick Tunnel)
+### Antes da migração
 
-O repositório já inclui INICIAR-TUNEL.bat.
+No PC Windows antigo:
+
+1. Pare o BOT-ASTHEN.
+2. Desative a publicação do Funnel nesse dispositivo, se ele não será mais usado:
+
+~~~powershell
+tailscale funnel reset
+~~~
+
+3. Libere o nome asthen-bot renomeando o dispositivo antigo:
+
+~~~powershell
+tailscale set --hostname=asthen-windows
+~~~
+
+Também é possível renomear o dispositivo em Machines, no painel de administração do Tailscale.
+
+### Na VPS Linux
+
+1. Instale o Tailscale pela documentação oficial: https://tailscale.com/download/linux
+2. Entre no mesmo tailnet usado pelo PC Windows.
+3. Confirme que a VPS aparece em Machines.
+4. Atribua o nome reservado:
+
+~~~bash
+sudo tailscale set --hostname=asthen-bot
+~~~
+
+5. Instale e configure o BOT-ASTHEN para iniciar automaticamente.
+6. Confirme que a API está ouvindo em 127.0.0.1:8787.
+7. Ative o Funnel:
+
+~~~bash
+sudo tailscale funnel --bg 8787
+~~~
+
+8. Confira:
+
+~~~bash
+tailscale funnel status
+tailscale status
+~~~
+
+Se o nome antigo foi liberado corretamente e o nome DNS do tailnet não mudou, o endereço completo volta a ser:
+
+~~~text
+https://asthen-bot.NOME-DO-TAILNET.ts.net
+~~~
+
+O plugin pode continuar usando a mesma bridge.poll.url. Pode existir uma interrupção durante a troca, enquanto o dispositivo antigo é renomeado, a VPS assume o nome, o Funnel é habilitado e o DNS/certificado são atualizados.
+
+**Não tente manter dois dispositivos com o nome asthen-bot ao mesmo tempo.** Os nomes de máquina são únicos dentro do tailnet. Se a VPS receber automaticamente o nome asthen-bot-1, é sinal de que o nome original ainda está ocupado.
+
+Se a VPS entrar em outro tailnet, ou se o nome DNS do tailnet for alterado, o endereço completo será diferente e bridge.poll.url precisará ser atualizado.
+
+Documentação oficial:
+- Nomes de máquinas: https://tailscale.com/docs/concepts/machine-names
+- MagicDNS: https://tailscale.com/docs/features/magicdns
+- Tailscale Funnel: https://tailscale.com/docs/features/tailscale-funnel
+- Comando Funnel e --bg: https://tailscale.com/docs/reference/tailscale-cli/funnel
+
+---
+
+## 3. Cloudflare Tunnel gratuito
+
+O Cloudflare Tunnel está disponível no plano Free, mas há duas modalidades diferentes:
+
+- **Quick Tunnel:** não exige domínio e entrega uma URL trycloudflare.com aleatória. É temporária e pode mudar quando o túnel é recriado.
+- **Named Tunnel:** tem um identificador persistente e pode manter um hostname próprio, mas para publicar um domínio como bot.seudominio.com é necessário controlar um domínio e configurá-lo na Cloudflare.
+
+O subdomínio seusite.netlify.app não substitui um domínio próprio para essa configuração, porque a zona DNS netlify.app pertence à Netlify.
+
+### Teste rápido no Windows com Quick Tunnel
+
+O repositório inclui INICIAR-TUNEL.bat.
 
 1. Inicie o BOT-ASTHEN.
 2. Execute INICIAR-TUNEL.bat.
-3. Copie a URL https://....trycloudflare.com.
+3. Copie a URL trycloudflare.com mostrada no terminal.
 4. Coloque a URL-base em bridge.poll.url no plugin.
-5. Mantenha a janela aberta enquanto estiver testando.
+5. Mantenha o processo cloudflared e o bot ativos.
 
-Ao encerrar o processo, a URL temporária para de funcionar. Ao criar outro Quick Tunnel, atualize o endereço no plugin.
+Quando o processo do Quick Tunnel é encerrado, a URL deixa de funcionar. Ao criar outro Quick Tunnel, o endereço pode mudar e precisa ser atualizado no plugin. Use somente para testes temporários.
 
 ### Named Tunnel com domínio próprio
 
 Se vocês comprarem ou já tiverem um domínio:
 
-1. Adicione o domínio à Cloudflare e complete a configuração DNS indicada pelo painel.
-2. Em Cloudflare Zero Trust/Networking > Tunnels, crie um Named Tunnel.
+1. Adicione o domínio à Cloudflare e conclua a configuração DNS.
+2. No painel Cloudflare, crie um Named Tunnel.
 3. Instale cloudflared na máquina do bot usando o comando fornecido pelo painel.
 4. Crie uma Published Application Route.
-5. Defina um hostname como bot.seudominio.com.
-6. Configure o serviço de destino como http://localhost:8787.
+5. Defina um hostname, por exemplo bot.seudominio.com.
+6. Configure o serviço de destino como http://127.0.0.1:8787.
 7. Use https://bot.seudominio.com em bridge.poll.url.
 
 Guarde o Tunnel Token como segredo. Não o publique.
 
 Documentação:
-- Overview: https://developers.cloudflare.com/tunnel/
-- Criar túnel gerenciado: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/
-- Quick Tunnels: https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/
+- https://developers.cloudflare.com/tunnel/
+- https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/
+- https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/
 
 ---
 
-## Opção 3 — tunnel.to Registered Free (boa para futura VPS Linux)
+## 4. tunnel.to Registered Free para VPS Linux
 
-O tunnel.to é um serviço separado do Cloudflare Tunnel. O plano Registered Free anuncia um hostname reservado na conta, para que o endereço público permaneça o mesmo quando o cliente reconecta usando aquele nome. A página de preços também lista tokens de API e túneis simultâneos; confira os limites e as cotas atuais antes de depender do serviço, pois eles podem mudar.
+tunnel.to é um serviço separado do Cloudflare Tunnel. O plano Registered Free anuncia a possibilidade de reservar um hostname na conta e reutilizá-lo quando o cliente reconecta com o mesmo nome. Confira preços, cotas e limites atuais antes de depender dele.
 
-- Preços: https://tunnel.to/pricing
+- Painel e preços: https://tunnel.to/pricing
 - Documentação: https://tunnel.to/docs
 - Reserva de nome: https://tunnel.to/docs/reserving-a-name
 - Downloads: https://www.tunnel.to/download
 - Guia rápido: https://www.tunnel.to/docs/quick-start
 
-### Reservar o nome
+A página de downloads consultada lista clientes para Linux e macOS, mas não um binário Windows nativo. Por isso, não é a opção recomendada para os dois PCs Windows do teste inicial.
 
-1. Crie ou acesse uma conta em https://tunnel.to/.
+### Reservar o endereço
+
+1. Crie uma conta em https://tunnel.to/.
 2. No painel, abra Tunnels e reserve um nome disponível, por exemplo asthen.
 3. O endereço reservado será parecido com https://asthen.tunnel.to.
-4. Em Tokens, crie um CLI token com as permissões solicitadas pelo guia oficial.
-5. Guarde o token em local privado; ele não é o DKB_SECRET.
+4. Crie um CLI token com as permissões pedidas pelo guia oficial.
+5. Guarde o token em local privado.
+6. Na VPS Linux, inicie o cliente usando o nome reservado.
 
-O cliente deve iniciar o túnel sempre com o mesmo argumento --name asthen.
-
-### Compatibilidade com Windows
-
-**A página oficial de downloads consultada lista binários para macOS e Linux; não lista um executável nativo para Windows.** Portanto, não recomendo tunnel.to para o teste atual entre dois Windows sem uma forma de executar o cliente Linux/macOS suportado.
-
-### Instalar na VPS Linux quando migrarem
-
-Na VPS Linux, use:
+Exemplo de instalação indicado no guia do serviço:
 
 ~~~bash
 curl -fsSL https://tunnel.to/install.sh | bash
 ~~~
 
-Crie o token na conta e defina-o somente na sessão local:
+Depois, use o token localmente conforme a documentação atual do tunnel.to. Não publique o token e não o confunda com DKB_SECRET.
 
-~~~bash
-export TUNNELTO_TOKEN='COLE_SEU_TOKEN_LOCALMENTE'
-tunnelto 8787 --name asthen
-~~~
-
-Confirme que o painel mostra o túnel conectado e que o hostname corresponde ao nome reservado.
-
-### Início automático na VPS com systemd
-
-Depois de testar manualmente, crie um arquivo local para o token:
-
-~~~bash
-sudo nano /etc/asthen-tunnel.env
-~~~
-
-Conteúdo:
-
-~~~env
-TUNNELTO_TOKEN=COLE_SEU_TOKEN_LOCALMENTE
-~~~
-
-Proteja:
-
-~~~bash
-sudo chmod 600 /etc/asthen-tunnel.env
-~~~
-
-Crie /etc/systemd/system/asthen-tunnel.service. Troque BOT_USER pelo usuário Linux real e confirme o caminho do binário com which tunnelto.
-
-~~~ini
-[Unit]
-Description=ASTHEN persistent tunnel
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-Type=simple
-User=BOT_USER
-EnvironmentFile=/etc/asthen-tunnel.env
-ExecStart=/usr/local/bin/tunnelto 8787 --name asthen
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-~~~
-
-Ative:
-
-~~~bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now asthen-tunnel
-sudo systemctl status asthen-tunnel
-~~~
-
-Veja logs:
-
-~~~bash
-sudo journalctl -u asthen-tunnel -f
-~~~
-
-O processo reinicia se cair e inicia no boot. O próprio BOT-ASTHEN também precisa ser configurado para iniciar automaticamente. Ao migrar do PC para a VPS, pare o túnel antigo antes de iniciar o mesmo hostname na nova máquina.
+Para que o túnel volte depois de uma reinicialização, configure o cliente como serviço systemd com Restart=always e habilite o serviço no boot. O BOT-ASTHEN também precisa iniciar automaticamente.
 
 ---
 
-## Configuração final do plugin
+## Checklist de conexão
 
-Depois que o plugin implementar Long Polling, use o endereço público do provedor escolhido:
-
-~~~yaml
-bridge:
-  enabled: true
-  mode: "poll"
-  secret: "MESMO_DKB_SECRET_DO_BOT"
-  poll:
-    url: "https://SUA-URL-PUBLICA"
-    interval-seconds: 3
-    max-per-poll: 5
-    http-timeout: 35
-    long-poll:
-      enabled: true
-      wait-seconds: 20
-~~~
-
-Não acrescente /plugin/v1 à URL. O plugin monta os caminhos internamente.
-
-## Checklist rápido
-
-- [ ] O bot está ativo e ouvindo em 127.0.0.1:8787.
-- [ ] O túnel está conectado no mesmo PC em que o bot está rodando.
-- [ ] O endereço HTTPS abre e chega à API (sem Authorization, espera-se HTTP 401).
-- [ ] DKB_SECRET no bot é igual a bridge.secret no plugin.
-- [ ] bridge.poll.url contém apenas a URL-base HTTPS.
-- [ ] O plugin usa Long Polling apenas depois de implementar a versão compatível.
-- [ ] Nenhum token/segredo foi publicado no GitHub.
+- [ ] BOT-ASTHEN ativo na máquina que hospeda a API.
+- [ ] API local em 127.0.0.1:8787.
+- [ ] No Tailscale, a máquina do bot se chama asthen-bot.
+- [ ] Funnel ativo e apontando para 8787.
+- [ ] URL completa copiada do comando/painel, sem placeholders.
+- [ ] bridge.poll.url contém somente a URL-base HTTPS.
+- [ ] DKB_SECRET é igual a bridge.secret.
+- [ ] O plugin instalado é compatível com o modo de polling configurado.
+- [ ] O computador/VPS e a conexão permanecem ativos.
+- [ ] Nenhum token ou segredo foi enviado ao GitHub.
