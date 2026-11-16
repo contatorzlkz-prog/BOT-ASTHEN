@@ -1,4 +1,4 @@
-## 2.15.0 — pronta para publicação
+## 2.15.0 — publicada
 
 - Painel `#kits` permanece clicável mesmo quando só existe o Kit Demonstração; o demo abre uma prévia sem compra, Pix ou entrega.
 - Corrigidas as quebras de linha do painel `#atendimento`.
@@ -7,8 +7,9 @@
 - Painéis existentes são encontrados e preservados no boot; só são publicados quando não há mensagem válida. Sincronizar kits e editar metadados não altera o painel fixo.
 - README reduzido a uma página inicial; instalação, canais, loja, tickets e Supabase reunidos em `docs/GUIA.md`.
 - Removidos manuais duplicados e wrappers Linux redundantes; scripts principais permanecem em `linux/`.
-- CI da PR #5: verificações de sintaxe e slash commands aprovadas; 57 testes automatizados passaram.
-- O teste manual no Discord real (descoberta de canais, migração única do painel, permissões de `#logs`) e o fluxo real Paper ainda precisam ser confirmados após a atualização.
+- PR #5 integrada ao `main`; CI da PR e do `main` aprovados: verificações de sintaxe e slash commands, 57 testes automatizados, zero falhas.
+- Release `v2.15.0` publicada com `ASTHEN-BOT-v2.15.0.zip`.
+- Ainda falta validar no Discord real a descoberta dos canais, migração única dos painéis e permissões de `#logs`, além do fluxo de compra/entrega em Paper.
 
 ---
 ## 2.14.0 — 16/11/2026
