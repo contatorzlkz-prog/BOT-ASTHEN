@@ -232,10 +232,9 @@ export function makeKitEditFieldMenu(kit) {
     .setMinValues(1)
     .setMaxValues(1)
     .addOptions(
-      { label: 'Nome exibido na loja', description: 'Nome bonito que o cliente verá, sem underscores.', value: 'displayName' },
-      { label: 'Descrição', description: 'Texto que aparece na prévia.', value: 'description' },
-      { label: 'Imagem', description: 'Link HTTPS da imagem do kit.', value: 'imageUrl' },
-      { label: 'Reabrir na loja', description: 'Remove o bloqueio manual; o plugin ainda precisa permitir a venda.', value: 'availability' }
+      { label: 'Nome exibido na loja', description: 'Nome que o cliente verá no catálogo.', value: 'displayName' },
+      { label: 'Descrição', description: 'Texto que aparece na prévia da loja.', value: 'description' },
+      { label: 'Imagem', description: 'Link HTTPS da imagem do kit.', value: 'imageUrl' }
     );
   return new ActionRowBuilder().addComponents(menu);
 }
