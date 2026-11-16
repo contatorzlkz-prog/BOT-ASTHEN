@@ -75,3 +75,19 @@ test('paginação administrativa mantém ação vinculada e desabilita limites',
   assert.equal(first[2].custom_id, 'kit:admin-page:edit:1');
   assert.equal(first[2].disabled, false);
 });
+
+test('kit demo aparece identificado e informa que não gera compra', () => {
+  const demo = {
+    id: 'asthen-demo-kit',
+    name: 'ASTHEN_DEMO_KIT',
+    displayName: 'Kit Demonstração',
+    demo: true,
+    enabled: false,
+    pluginEnabled: false,
+    pluginForSale: false,
+    forSale: false
+  };
+  const option = makeCatalogMenu([demo]).toJSON().components[0].options[0];
+  assert.match(option.label, /^DEMO/);
+  assert.match(option.description, /não gera compra nem cobrança/i);
+});
