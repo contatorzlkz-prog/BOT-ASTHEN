@@ -64,9 +64,7 @@ function defaultGuildConfig() {
     logsChannelId: null,
     buyersChannelId: null,
     staffRoleId: null,
-    kits: [],
-    hiddenPluginKits: [],
-    pluginSyncReceived: false
+    kits: []
   };
 }
 
@@ -80,16 +78,15 @@ function ensureGuildConfig(guildId) {
   }
 
   if (!Array.isArray(config.kits)) config.kits = [];
-  if (!Array.isArray(config.hiddenPluginKits)) config.hiddenPluginKits = [];
-  if (typeof config.pluginSyncReceived !== 'boolean') config.pluginSyncReceived = false;
+  delete config.hiddenPluginKits;
+  delete config.pluginSyncReceived;
 
   // Pix is fixed for this store; discard values left by the old /pix command.
   delete config.pixKey;
   delete config.pixInstructions;
 
   // Preserve all existing products. Missing plugin kits are marked unavailable by syncPluginKits.
-  config.hiddenPluginKits = [];
-  config.kits = config.kits.map(kit => ({
+    config.kits = config.kits.map(kit => ({
     ...kit,
     displayName: kit.displayName || makeKitDisplayName(kit.name),
     description: String(kit.description || ''),
@@ -242,8 +239,7 @@ const DEMO_KIT = Object.freeze({
 export function getShopKits(guildId) {
   const config = ensureGuildConfig(guildId);
   const pluginKits = config.kits.filter(kit => kit.pluginManaged === true);
-  if (pluginKits.length > 0 || config.pluginSyncReceived) return pluginKits;
-  return [{ ...DEMO_KIT }];
+  return pluginKits.length > 0 ? pluginKits : [{ ...DEMO_KIT }];
 }
 
 export function updateGuildConfig(guildId, changes) {
@@ -264,9 +260,6 @@ export function syncPluginKits(guildId, pluginKits) {
       && /^[A-Za-z0-9_-]{1,32}$/.test(item.name))
     : null;
   if (!incoming) return { changed: false, kits: config.kits };
-  const previousPluginSyncReceived = config.pluginSyncReceived;
-  config.pluginSyncReceived = true;
-
   const incomingByName = new Map();
   for (const item of incoming) incomingByName.set(normalizeKitName(item.name), item);
 
@@ -337,12 +330,11 @@ export function syncPluginKits(guildId, pluginKits) {
     }));
 
   const next = [...syncedKits, ...missingKits];
-  const beforeJson = JSON.stringify({ kits: config.kits, hidden: config.hiddenPluginKits, pluginSyncReceived: previousPluginSyncReceived });
-  const afterJson = JSON.stringify({ kits: next, hidden: [], pluginSyncReceived: true });
+  const beforeJson = JSON.stringify({ kits: config.kits });
+  const afterJson = JSON.stringify({ kits: next });
   if (beforeJson === afterJson) return { changed: false, kits: config.kits };
 
   config.kits = next;
-  config.hiddenPluginKits = [];
   saveStore();
   return { changed: true, kits: config.kits };
 }
