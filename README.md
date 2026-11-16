@@ -9,7 +9,7 @@ Bot de Discord para o servidor Minecraft ASTHEN: atendimento privado, loja de ki
 ![Version](https://img.shields.io/badge/vers%C3%A3o-2.12.0-7C5CFC)
 
 <p align="center">
-  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip">
+  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/latest/download/ASTHEN-BOT-v2.12.0.zip">
     <img src="assets/download-zip.svg" alt="Baixar ASTHEN BOT em ZIP" width="264" height="58">
   </a>
 </p>
