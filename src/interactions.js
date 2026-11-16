@@ -29,6 +29,7 @@ import {
   makeChannelLinkRow,
   makeCloseRow,
   makeKitAdminMenu,
+  makeKitAdminPaginationRow,
   makeKitEditFieldMenu,
   makeKitRemoveControls,
   makeKitPreviewEmbed,
@@ -110,6 +111,15 @@ function makeCatalogComponents(kits, page = 0) {
   const totalPages = Math.max(1, Math.ceil(kits.length / pageSize));
   const components = [makeCatalogMenu(kits, page)];
   const pagination = makeCatalogPaginationRow(page, totalPages);
+  if (pagination) components.push(pagination);
+  return components;
+}
+
+function makeKitAdminComponents(kits, action, page = 0) {
+  const totalPages = Math.max(1, Math.ceil(kits.length / 25));
+  const customId = 'kit:' + action + '-select';
+  const components = [makeKitAdminMenu(kits, customId, page)];
+  const pagination = makeKitAdminPaginationRow(page, totalPages, action);
   if (pagination) components.push(pagination);
   return components;
 }
@@ -404,7 +414,7 @@ async function handleKitCommand(interaction) {
     }
     return interaction.reply({
       content: 'Selecione um kit que já existe no Minecraft. O preço é definido no jogo com /dk price <nome> <valor>. Esta etapa cadastra apenas nome exibido, descrição e imagem no Discord.',
-      components: [makeKitAdminMenu(pending, 'kit:create-select')],
+      components: makeKitAdminComponents(pending, 'create', 0),
       ephemeral: true
     });
   }
@@ -415,8 +425,43 @@ async function handleKitCommand(interaction) {
     : 'Selecione o kit que deseja marcar como indisponível na loja.';
   return interaction.reply({
     content: prompt,
-    components: [makeKitAdminMenu(config.kits, customId)],
+    components: makeKitAdminComponents(config.kits, subcommand === 'editar' ? 'edit' : 'remove', 0),
     ephemeral: true
+  });
+}
+
+async function handleKitAdminPage(interaction, action, requestedPage) {
+  if (!isAdministrator(interaction)) {
+    return replyPrivate(interaction, 'Somente administradores podem gerenciar kits.');
+  }
+  if (!['create', 'edit', 'remove'].includes(action)
+      || !Number.isInteger(requestedPage) || requestedPage < 0) {
+    return replyPrivate(interaction, 'Página de administração inválida. Abra o menu novamente.');
+  }
+
+  const config = getGuildConfig(interaction.guildId);
+  const kits = action === 'create'
+    ? config.kits.filter(kit =>
+      kit.pluginManaged === true
+      && kit.pluginEnabled !== false
+      && kit.missingFromPlugin !== true
+      && kit.storeConfigured !== true)
+    : config.kits;
+  const totalPages = Math.max(1, Math.ceil(kits.length / 25));
+  if (!kits.length || requestedPage >= totalPages) {
+    return replyPrivate(interaction, 'Esta página não existe mais. Atualize o menu de administração.');
+  }
+
+  const content = action === 'create'
+    ? 'Selecione um kit que já existe no Minecraft. O preço é definido no jogo com /dk price <nome> <valor>. Esta etapa cadastra apenas nome exibido, descrição e imagem no Discord.'
+    : action === 'edit'
+      ? 'Selecione o kit e depois escolha qual informação comercial deseja alterar.'
+      : 'Selecione o kit que deseja marcar como indisponível na loja.';
+
+  return interaction.update({
+    content,
+    embeds: [],
+    components: makeKitAdminComponents(kits, action, requestedPage)
   });
 }
 
@@ -1623,6 +1668,10 @@ export async function handleInteraction(interaction) {
     if (interaction.customId === 'shop:catalog') return openCatalog(interaction);
     if (interaction.customId.startsWith('shop:page:')) {
       return handleCatalogPage(interaction, Number(interaction.customId.split(':')[2]));
+    }
+    if (interaction.customId.startsWith('kit:admin-page:')) {
+      const [, , action, page] = interaction.customId.split(':');
+      return handleKitAdminPage(interaction, action, Number(page));
     }
     if (interaction.customId.startsWith('shop:buy:')) {
       return beginPurchaseWithKit(interaction, interaction.customId.split(':')[2]);
