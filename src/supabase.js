@@ -2,6 +2,7 @@ let syncTimer = null;
 let retryTimer = null;
 let syncInFlight = false;
 let syncQueued = false;
+let syncPromise = null;
 let retryCount = 0;
 let lastSyncError = null;
 let lastSyncedAt = null;
@@ -138,16 +139,10 @@ function scheduleRetry() {
   retryTimer.unref?.();
 }
 
-async function pushSnapshot(snapshot) {
+async function pushSnapshotOnce(snapshot) {
   const config = getSupabaseConfig();
   if (!config) return false;
 
-  if (syncInFlight) {
-    syncQueued = true;
-    return false;
-  }
-
-  syncInFlight = true;
   try {
     const response = await supabaseRequest(config, '?on_conflict=id', {
       method: 'POST',
@@ -179,23 +174,52 @@ async function pushSnapshot(snapshot) {
     console.warn('[Asthen Supabase] ' + lastSyncError + ' O backup local continua disponível.');
     scheduleRetry();
     return false;
+  }
+}
+
+async function pushSnapshot(snapshot) {
+  if (syncInFlight) {
+    syncQueued = true;
+    return syncPromise || false;
+  }
+
+  syncInFlight = true;
+  syncPromise = (async () => {
+    let nextSnapshot = snapshot;
+    let allSuccessful = true;
+    do {
+      syncQueued = false;
+      // Always prefer the latest scheduled snapshot, never an older queued copy.
+      if (snapshotProvider) nextSnapshot = snapshotProvider();
+      const successful = await pushSnapshotOnce(nextSnapshot);
+      allSuccessful = successful && allSuccessful;
+    } while (syncQueued);
+    return allSuccessful;
+  })();
+
+  try {
+    return await syncPromise;
   } finally {
     syncInFlight = false;
-    if (syncQueued) {
+    syncPromise = null;
+    if (syncQueued && snapshotProvider) {
       syncQueued = false;
       if (syncTimer) clearTimeout(syncTimer);
       syncTimer = setTimeout(() => {
         syncTimer = null;
         void flushSupabaseSync();
-      }, 250);
+      }, 0);
       syncTimer.unref?.();
     }
   }
 }
-
 export function scheduleSupabaseSync(snapshot) {
   if (!getSupabaseConfig()) return;
   snapshotProvider = () => snapshot;
+  if (syncInFlight) {
+    syncQueued = true;
+    return;
+  }
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
     syncTimer = null;
@@ -215,6 +239,10 @@ export async function flushSupabaseSync() {
     syncTimer = null;
   }
   if (!snapshotProvider) return false;
+  if (syncInFlight) {
+    syncQueued = true;
+    return syncPromise || false;
+  }
   return pushSnapshot(snapshotProvider());
 }
 

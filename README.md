@@ -6,7 +6,7 @@ Bot de Discord para o servidor Minecraft ASTHEN: atendimento privado, loja de ki
 ![Discord.js](https://img.shields.io/badge/discord.js-14-5865F2?logo=discord&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-estoque_persistente-3ECF8E?logo=supabase&logoColor=white)
 [![Checks](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/vers%C3%A3o-2.12.0-7C5CFC)
+![Version](https://img.shields.io/badge/vers%C3%A3o-2.13.0-candidato-7C5CFC)
 
 <p align="center">
   <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/latest/download/ASTHEN-BOT-v2.12.0.zip">
@@ -18,6 +18,9 @@ Bot de Discord para o servidor Minecraft ASTHEN: atendimento privado, loja de ki
   <strong>Windows 10/11 · Node.js 22 ou mais recente · Paper + Plugin-ASTHEN</strong>
 </p>
 
+## Versão em revisão
+
+A versão 2.13.0 está em revisão na [PR #3](https://github.com/contatorzlkz-prog/BOT-ASTHEN/pull/3). O botão de download continua apontando para a última versão estável publicada (2.12.0); não substitua a instalação de produção pelo código da PR antes da validação e publicação da release.
 ## Começar
 
 1. Baixe o ZIP pelo botão acima e extraia a pasta.
@@ -71,7 +74,7 @@ Quando um kit é desativado ou removido do plugin, ou perde o preço, continua v
 - Registro privado das decisões e avisos de falha de entrega para a equipe.
 - Anúncio de compra com nome e valor do produto.
 - Escolha de Minecraft Java ou Bedrock antes de abrir o ticket.
-- API HTTP autenticada para o Plugin-ASTHEN com suporte a Long Polling no bot (compatível com o modo poll antigo).
+- API HTTP autenticada para o Plugin-ASTHEN com Long Polling e fila persistente de pedidos na proposta 2.13.0.
 - Tentativa automática adicional quando a entrega expira, reutilizando o mesmo identificador para evitar duplicidade.
 - Entrega do kit pelo plugin em uma Shulker Box com nome e itens preservados.
 - Jogador offline: kit fica pendente no plugin e é tentado automaticamente quando entrar.
@@ -150,7 +153,7 @@ Use uma Secret API Key somente no backend do bot. Não a coloque no cliente, em 
 BOT-ASTHEN/
 ├── assets/                  # QR Pix e imagens do projeto
 ├── bot-integration/         # API HTTP copiada/adaptada para o bot
-├── data/                    # Estado local (não versionar dados reais)
+├── data/                    # Estado local, fila persistente da Bridge e backups (não versionar dados reais)
 ├── docs/                    # Instalação, comandos e integrações
 ├── prompts/                 # Prompts de correção e evolução do bot/plugin
 ├── linux/                   # Scripts para Linux

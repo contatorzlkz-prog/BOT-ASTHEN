@@ -1,5 +1,5 @@
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
-import { findOpenTicket, getGuildConfig, saveTicket, updateTicket } from './store.js';
+import { appendTicketHistory, findOpenTicket, getGuildConfig, saveTicket, updateTicket } from './store.js';
 import { CONFIG } from './config.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -127,10 +127,17 @@ export async function createPrivateTicket({ guild, user, type, kit = null, minec
 }
 
 export async function archiveAndDeleteTicket({ channel, closedById }) {
+  const closedAt = new Date().toISOString();
   updateTicket(channel.id, {
     status: 'closed',
     closedBy: closedById,
-    closedAt: new Date().toISOString()
+    closedAt
+  });
+  appendTicketHistory(channel.id, {
+    type: 'ticket_closed',
+    closedById,
+    channelId: channel.id,
+    at: closedAt
   });
 
   await sleep(CONFIG.tickets.closeDelaySeconds * 1000);
