@@ -365,7 +365,7 @@ async function main() {
               guild,
               config.shopPanelChannelId,
               config.shopPanelMessageId,
-              makeShopPanel(config.kits),
+              makeShopPanel(getShopKits(guild.id)),
               'loja',
               { channel: 'shopPanelChannelId', message: 'shopPanelMessageId' }
             );
