@@ -5,6 +5,7 @@ let syncQueued = false;
 let syncPromise = null;
 let retryCount = 0;
 let lastSyncError = null;
+let lastLoggedSyncError = null;
 let lastSyncedAt = null;
 let snapshotProvider = null;
 
@@ -22,17 +23,16 @@ export function getSupabaseConfig() {
       || ''
   ).trim();
   const table = String(process.env.SUPABASE_TABLE || 'asthen_bot_state').trim();
-  const kitsTable = String(process.env.SUPABASE_KITS_TABLE || 'asthen_bot_kits').trim();
   const weeklyStockTable = String(process.env.SUPABASE_WEEKLY_STOCK_TABLE || 'asthen_bot_weekly_stock').trim();
 
   if (!projectUrl || !secretKey) return null;
   if (!/^https:\/\//i.test(projectUrl)) {
     throw new Error('SUPABASE_URL precisa ser a URL HTTPS base do projeto.');
   }
-  if (![table, kitsTable, weeklyStockTable].every(name => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))) {
+  if (![table, weeklyStockTable].every(name => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))) {
     throw new Error('O nome de uma tabela Supabase contém caracteres inválidos.');
   }
-  return { projectUrl, secretKey, table, kitsTable, weeklyStockTable };
+  return { projectUrl, secretKey, table, weeklyStockTable };
 }
 
 function buildHeaders(config, extra = {}) {
@@ -64,48 +64,6 @@ async function supabaseRequest(config, path, options = {}, table = config.table)
   }
 }
 
-async function pushKitRows(config, snapshot) {
-  const guilds = snapshot?.guilds && typeof snapshot.guilds === 'object' ? snapshot.guilds : {};
-
-  for (const [guildId, guild] of Object.entries(guilds)) {
-    const now = new Date().toISOString();
-    const kits = Array.isArray(guild?.kits) ? guild.kits : [];
-    const rows = kits
-      .filter(kit => kit && typeof kit.id === 'string' && typeof kit.name === 'string')
-      .map(kit => ({
-        guild_id: String(guildId),
-        kit_id: kit.id,
-        plugin_name: kit.name,
-        display_name: String(kit.displayName || kit.name.replace(/[_-]+/g, ' ')),
-        description: String(kit.description || ''),
-        price: String(kit.price || ''),
-        price_cents: Number.isSafeInteger(Number(kit.priceCents)) && Number(kit.priceCents) > 0
-          ? Number(kit.priceCents) : null,
-        plugin_for_sale: kit.pluginForSale === true,
-        for_sale: kit.forSale === true,
-        image_url: String(kit.imageUrl || ''),
-        plugin_enabled: kit.pluginEnabled !== false,
-        store_configured: kit.storeConfigured === true,
-        manually_unavailable: kit.manuallyUnavailable === true,
-        missing_from_plugin: kit.missingFromPlugin === true,
-        item_count: Number.isFinite(Number(kit.itemCount)) ? Number(kit.itemCount) : 0,
-        updated_at: now
-      }));
-
-    if (rows.length) {
-      const upsert = await supabaseRequest(config, '?on_conflict=guild_id,kit_id', {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify(rows)
-      }, config.kitsTable);
-      if (!upsert.ok) {
-        throw new Error('Supabase respondeu HTTP ' + upsert.status + ' ao salvar os kits.');
-      }
-    }
-
-
-  }
-}
 
 function snapshotHasData(snapshot) {
   return Boolean(
@@ -155,24 +113,31 @@ async function pushSnapshotOnce(snapshot) {
     });
 
     if (!response.ok) {
-      lastSyncError = 'Supabase respondeu HTTP ' + response.status + '.';
-      throw new Error(lastSyncError);
+      const detail = await response.text().catch(() => '');
+      const summary = detail ? ' ' + detail.slice(0, 700) : '';
+      const error = new Error('Supabase respondeu HTTP ' + response.status + ' ao salvar o snapshot.' + summary);
+      error.status = response.status;
+      error.retryable = response.status >= 500 || response.status === 429;
+      throw error;
     }
-
-    await pushKitRows(config, snapshot);
 
     retryCount = 0;
     if (retryTimer) clearTimeout(retryTimer);
     retryTimer = null;
     lastSyncError = null;
+    lastLoggedSyncError = null;
     lastSyncedAt = new Date().toISOString();
     return true;
   } catch (error) {
     lastSyncError = error.name === 'AbortError'
       ? 'Tempo limite ao conectar ao Supabase.'
       : (error?.message || lastSyncError || 'Não foi possível sincronizar com o Supabase.');
-    console.warn('[Asthen Supabase] ' + lastSyncError + ' O backup local continua disponível.');
-    scheduleRetry();
+    if (lastLoggedSyncError !== lastSyncError) {
+      console.warn('[Asthen Supabase] ' + lastSyncError + ' O backup local continua disponível.');
+      lastLoggedSyncError = lastSyncError;
+    }
+    // Schema/permission errors (4xx) do not heal by retrying every minute.
+    if (error.retryable !== false) scheduleRetry();
     return false;
   }
 }
@@ -228,11 +193,6 @@ export function scheduleSupabaseSync(snapshot) {
   syncTimer.unref?.();
 }
 
-export function scheduleSupabaseKitsSync(snapshot) {
-  // The normalized kit table is synchronized in the same debounced write as the state snapshot.
-  scheduleSupabaseSync(snapshot);
-}
-
 export async function flushSupabaseSync() {
   if (syncTimer) {
     clearTimeout(syncTimer);
@@ -262,9 +222,14 @@ export async function initializeSupabaseSync({
       { method: 'GET' }
     );
     if (!response.ok) {
-      lastSyncError = 'Supabase respondeu HTTP ' + response.status + ' durante a leitura.';
-      console.warn('[Asthen Supabase] ' + lastSyncError + ' O bot continuará usando o arquivo local.');
-      scheduleSupabaseSync(getSnapshot());
+      const detail = await response.text().catch(() => '');
+      lastSyncError = 'Supabase respondeu HTTP ' + response.status + ' durante a leitura.' +
+        (detail ? ' ' + detail.slice(0, 700) : '');
+      if (lastLoggedSyncError !== lastSyncError) {
+        console.warn('[Asthen Supabase] ' + lastSyncError + ' O bot continuará usando o arquivo local.');
+        lastLoggedSyncError = lastSyncError;
+      }
+      if (response.status >= 500 || response.status === 429) scheduleSupabaseSync(getSnapshot());
       return { enabled: true, restored: false };
     }
 
@@ -416,7 +381,6 @@ export function getSupabaseStatus() {
   const config = getSupabaseConfig();
   return {
     enabled: Boolean(config),
-    kitsTable: config?.kitsTable || null,
     weeklyStockTable: config?.weeklyStockTable || null,
     weeklyStockEnabled: Boolean(config),
     lastSyncedAt,
