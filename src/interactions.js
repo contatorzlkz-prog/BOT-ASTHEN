@@ -408,27 +408,10 @@ async function handleKitEditFieldSelection(interaction) {
   if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem editar kits.');
   const kitId = interaction.customId.split(':')[2];
   const field = interaction.values[0];
-  const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
-  if (!kit) return replyPrivate(interaction, 'Este kit não está mais no catálogo.');
-  if (field === 'availability') {
-    if (kit.missingFromPlugin || kit.pluginEnabled === false) {
-      return replyPrivate(interaction, 'Não é possível reabrir: o kit foi removido ou está desativado no Minecraft.');
-    }
-    updateKit(interaction.guildId, kit.id, {
-      manuallyUnavailable: false,
-      enabled: true,
-      forSale: kit.pluginForSale === true
-    });
-    const freshConfig = getGuildConfig(interaction.guildId);
-    const shopChannel = await fetchTextChannel(interaction.guild, freshConfig.shopPanelChannelId);
-    if (shopChannel) {
-      updateGuildConfig(interaction.guildId, await updatePanel(interaction.guild, freshConfig, 'shop', shopChannel));
-    }
-    return interaction.update({
-      content: 'O bloqueio manual foi removido. A venda só será reaberta se o Plugin-ASTHEN mantiver o kit ativo, com preço e com for_sale=true.',
-      embeds: [],
-      components: []
-    });
+  const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId && item.pluginManaged === true);
+  if (!kit) return replyPrivate(interaction, 'Este kit não está mais sincronizado com o Minecraft.');
+  if (!['displayName', 'description', 'imageUrl'].includes(field)) {
+    return replyPrivate(interaction, 'Campo de edição inválido.');
   }
   return interaction.showModal(makeKitEditModal(kit, field));
 }
@@ -436,7 +419,7 @@ async function handleKitEditFieldSelection(interaction) {
 async function handleKitEditModal(interaction) {
   if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem editar kits.');
   const [, , field, kitId] = interaction.customId.split(':');
-  const current = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId);
+  const current = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId && item.pluginManaged === true);
   if (!current) return replyPrivate(interaction, 'Este kit não está mais no catálogo.');
 
   const value = interaction.fields.getTextInputValue('value').trim();
