@@ -124,6 +124,7 @@ export async function startBridge({
     return {
       host,
       port: listeningPort,
+      getJob: requestId => instance.getJob(requestId),
       close: async () => {
         await instance.close();
         if (bridgeInstance === instance) {
@@ -145,4 +146,9 @@ export function deliverKit(request) {
     }));
   }
   return bridgeInstance.deliverKit(request);
+}
+
+export function getBridgeJob(requestId) {
+  if (!bridgeInstance) return null;
+  return bridgeInstance.getJob(requestId);
 }
