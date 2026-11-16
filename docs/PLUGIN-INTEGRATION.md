@@ -24,27 +24,31 @@ O plugin ainda gera uma chave própria se `bridge.secret` estiver vazio. Por iss
 
 Não é preciso hospedar o servidor Minecraft publicamente para o primeiro teste. O responsável pelo plugin pode iniciar um servidor Paper local no próprio Windows. Um mundo single-player vanilla não carrega plugins Paper; é necessário iniciar Paper localmente, mas não é preciso publicar o servidor nem contratar hospedagem.
 
-### No PC do bot
+### No PC do bot — Tailscale Funnel (recomendado para testes entre dois Windows)
 
-No .env:
+1. Instale o Tailscale no PC que executa o BOT-ASTHEN: https://tailscale.com/download/windows
+2. Entre no tailnet da conta Tailscale.
+3. Inicie o BOT-ASTHEN e confira a API em http://127.0.0.1:8787.
+4. Abra PowerShell como Administrador e padronize o nome da máquina:
 
-~~~env
-DKB_HOST=127.0.0.1
-DKB_PORT=8787
+~~~powershell
+tailscale set --hostname=asthen-bot
 ~~~
 
-1. Inicie o bot com INICIAR.bat.
-2. Confira no console: [Asthen Bridge] API ativa em http://127.0.0.1:8787.
-3. Baixe o cloudflared para Windows 64-bit pela [página oficial](https://developers.cloudflare.com/tunnel/downloads/).
-4. Renomeie o arquivo para cloudflared.exe e coloque-o na pasta do bot.
-5. Execute INICIAR-TUNEL.bat.
-6. Copie a URL https://....trycloudflare.com que aparecer no console.
+5. Ative o Funnel em segundo plano:
 
-A URL Quick Tunnel é temporária e muda quando o túnel é criado novamente. Mantenha o bot e a janela do túnel abertos durante o teste. É uma solução para testes, não para produção. [Documentação do Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/).
+~~~powershell
+tailscale funnel --bg 8787
+~~~
 
-### No PC/host do Minecraft
+6. Copie o endereço completo exibido, no formato https://asthen-bot.NOME-DO-TAILNET.ts.net.
+7. Confira com tailscale funnel status.
 
-No plugins/DiscordKitBridge/config.yml:
+Fechar o PowerShell não encerra o Funnel porque --bg mantém a configuração no serviço Tailscale. O BOT-ASTHEN, porém, precisa continuar rodando. Se fechar o processo do bot, o túnel fica ativo, mas a API não responde. O PC também precisa permanecer ligado e conectado.
+
+O servidor Paper do amigo não precisa instalar Tailscale: ele acessa a URL pública HTTPS normalmente.
+
+Para o Plugin-ASTHEN 1.2.0, mantenha o polling tradicional:
 
 ~~~yaml
 bridge:
@@ -52,13 +56,28 @@ bridge:
   mode: "poll"
   secret: "COLE_LOCALMENTE_O_MESMO_DKB_SECRET_DO_BOT"
   poll:
-    url: "https://ENDERECO-HTTPS-DO-TUNEL"
+    url: "https://asthen-bot.NOME-DO-TAILNET.ts.net"
     interval-seconds: 3
     max-per-poll: 5
     http-timeout: 10
 ~~~
 
-Use a URL HTTPS gerada pelo túnel, sem acrescentar /plugin/v1. Não use localhost ou 127.0.0.1 para chegar ao PC do dono do bot.
+Quando o Plugin-ASTHEN 1.3.0 com Long Polling estiver instalado, troque para wait-seconds: 20 e http-timeout: 35 conforme o prompt de implementação. Não adicione a seção long-poll ao plugin 1.2.0 esperando que ela funcione.
+
+### Migração para VPS sem trocar o hostname
+
+A URL pode ser reutilizada se a VPS entrar no mesmo tailnet e receber o nome asthen-bot. O nome deve ser liberado no dispositivo antigo antes da VPS assumir:
+
+1. Pare o bot antigo e remova a publicação antiga do Funnel com tailscale funnel reset.
+2. Renomeie o PC Windows antigo para asthen-windows, pelo painel Tailscale ou usando tailscale set --hostname=asthen-windows.
+3. Instale o Tailscale na VPS e entre no mesmo tailnet.
+4. Na VPS, execute sudo tailscale set --hostname=asthen-bot.
+5. Configure o bot na VPS para iniciar e escutar em 127.0.0.1:8787.
+6. Ative sudo tailscale funnel --bg 8787 e confira tailscale funnel status.
+
+Se o nome DNS do tailnet não mudar, a URL completa será novamente https://asthen-bot.NOME-DO-TAILNET.ts.net. Pode haver indisponibilidade durante a transferência. Não tente manter dois dispositivos com o nome asthen-bot ao mesmo tempo: nomes de máquinas são únicos no tailnet.
+
+Guia completo: [TÚNEL HTTPS](TUNNEL-SETUP.md).
 
 ### Entrega quando o jogador está offline ou com inventário cheio
 
@@ -96,6 +115,8 @@ Todos os comandos `/kit` exigem a permissão **Administrador** no Discord.
 Para apagar o kit real, use a função de exclusão do plugin. Quando a lista seguinte não contiver mais esse identificador, o bot mantém o produto no catálogo e marca como indisponível. Produtos antigos e pedidos não são apagados.
 
 ## 5. Contrato HTTP
+
+**Long Polling:** o BOT-ASTHEN 2.12.0 aceita o parâmetro opcional `wait_ms` em GET /plugin/v1/pull. O plugin 1.2.0 não envia esse parâmetro e continua no polling tradicional. O plugin 1.3.0 deverá enviar `wait_ms=20000`, aceitar HTTP 204 como resposta normal e usar timeout HTTP de pelo menos 30 segundos (configuração recomendada: 35 segundos). Consulte [o prompt de implementação 1.3.0](PLUGIN-LONG-POLLING-PROMPT.md).
 
 Todas as rotas usam:
 
