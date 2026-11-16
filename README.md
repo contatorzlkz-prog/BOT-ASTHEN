@@ -104,7 +104,7 @@ O bot e o servidor Minecraft podem ficar em computadores diferentes.
 
 - No PC do bot: a API local usa `127.0.0.1:8787`.
 - No PC do Minecraft: o plugin consulta um endereço HTTPS que encaminha até a API do bot.
-- Para testar entre PCs Windows sem domínio próprio, use Tailscale Funnel (URL HTTPS estável por dispositivo). `INICIAR-TUNEL.bat` continua disponível como Cloudflare Quick Tunnel (URL temporária). Para uma futura VPS Linux, o guia também documenta tunnel.to Registered Free. Veja [TÚNEL HTTPS](docs/TUNNEL-SETUP.md).
+- Para testar entre PCs Windows sem domínio próprio, use Tailscale Funnel e padronize o dispositivo do bot como `asthen-bot`. A URL `https://asthen-bot.NOME-DO-TAILNET.ts.net` pode ser reutilizada na VPS se ela entrar no mesmo tailnet e o nome for transferido corretamente (renomeie o PC antigo para `asthen-windows` antes de atribuí-lo à VPS). `INICIAR-TUNEL.bat` continua disponível como Cloudflare Quick Tunnel temporário. O guia também documenta Cloudflare Named Tunnel e tunnel.to Registered Free. Veja [TÚNEL HTTPS](docs/TUNNEL-SETUP.md).
 
 A chave deve ser copiada diretamente entre arquivos locais: `DKB_SECRET` no `.env` do bot e `bridge.secret` no `config.yml` do plugin. O bot não mostra esse segredo no Discord.
 
@@ -176,6 +176,9 @@ npm test
 O GitHub Actions executa as mesmas verificações em pull requests e atualizações da branch principal.
 
 ## Documentação
+
+- [Túneis HTTPS, hostname asthen-bot e migração para VPS](docs/TUNNEL-SETUP.md)
+- [Prompt atualizado para Plugin-ASTHEN 1.3.0 / Long Polling](docs/PLUGIN-LONG-POLLING-PROMPT.md)
 
 - [Instalação detalhada](docs/INSTALLATION.md)
 - [Lista de comandos](docs/COMMANDS.md)
