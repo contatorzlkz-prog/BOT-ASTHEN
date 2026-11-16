@@ -104,7 +104,7 @@ O bot e o servidor Minecraft podem ficar em computadores diferentes.
 
 - No PC do bot: a API local usa `127.0.0.1:8787`.
 - No PC do Minecraft: o plugin consulta um endereço HTTPS que encaminha até a API do bot.
-- Para testes rápidos, `INICIAR-TUNEL.bat` usa Cloudflare Quick Tunnel (URL temporária). Para um endereço fixo, veja [TÚNEL HTTPS permanente](docs/TUNNEL-SETUP.md).
+- Para testar entre PCs Windows sem domínio próprio, use Tailscale Funnel (URL HTTPS estável por dispositivo). `INICIAR-TUNEL.bat` continua disponível como Cloudflare Quick Tunnel (URL temporária). Para uma futura VPS Linux, o guia também documenta tunnel.to Registered Free. Veja [TÚNEL HTTPS](docs/TUNNEL-SETUP.md).
 
 A chave deve ser copiada diretamente entre arquivos locais: `DKB_SECRET` no `.env` do bot e `bridge.secret` no `config.yml` do plugin. O bot não mostra esse segredo no Discord.
 
