@@ -66,7 +66,7 @@ export async function startBridge({
   token = getBridgeSecret(),
   host = process.env.DKB_HOST?.trim() || '127.0.0.1',
   port = Number(process.env.DKB_PORT || 8787),
-  leaseMs = 15000,
+  leaseMs = 90000,
   onKits = () => {},
   onResult = () => {},
   onDeliveryUpdate = () => {},
