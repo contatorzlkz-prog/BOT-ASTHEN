@@ -123,13 +123,16 @@ export function makeShopPanel(kits = []) {
 }
 
 
-export function makeCatalogMenu(kits = []) {
-  const listed = [...kits]
-    .sort((a, b) => Number(canBuyKit(b)) - Number(canBuyKit(a)))
-    .slice(0, CONFIG.shop.maxKits);
+export function makeCatalogMenu(kits = [], page = 0) {
+  const pageSize = Math.min(25, Math.max(1, Number(CONFIG.shop.maxKits) || 25));
+  const sorted = [...kits]
+    .sort((a, b) => Number(canBuyKit(b)) - Number(canBuyKit(a)));
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(totalPages - 1, Math.max(0, Number.isInteger(page) ? page : 0));
+  const listed = sorted.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   const menu = new StringSelectMenuBuilder()
-    .setCustomId('shop:select')
-    .setPlaceholder('Selecione um kit')
+    .setCustomId('shop:select:' + currentPage)
+    .setPlaceholder('Selecione um kit · página ' + (currentPage + 1) + '/' + totalPages)
     .setMinValues(1)
     .setMaxValues(1)
     .addOptions(listed.map(kit => {
@@ -156,6 +159,28 @@ export function makeCatalogMenu(kits = []) {
       };
     }));
   return new ActionRowBuilder().addComponents(menu);
+}
+
+export function makeCatalogPaginationRow(page, totalPages) {
+  if (totalPages <= 1) return null;
+  const currentPage = Math.min(totalPages - 1, Math.max(0, Number(page) || 0));
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('shop:page:' + (currentPage - 1))
+      .setLabel('Anterior')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(currentPage <= 0),
+    new ButtonBuilder()
+      .setCustomId('shop:page:info')
+      .setLabel('Página ' + (currentPage + 1) + '/' + totalPages)
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true),
+    new ButtonBuilder()
+      .setCustomId('shop:page:' + (currentPage + 1))
+      .setLabel('Próxima')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(currentPage >= totalPages - 1)
+  );
 }
 
 export function makeKitAdminMenu(kits = [], customId = 'kit:admin:select') {
