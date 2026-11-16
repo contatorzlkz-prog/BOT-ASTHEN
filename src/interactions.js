@@ -51,6 +51,7 @@ import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock } from './s
 
 const closingTickets = new Set();
 const orderDecisionsInFlight = new Set();
+const deliveryAttemptsInFlight = new Set();
 
 function normalizeImageUrl(value) {
   if (!value) return '';
@@ -72,8 +73,10 @@ function canManage(interaction) {
 }
 
 function isStaff(interaction, config = getGuildConfig(interaction.guildId)) {
-  if (canManage(interaction)) return true;
-  return Boolean(config.staffRoleId && interaction.member?.roles?.cache?.has?.(config.staffRoleId));
+  // Administrator bypasses channel overwrites. ManageGuild alone does not, so it
+  // is not sufficient to review a private ticket unless the member has the staff role.
+  return isAdministrator(interaction)
+    || Boolean(config.staffRoleId && interaction.member?.roles?.cache?.has?.(config.staffRoleId));
 }
 
 function isKitPurchasable(kit) {
@@ -1251,7 +1254,20 @@ async function deliverWithTimeoutRetry(payload) {
   throw new Error('Não foi possível concluir a entrega.');
 }
 
-async function processApprovedDelivery(channel, ticket, { newRequest = false, interaction = null } = {}) {
+async function processApprovedDelivery(channel, ticket, options = {}) {
+  if (!ticket?.channelId) throw new Error('Ticket inválido para iniciar entrega.');
+  if (deliveryAttemptsInFlight.has(ticket.channelId)) {
+    return { skipped: true, reason: 'delivery_in_flight' };
+  }
+  deliveryAttemptsInFlight.add(ticket.channelId);
+  try {
+    return await processApprovedDeliveryInternal(channel, ticket, options);
+  } finally {
+    deliveryAttemptsInFlight.delete(ticket.channelId);
+  }
+}
+
+async function processApprovedDeliveryInternal(channel, ticket, { newRequest = false, interaction = null } = {}) {
   if (!ticket.platform) {
     updateTicket(ticket.channelId, {
       deliveryStatus: 'PLATFORM_REQUIRED',
@@ -1356,14 +1372,43 @@ async function retryApprovedDelivery(interaction, mode) {
   if (!isStaff(interaction, getGuildConfig(interaction.guildId))) {
     return replyPrivate(interaction, 'Somente a equipe pode solicitar outra tentativa de entrega.');
   }
+  if (deliveryAttemptsInFlight.has(ticket.channelId)) {
+    return replyPrivate(interaction, 'Já existe uma tentativa de entrega em andamento para este pedido.');
+  }
+  if (ticket.deliveryStatus === 'KIT_PENDING') {
+    return replyPrivate(interaction, 'O kit já está guardado no Minecraft. Não crie outra entrega; o plugin atualizará este pedido quando o jogador retirar a pendência.');
+  }
+  if (ticket.deliveryStatus === 'KIT_DELIVERED') {
+    return replyPrivate(interaction, 'O plugin já confirmou a entrega deste kit. Uma nova tentativa não será criada.');
+  }
+  if (mode !== 'same' && mode !== 'new') {
+    return replyPrivate(interaction, 'Modo de tentativa inválido.');
+  }
   if (mode === 'same' && !ticket.deliveryRequestId) {
-    return replyPrivate(interaction, 'Não encontrei o identificador da entrega anterior. Use uma nova tentativa.');
+    return replyPrivate(interaction, 'Não encontrei o identificador da entrega anterior. A equipe precisa revisar o histórico antes de criar outra tentativa.');
+  }
+
+  const retryableFinalFailures = new Set([
+    'PLAYER_OFFLINE',
+    'PLATFORM_MISMATCH',
+    'PLATFORM_UNVERIFIABLE',
+    'KIT_NOT_FOUND',
+    'KIT_DISABLED',
+    'INVENTORY_FULL',
+    'DELIVERY_DISABLED',
+    'KIT_CORRUPT',
+    'INVALID_REQUEST'
+  ]);
+  if (mode === 'new' && !retryableFinalFailures.has(ticket.deliveryStatus)) {
+    return replyPrivate(interaction,
+      'Não é seguro criar outro request_id para este estado (' + String(ticket.deliveryStatus || 'desconhecido') +
+      '). Reutilize o mesmo identificador ou faça a reconciliação com o Minecraft primeiro.');
   }
 
   await interaction.reply({
     content: mode === 'new'
-      ? 'Uma nova tentativa de entrega foi criada.'
-      : 'A tentativa anterior foi reenviada com o mesmo identificador.',
+      ? 'Uma nova tentativa foi autorizada após falha final confirmada.'
+      : 'A tentativa será reenviada com o mesmo identificador, sem criar outra compra.',
     ephemeral: true
   });
   void processApprovedDelivery(interaction.channel, ticket, { newRequest: mode === 'new', interaction })
