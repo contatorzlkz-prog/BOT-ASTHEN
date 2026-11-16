@@ -1,4 +1,4 @@
-## 2.14.0 — candidato em revisão
+## 2.14.0 — 16/11/2026
 
 - Removida a sincronização redundante da tabela `asthen_bot_kits`; os kits ficam no snapshot `asthen_bot_state.payload` e vêm exclusivamente do Plugin-ASTHEN.
 - Supabase agora exige somente `asthen_bot_state`, `asthen_bot_weekly_stock`, `asthen_bot_stock_reservations` e `reserve_asthen_weekly_kit_stock(...)`.
