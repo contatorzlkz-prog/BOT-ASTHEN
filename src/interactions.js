@@ -175,7 +175,7 @@ async function updatePanel(guild, config, kind, channel) {
   const messageKey = isShop ? 'shopPanelMessageId' : 'supportPanelMessageId';
   const oldChannelId = config[channelKey];
   const oldMessageId = config[messageKey];
-  const payload = isShop ? makeShopPanel(getShopKits(guild.id)) : makeSupportPanel();
+  const payload = isShop ? makeShopPanel() : makeSupportPanel();
   let message = null;
 
   // Reaproveita o painel no canal atual, mas não deixa um ID antigo travar a configuração.
