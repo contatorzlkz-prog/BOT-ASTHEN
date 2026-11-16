@@ -253,45 +253,6 @@ export function updateGuildConfig(guildId, changes) {
   return config;
 }
 
-export function addKit(guildId, kit) {
-  const config = ensureGuildConfig(guildId);
-  if (config.kits.length >= 200) throw new Error('O catálogo já atingiu o limite de 200 kits.');
-  if (config.kits.some(item => normalizeKitName(item.name) === normalizeKitName(kit.name))) {
-    throw new Error('Já existe um kit com esse identificador.');
-  }
-  config.kits.push({
-    ...kit,
-    displayName: kit.displayName || makeKitDisplayName(kit.name),
-    pluginManaged: Boolean(kit.pluginManaged)
-  });
-  saveStore();
-}
-
-export function updateKit(guildId, kitId, changes) {
-  const config = ensureGuildConfig(guildId);
-  const index = config.kits.findIndex(kit => kit.id === kitId);
-  if (index < 0) return null;
-  config.kits[index] = { ...config.kits[index], ...changes };
-  saveStore();
-  return config.kits[index];
-}
-
-export function removeKit(guildId, kitId) {
-  const config = ensureGuildConfig(guildId);
-  const index = config.kits.findIndex(kit => kit.id === kitId);
-  if (index < 0) return false;
-
-  // The old remove action now disables the product without deleting its data.
-  config.kits[index] = {
-    ...config.kits[index],
-    enabled: false,
-    forSale: false,
-    manuallyUnavailable: true
-  };
-  saveStore();
-  return true;
-}
-
 /**
  * Reconcile the plugin's complete list without deleting historical products.
  * Missing products remain in the store as unavailable. Plugin 1.2.0 is authoritative for price and sale status.
