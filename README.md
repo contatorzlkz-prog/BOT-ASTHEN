@@ -6,10 +6,10 @@ Bot de Discord para o servidor Minecraft ASTHEN: atendimento privado, loja de ki
 ![Discord.js](https://img.shields.io/badge/discord.js-14-5865F2?logo=discord&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-estoque_persistente-3ECF8E?logo=supabase&logoColor=white)
 [![Checks](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/vers%C3%A3o-2.11.0-7C5CFC)
+![Version](https://img.shields.io/badge/vers%C3%A3o-2.12.0-7C5CFC)
 
 <p align="center">
-  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/latest/download/ASTHEN-BOT-v2.11.0.zip">
+  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip">
     <img src="assets/download-zip.svg" alt="Baixar ASTHEN BOT em ZIP" width="264" height="58">
   </a>
 </p>
@@ -71,7 +71,7 @@ Quando um kit é desativado ou removido do plugin, ou perde o preço, continua v
 - Registro privado das decisões e avisos de falha de entrega para a equipe.
 - Anúncio de compra com nome e valor do produto.
 - Escolha de Minecraft Java ou Bedrock antes de abrir o ticket.
-- API HTTP autenticada para o Plugin-ASTHEN usando o modo poll.
+- API HTTP autenticada para o Plugin-ASTHEN com suporte a Long Polling no bot (compatível com o modo poll antigo).
 - Tentativa automática adicional quando a entrega expira, reutilizando o mesmo identificador para evitar duplicidade.
 - Entrega do kit pelo plugin em uma Shulker Box com nome e itens preservados.
 - Jogador offline: kit fica pendente no plugin e é tentado automaticamente quando entrar.
@@ -104,7 +104,7 @@ O bot e o servidor Minecraft podem ficar em computadores diferentes.
 
 - No PC do bot: a API local usa `127.0.0.1:8787`.
 - No PC do Minecraft: o plugin consulta um endereço HTTPS que encaminha até a API do bot.
-- Para testes, o repositório inclui `INICIAR-TUNEL.bat`, que usa Cloudflare Quick Tunnel.
+- Para testes rápidos, `INICIAR-TUNEL.bat` usa Cloudflare Quick Tunnel (URL temporária). Para um endereço fixo, veja [TÚNEL HTTPS permanente](docs/TUNNEL-SETUP.md).
 
 A chave deve ser copiada diretamente entre arquivos locais: `DKB_SECRET` no `.env` do bot e `bridge.secret` no `config.yml` do plugin. O bot não mostra esse segredo no Discord.
 
