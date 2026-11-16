@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { scheduleSupabaseSync, scheduleSupabaseKitsSync, initializeSupabaseSync } from './supabase.js';
+import { scheduleSupabaseSync, initializeSupabaseSync } from './supabase.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,7 +65,8 @@ function defaultGuildConfig() {
     buyersChannelId: null,
     staffRoleId: null,
     kits: [],
-    hiddenPluginKits: []
+    hiddenPluginKits: [],
+    pluginSyncReceived: false
   };
 }
 
@@ -80,6 +81,7 @@ function ensureGuildConfig(guildId) {
 
   if (!Array.isArray(config.kits)) config.kits = [];
   if (!Array.isArray(config.hiddenPluginKits)) config.hiddenPluginKits = [];
+  if (typeof config.pluginSyncReceived !== 'boolean') config.pluginSyncReceived = false;
 
   // Pix is fixed for this store; discard values left by the old /pix command.
   delete config.pixKey;
@@ -188,7 +190,6 @@ export function saveStore({ syncRemote = true } = {}) {
     if (syncRemote) {
       const snapshot = JSON.parse(contents);
       scheduleSupabaseSync(snapshot);
-      scheduleSupabaseKitsSync(snapshot);
     }
   } catch (error) {
     try { fs.rmSync(temporaryFile, { force: true }); } catch {}
@@ -209,13 +210,39 @@ export async function initializeStoreSync() {
     },
     saveLocal: () => saveStore({ syncRemote: false })
   });
-  const snapshot = JSON.parse(JSON.stringify(state));
-  scheduleSupabaseKitsSync(snapshot);
   return result;
 }
 
 export function getGuildConfig(guildId) {
   return ensureGuildConfig(guildId);
+}
+
+const DEMO_KIT = Object.freeze({
+  id: 'asthen-demo-kit',
+  name: 'ASTHEN_DEMO_KIT',
+  displayName: 'Kit Demonstração',
+  description: 'Amostra visual da loja ASTHEN. Este item é apenas demonstrativo: não gera compra, Pix, estoque nem entrega no Minecraft.',
+  price: 'Apenas demonstração',
+  priceCents: null,
+  pluginForSale: false,
+  forSale: false,
+  pluginEnabled: false,
+  enabled: false,
+  manuallyUnavailable: false,
+  missingFromPlugin: false,
+  storeConfigured: true,
+  itemCount: 0,
+  demo: true
+});
+
+/**
+ * Shows one non-purchasable sample only until the first plugin catalog sync.
+ * The demo never enters state.json, Supabase, the inventory, or delivery queue.
+ */
+export function getShopKits(guildId) {
+  const config = ensureGuildConfig(guildId);
+  if (config.kits.length > 0 || config.pluginSyncReceived) return config.kits;
+  return [{ ...DEMO_KIT }];
 }
 
 export function updateGuildConfig(guildId, changes) {
@@ -275,6 +302,8 @@ export function syncPluginKits(guildId, pluginKits) {
       && /^[A-Za-z0-9_-]{1,32}$/.test(item.name))
     : null;
   if (!incoming) return { changed: false, kits: config.kits };
+  const previousPluginSyncReceived = config.pluginSyncReceived;
+  config.pluginSyncReceived = true;
 
   const incomingByName = new Map();
   for (const item of incoming) incomingByName.set(normalizeKitName(item.name), item);
@@ -346,8 +375,8 @@ export function syncPluginKits(guildId, pluginKits) {
     }));
 
   const next = [...syncedKits, ...missingKits];
-  const beforeJson = JSON.stringify({ kits: config.kits, hidden: config.hiddenPluginKits });
-  const afterJson = JSON.stringify({ kits: next, hidden: [] });
+  const beforeJson = JSON.stringify({ kits: config.kits, hidden: config.hiddenPluginKits, pluginSyncReceived: previousPluginSyncReceived });
+  const afterJson = JSON.stringify({ kits: next, hidden: [], pluginSyncReceived: true });
   if (beforeJson === afterJson) return { changed: false, kits: config.kits };
 
   config.kits = next;
