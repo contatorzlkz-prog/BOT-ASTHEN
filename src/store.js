@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = path.resolve(currentDir, '../data');
+const dataDir = path.resolve(process.env.ASTHEN_DATA_DIR?.trim() || path.resolve(currentDir, '../data'));
 const dataFile = path.join(dataDir, 'state.json');
 
 const emptyState = () => ({ guilds: {}, tickets: {}, purchaseDrafts: {} });
@@ -114,25 +114,62 @@ function ensureGuildConfig(guildId) {
   return config;
 }
 
+function preserveCorruptStore(reason) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupFile = dataFile + '.corrupt-' + timestamp + '.bak';
+  try {
+    fs.copyFileSync(dataFile, backupFile, fs.constants.COPYFILE_EXCL);
+  } catch (backupError) {
+    console.error('[Asthen] Não foi possível criar cópia de recuperação de state.json:', backupError.message);
+  }
+  throw new Error(
+    'O arquivo data/state.json está inválido ou ilegível. O arquivo original foi preservado' +
+    (fs.existsSync(backupFile) ? ' e uma cópia foi criada em ' + path.basename(backupFile) : '') +
+    '. O bot não iniciou para evitar sobrescrever seus dados. Motivo: ' + reason
+  );
+}
+
+function isPlainRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function getStoreDataDir() {
+  return dataDir;
+}
+
 export function loadStore() {
   fs.mkdirSync(dataDir, { recursive: true });
+
+  let contents;
   try {
-    const parsed = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
-    state = {
-      guilds: parsed.guilds && typeof parsed.guilds === 'object' ? parsed.guilds : {},
-      tickets: parsed.tickets && typeof parsed.tickets === 'object' ? parsed.tickets : {},
-      purchaseDrafts: parsed.purchaseDrafts && typeof parsed.purchaseDrafts === 'object'
-        ? parsed.purchaseDrafts
-        : {}
-    };
-    for (const guildId of Object.keys(state.guilds)) ensureGuildConfig(guildId);
+    contents = fs.readFileSync(dataFile, 'utf8');
   } catch (error) {
-    if (error.code !== 'ENOENT') {
-      console.error('[Asthen] O arquivo data/state.json não pôde ser lido. Um estado novo será criado.', error);
-    }
+    if (error.code !== 'ENOENT') preserveCorruptStore(error.message);
     state = emptyState();
+    saveStore({ syncRemote: false });
+    return;
   }
-  saveStore({ syncRemote: false });
+
+  let parsed;
+  try {
+    parsed = JSON.parse(contents);
+  } catch (error) {
+    preserveCorruptStore('JSON inválido: ' + error.message);
+  }
+
+  if (!isPlainRecord(parsed)
+      || (parsed.guilds !== undefined && !isPlainRecord(parsed.guilds))
+      || (parsed.tickets !== undefined && !isPlainRecord(parsed.tickets))
+      || (parsed.purchaseDrafts !== undefined && !isPlainRecord(parsed.purchaseDrafts))) {
+    preserveCorruptStore('estrutura de dados incompatível');
+  }
+
+  state = {
+    guilds: parsed.guilds || {},
+    tickets: parsed.tickets || {},
+    purchaseDrafts: parsed.purchaseDrafts || {}
+  };
+  for (const guildId of Object.keys(state.guilds)) ensureGuildConfig(guildId);
 }
 
 export function saveStore({ syncRemote = true } = {}) {
@@ -321,6 +358,18 @@ export function syncPluginKits(guildId, pluginKits) {
 
 export function getTicket(channelId) {
   return state.tickets[channelId] ?? null;
+}
+
+export function findTicketByDeliveryRequestId(requestId) {
+  const target = String(requestId || '');
+  if (!target) return null;
+  return Object.values(state.tickets).find(ticket =>
+    ticket.type === 'shop' && ticket.deliveryRequestId === target
+  ) ?? null;
+}
+
+export function listTickets() {
+  return Object.values(state.tickets).map(ticket => ({ ...ticket }));
 }
 
 export function findOpenTicket(guildId, userId, type = null) {
