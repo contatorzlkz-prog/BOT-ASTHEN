@@ -678,6 +678,9 @@ function startBridge(opts) {
     }
     return new Promise((resolve, reject) => {
       server.close(error => error ? reject(error) : resolve());
+      // Close idle and keep-alive sockets so shutdown/test teardown cannot hang.
+      server.closeIdleConnections?.();
+      server.closeAllConnections?.();
     });
   }
 
