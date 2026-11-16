@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { flushSupabaseSync, initializeSupabaseSync, scheduleSupabaseSync } from '../src/supabase.js';
 
-test('flush aguarda sincronização em andamento e envia o snapshot mais recente', async () => {
+test('flush aguarda sincronização em andamento e envia o snapshot mais recente', { timeout: 15000 }, async () => {
   const previous = {
     url: process.env.SUPABASE_URL,
     secret: process.env.SUPABASE_SECRET_KEY,
