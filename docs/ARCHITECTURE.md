@@ -1,92 +1,85 @@
-# Arquitetura do ASTHEN BOT
+# Arquitetura do ASTHEN BOT 2.14.0
 
-## Partes do sistema
+## Componentes
 
 | Parte | Responsabilidade |
 |---|---|
-| Bot Discord (`src/`) | Comandos, painéis, catálogo comercial, tickets e aprovação manual. |
-| Bridge HTTP (`bot-integration/`, `src/bridge.js`) | Recebe a lista completa de kits e mantém a fila de pedidos de entrega. |
-| Plugin-ASTHEN | Cria e mantém os kits reais, informa quais estão ativos e executa as entregas no Minecraft. |
-| Estado local (`data/state.json`) | Backup local de configurações, tickets e catálogo. |
-| Supabase (opcional) | Backup remoto e tabela organizada para consultar os kits por servidor. |
+| `src/` | Bot Discord, loja, comandos, tickets, pagamentos e aprovação manual. |
+| `bot-integration/` | API HTTP, Long Polling e fila persistente de entregas. |
+| Plugin-ASTHEN | Origem dos kits, itens, preço, disponibilidade e entrega no Minecraft. |
+| `data/state.json` | Backup local de configurações, catálogo sincronizado e tickets. |
+| `data/bridge-queue.json` | Fila local persistente de pedidos de entrega. |
+| Supabase | Snapshot remoto e controle transacional do estoque semanal. |
 
-## Quem é responsável por cada dado
+## Origem dos dados
 
-**Plugin Minecraft**
-- Identificador técnico e itens dentro do kit.
-- Estado ativo/desativado no servidor.
-- Preço oficial em centavos e regra `for_sale`.
-- Entrega em uma Shulker Box com o nome do kit e os itens preservados.
+**Minecraft / Plugin-ASTHEN**
+- Cria os kits e define seus itens.
+- Define preço, ativação e disponibilidade de venda.
+- Envia a lista completa ao bot em `POST /plugin/v1/kits`.
+- Executa a entrega da Shulker Box e mantém pendências.
 
-**Bot Discord**
-- Nome comercial exibido ao comprador.
-- Descrição comercial e URL HTTPS da imagem.
-- Bloqueio manual adicional da loja e fluxo de pagamento.
-- Exibição do preço exato recebido em `price_cents` (não define o valor).
+**Discord / BOT-ASTHEN**
+- Importa automaticamente os kits recebidos do plugin.
+- Permite editar somente nome exibido, descrição e imagem comercial.
+- Mostra o catálogo, cria tickets e recebe a conferência manual dos pagamentos.
+- Não cria kits e não altera o preço nem os itens reais do Minecraft.
 
-O bot não edita os itens do Minecraft. Um kit real nasce no plugin; o bot só o cadastra na loja depois de receber sua identificação pela bridge.
-
-## Fluxo de cadastro
+## Sincronização dos kits
 
 ~~~text
-Administrador cria kit no Paper
-          |
-          v
+Administrador cria o kit no Minecraft
+              |
+              v
 Plugin envia POST /plugin/v1/kits
-          |
-          v
-Bot importa/atualiza o catálogo
-          |
-          v
-Administrador usa /kit criar
-          |
-          v
-Nome comercial + descrição + imagem (preço vem do plugin)
-          |
-          v
-Produto aparece na loja do Discord
+              |
+              v
+Bot reconcilia a lista no state.json
+              |
+              v
+Kit aparece automaticamente na loja Discord
+              |
+              v
+Administrador usa /kit editar (nome, descrição, imagem)
 ~~~
 
-Para mudanças pontuais, use `/kit editar`. Para bloquear compras, use `/kit remover`. Um kit que some da lista ou fica desativado no plugin é mantido no catálogo como indisponível, sem apagar seus dados antigos.
+Quando o plugin ainda não conectou, a loja mostra um Kit Demonstração local. Ele serve apenas para visualizar a interface e não é persistido, não gera ticket, Pix, reserva de estoque ou entrega. A primeira sincronização real remove o demo.
 
-## Fluxo de compra e entrega
+Os kits são identificados pelo nome técnico do plugin. O nome comercial no Discord não altera esse identificador.
 
-1. O cliente seleciona o kit e confere a prévia.
-2. Informa o nick e escolhe Java ou Bedrock.
-3. O bot cria um ticket privado e exibe os dados Pix.
-4. A equipe confere o comprovante manualmente.
-5. Um administrador ou membro com o cargo de equipe aprova o pedido.
-6. O bot envia `request_id`, jogador, plataforma e identificador técnico do kit à bridge.
-7. O plugin consulta a fila, monta a Shulker Box do kit e entrega um único item ao jogador.
-8. Se não houver espaço, o plugin guarda o kit completo como pendente; o jogador pode retirá-lo com `/dk claim`.
-9. O bot informa o resultado no ticket e registra a decisão.
+## Compra e entrega
 
-Em caso de timeout, o bot repete uma vez com o mesmo `request_id`. O plugin deve tratar esse identificador como idempotente para impedir uma segunda entrega da mesma compra.
+1. O cliente seleciona um kit real disponível e confere a prévia.
+2. Informa nick e escolhe Java ou Bedrock.
+3. O bot abre um ticket privado com os dados Pix.
+4. A equipe confere o comprovante e aprova o pedido.
+5. O bot reserva uma unidade do estoque semanal no Supabase.
+6. O bot envia `request_id`, jogador, plataforma e kit à Bridge.
+7. O plugin consulta a fila e entrega uma Shulker Box com o kit.
+8. Se o jogador estiver offline ou sem espaço, o plugin mantém a entrega pendente conforme sua configuração.
+9. O bot atualiza o ticket com o resultado do plugin.
 
-## Bridge persistente — versão 2.13.0
+Timeout reutiliza o mesmo `request_id`. O plugin deve tratar esse identificador como idempotente para evitar duplicidade.
 
-A fila de entregas deixa de depender somente de uma Map em memória e passa a manter o diário local em data/bridge-queue.json. O pedido é salvo antes de ser oferecido ao plugin. O registro conserva request_id, payload, ticket/guild, status, lease, tentativas e resultado.
+## Persistência da Bridge
 
-Quando o bot reinicia, leases do processo anterior são liberados para nova consulta pelo plugin com o mesmo request_id. Resultado final é salvo antes do HTTP 2xx. Arquivo corrompido impede a inicialização da Bridge e é preservado para recuperação, em vez de virar fila vazia.
+A fila fica em `data/bridge-queue.json` e é gravada antes de entregar um pedido ao plugin. Após reinício, leases antigos são liberados e pedidos sem resultado voltam a ser consultados usando o mesmo `request_id`.
 
-O endpoint POST /plugin/v1/delivery-update recebe a transição autenticada de KIT_PENDING para KIT_DELIVERED. Ele só aceita request_id já conhecido e não reserva estoque novamente. A atualização do ticket é idempotente e pode ser reprocessada depois de um reinício.
+Resultados são persistidos antes da resposta HTTP de sucesso. `POST /plugin/v1/delivery-update` recebe a transição posterior autenticada de `KIT_PENDING` para `KIT_DELIVERED`, quando o plugin 1.3.0 implementar essa chamada.
 
-A fila deve ser preservada junto com a pasta data/ ao atualizar ou mover o bot. Use apenas uma instância do bot por diretório de dados; não compartilhe o mesmo arquivo de fila entre processos simultâneos.
+Preserve toda a pasta `data/` ao atualizar o bot. Use somente uma instância do bot por diretório de dados.
 
-## Supabase e backup
+## Supabase
 
-O estado local é salvo primeiro em `data/state.json`. O Supabase recebe:
-- `asthen_bot_state`: snapshot do estado.
-- `asthen_bot_kits`: uma linha por kit e servidor Discord.
+O snapshot completo é salvo em `asthen_bot_state`, incluindo a lista de kits. Não existe mais gravação paralela numa tabela `asthen_bot_kits`.
 
-A tabela normalizada diferencia o estado recebido do plugin de disponibilidade e configuração comerciais. Kits antigos não são removidos quando o plugin deixa de reportá-los.
+O estoque usa `asthen_bot_weekly_stock`, `asthen_bot_stock_reservations` e a função `reserve_asthen_weekly_kit_stock(...)`. A reserva é atômica, limitada a 10 unidades por kit e servidor a cada semana, e idempotente por pedido.
 
-O Supabase é opcional. Sem conexão, o bot mantém o backup local e tenta sincronizar novamente.
+Consulte `docs/SUPABASE.md` e execute `supabase/SETUP.sql` para criar a estrutura necessária.
 
 ## Segurança
 
-- `DISCORD_TOKEN`, `DKB_SECRET` e `SUPABASE_SECRET_KEY` ficam apenas em `.env`.
+- `DISCORD_TOKEN`, `DKB_SECRET` e `SUPABASE_SECRET_KEY` ficam somente no `.env`.
 - O mesmo `DKB_SECRET` é configurado localmente em `bridge.secret` no plugin.
-- O segredo não aparece nos comandos ou nas mensagens do Discord.
-- A API do bot fica por padrão em `127.0.0.1:8787`; conexões de outro computador precisam de um endereço HTTPS seguro, por exemplo um túnel temporário para testes.
-- A chave secreta do Supabase é usada somente no backend do bot.
+- A API local escuta em `127.0.0.1:8787` por padrão.
+- O Supabase usa uma chave secreta de backend; nunca use chave pública `anon` para as operações do bot.
