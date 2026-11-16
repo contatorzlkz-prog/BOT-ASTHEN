@@ -40,6 +40,7 @@ async function refreshPanelMessage(guild, channelId, messageId, payload, label, 
     if (messageId) {
       try {
         message = await channel.messages.fetch(messageId);
+        if (!messageHasPanel(message, customId, guild.client.user?.id)) message = null;
       } catch (error) {
         if (!isMissingDiscordMessage(error)) throw error;
       }
@@ -83,8 +84,10 @@ async function refreshPanelMessage(guild, channelId, messageId, payload, label, 
 }
 
 async function discoverGuildChannels(guild) {
+  let channelsFetched = false;
   try {
     await guild.channels.fetch();
+    channelsFetched = true;
   } catch (error) {
     console.warn('[Asthen] Não foi possível listar os canais de ' + guild.name + ':', error.message);
   }
@@ -108,7 +111,7 @@ async function discoverGuildChannels(guild) {
       if (detectedId !== config[key]) changes[key] = detectedId;
       continue;
     }
-    if (config[key] && current?.type !== ChannelType.GuildText) {
+    if (channelsFetched && config[key] && current?.type !== ChannelType.GuildText) {
       changes[key] = null;
       if (messageKeys[key]) {
         changes[messageKeys[key].message] = null;
@@ -130,14 +133,14 @@ async function discoverGuildChannels(guild) {
     if (names.length) console.log('[Asthen] Canais reconhecidos em ' + guild.name + ': ' + names.join(', ') + '.');
   }
 
-  // O canal de logs é privado por padrão quando descoberto automaticamente.
-  if (changes.logsChannelId) {
-    const logsChannel = guild.channels.cache.get(changes.logsChannelId);
-    if (logsChannel?.type === ChannelType.GuildText) {
-      await secureLogsChannel(logsChannel, guild, config.staffRoleId || null).catch(error => {
-        console.warn('[Asthen] Não foi possível proteger automaticamente #logs:', error.message);
-      });
-    }
+  // Aplica as permissões de #logs em cada boot, inclusive quando o ID já estava salvo.
+  const latestConfig = getGuildConfig(guild.id);
+  const logsId = latestConfig.logsChannelId;
+  const logsChannel = logsId ? guild.channels.cache.get(logsId) : null;
+  if (logsChannel?.type === ChannelType.GuildText) {
+    await secureLogsChannel(logsChannel, guild, latestConfig.staffRoleId || null).catch(error => {
+      console.warn('[Asthen] Não foi possível proteger automaticamente #logs:', error.message);
+    });
   }
 }
 
