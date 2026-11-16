@@ -3,7 +3,7 @@ import { ChannelType, Client, Events, GatewayIntentBits, MessageFlags, REST, Rou
 import { commandDefinitions } from './commands.js';
 import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
 import { flushSupabaseSync } from './supabase.js';
-import { makeShopPanel, makeSupportPanel } from './ui.js';
+import { makeShopPanel, makeSupportPanel, PANEL_LAYOUT_VERSION } from './ui.js';
 import { handleInteraction, recoverApprovedDeliveries, secureLogsChannel } from './interactions.js';
 import { discoverStandardChannels, messageHasPanel } from './channel-discovery.js';
 import { ensureBridgeSecret, startBridge } from './bridge.js';
@@ -31,7 +31,7 @@ async function refreshPanelMessage(guild, channelId, messageId, payload, label, 
       });
 
     if (!channel || channel.type !== ChannelType.GuildText) {
-      updateGuildConfig(guild.id, { [keys.channel]: null, [keys.message]: null });
+      updateGuildConfig(guild.id, { [keys.channel]: null, [keys.message]: null, [keys.version]: null });
       console.warn('[Asthen] O canal de ' + label + ' não existe mais. Será procurado novamente pelo nome.');
       return;
     }
@@ -53,14 +53,29 @@ async function refreshPanelMessage(guild, channelId, messageId, payload, label, 
     }
 
     if (message) {
-      if (message.id !== messageId) updateGuildConfig(guild.id, { [keys.message]: message.id });
-      console.log('[Asthen] Painel de ' + label + ' encontrado em #' + channel.name + '; mensagem preservada.');
+      const savedConfig = getGuildConfig(guild.id);
+      if (savedConfig[keys.version] !== PANEL_LAYOUT_VERSION) {
+        // Migra uma única vez o painel legado (ex.: corrigir a descrição com \\n literal).
+        await message.edit(payload);
+        updateGuildConfig(guild.id, {
+          [keys.message]: message.id,
+          [keys.version]: PANEL_LAYOUT_VERSION
+        });
+        console.log('[Asthen] Painel de ' + label + ' atualizado uma vez para o layout ' + PANEL_LAYOUT_VERSION + '.');
+      } else if (message.id !== messageId) {
+        updateGuildConfig(guild.id, { [keys.message]: message.id });
+      } else {
+        console.log('[Asthen] Painel de ' + label + ' encontrado em #' + channel.name + '; mensagem preservada.');
+      }
       return;
     }
 
-    // No boot, só publica se o painel não existir. Mensagens existentes nunca são editadas.
+    // No boot, só publica se o painel não existir. Mensagens atuais não são editadas.
     const created = await channel.send(payload);
-    updateGuildConfig(guild.id, { [keys.message]: created.id });
+    updateGuildConfig(guild.id, {
+      [keys.message]: created.id,
+      [keys.version]: PANEL_LAYOUT_VERSION
+    });
     console.log('[Asthen] Painel de ' + label + ' criado em #' + channel.name + '.');
   } catch (error) {
     console.error('[Asthen] Não foi possível verificar o painel de ' + label + ' em ' + guild.name + ':', error.message);
@@ -78,8 +93,8 @@ async function discoverGuildChannels(guild) {
   const found = discoverStandardChannels(guild.channels.cache);
   const changes = {};
   const messageKeys = {
-    supportPanelChannelId: 'supportPanelMessageId',
-    shopPanelChannelId: 'shopPanelMessageId'
+    supportPanelChannelId: { message: 'supportPanelMessageId', version: 'supportPanelVersion' },
+    shopPanelChannelId: { message: 'shopPanelMessageId', version: 'shopPanelVersion' }
   };
 
   const channelKeys = [
@@ -90,7 +105,10 @@ async function discoverGuildChannels(guild) {
     if (current?.type === ChannelType.GuildText) continue;
     const detectedId = found[key] || null;
     if (detectedId !== config[key]) changes[key] = detectedId;
-    if (!detectedId && messageKeys[key]) changes[messageKeys[key]] = null;
+    if (!detectedId && messageKeys[key]) {
+      changes[messageKeys[key].message] = null;
+      changes[messageKeys[key].version] = null;
+    }
   }
 
   if (Object.keys(changes).length) {
@@ -287,7 +305,7 @@ async function refreshConfiguredPanels(client) {
       config.supportPanelMessageId,
       makeSupportPanel(),
       'atendimento',
-      { channel: 'supportPanelChannelId', message: 'supportPanelMessageId' },
+      { channel: 'supportPanelChannelId', message: 'supportPanelMessageId', version: 'supportPanelVersion' },
       'support:select'
     );
     await refreshPanelMessage(
@@ -296,7 +314,7 @@ async function refreshConfiguredPanels(client) {
       config.shopPanelMessageId,
       makeShopPanel(),
       'kits',
-      { channel: 'shopPanelChannelId', message: 'shopPanelMessageId' },
+      { channel: 'shopPanelChannelId', message: 'shopPanelMessageId', version: 'shopPanelVersion' },
       'shop:catalog'
     );
   }
