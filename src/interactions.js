@@ -14,6 +14,7 @@ import {
   getGuildConfig,
   getPurchaseDraft,
   getTicket,
+  listTickets,
   makeKitDisplayName,
   removeKit,
   savePurchaseDraft,
@@ -47,7 +48,7 @@ import {
 } from './ui.js';
 import { archiveAndDeleteTicket, createPrivateTicket } from './tickets.js';
 import { CONFIG } from './config.js';
-import { deliverKit, getBridgeStatus } from './bridge.js';
+import { deliverKit, getBridgeJob, getBridgeStatus } from './bridge.js';
 import { PIX_KEY_DEFAULT, PIX_QR_FILENAME, PIX_QR_IMAGE_PATH } from './pix.js';
 import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock } from './supabase.js';
 
@@ -1323,7 +1324,7 @@ async function processApprovedDelivery(channel, ticket, options = {}) {
   }
 }
 
-async function processApprovedDeliveryInternal(channel, ticket, { newRequest = false, interaction = null } = {}) {
+async function processApprovedDeliveryInternal(channel, ticket, { newRequest = false, interaction = null, recovery = false } = {}) {
   const retryableFinalFailures = new Set([
     'PLAYER_OFFLINE',
     'PLATFORM_MISMATCH',
@@ -1376,7 +1377,9 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
 
   // A falha ao publicar uma mensagem de progresso não pode impedir a entrega.
   try {
-    await channel.send('Pagamento confirmado. A entrega do kit está sendo solicitada ao Minecraft.');
+    await channel.send(recovery
+      ? 'O bot foi reiniciado e está retomando a solicitação de entrega já registrada.'
+      : 'Pagamento confirmado. A entrega do kit está sendo solicitada ao Minecraft.');
   } catch (notificationError) {
     console.error('[Asthen] Não foi possível publicar o aviso inicial da entrega:', notificationError.message);
   }
@@ -1690,6 +1693,42 @@ export async function handleInteraction(interaction) {
     if (interaction.customId.startsWith('kit:edit-modal:')) return handleKitEditModal(interaction);
     if (interaction.customId === 'shop:nick:submit' || interaction.customId.startsWith('shop:nick:edit:')) {
       return handleNickSubmit(interaction);
+    }
+  }
+}
+
+/**
+ * Reattaches to durable bridge jobs after a bot restart. If a crash occurred
+ * after the ticket was marked QUEUED but before the job was persisted, it
+ * recreates the job using the same deterministic request_id.
+ */
+export async function recoverApprovedDeliveries(client) {
+  const recoverableStatuses = new Set([undefined, null, 'QUEUED', 'TIMEOUT', 'WAITING']);
+  const candidates = listTickets().filter(ticket =>
+    ticket.type === 'shop'
+    && ticket.status !== 'closed'
+    && ticket.orderStatus === 'approved'
+    && ticket.platform
+    && recoverableStatuses.has(ticket.deliveryStatus)
+  );
+
+  for (const ticket of candidates) {
+    if (deliveryAttemptsInFlight.has(ticket.channelId)) continue;
+    const requestId = ticket.deliveryRequestId || ('ticket-' + ticket.channelId);
+    const job = getBridgeJob(requestId);
+    if (job?.result) continue; // the Bridge replays the persisted result to the ticket handler
+
+    const guild = client.guilds.cache.get(ticket.guildId)
+      ?? await client.guilds.fetch(ticket.guildId).catch(() => null);
+    if (!guild) continue;
+    const channel = guild.channels.cache.get(ticket.channelId)
+      ?? await guild.channels.fetch(ticket.channelId).catch(() => null);
+    if (!channel?.send) continue;
+
+    try {
+      await processApprovedDelivery(channel, ticket, { recovery: true });
+    } catch (error) {
+      console.error('[Asthen] Não foi possível retomar a entrega ' + requestId + ':', error.message);
     }
   }
 }
