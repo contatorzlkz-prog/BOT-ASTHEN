@@ -63,7 +63,7 @@ Para mudanças pontuais, use `/kit editar`. Para bloquear compras, use `/kit rem
 
 Em caso de timeout, o bot repete uma vez com o mesmo `request_id`. O plugin deve tratar esse identificador como idempotente para impedir uma segunda entrega da mesma compra.
 
-## Bridge persistente — proposta 2.13.0
+## Bridge persistente — versão 2.13.0
 
 A fila de entregas deixa de depender somente de uma Map em memória e passa a manter o diário local em data/bridge-queue.json. O pedido é salvo antes de ser oferecido ao plugin. O registro conserva request_id, payload, ticket/guild, status, lease, tentativas e resultado.
 
