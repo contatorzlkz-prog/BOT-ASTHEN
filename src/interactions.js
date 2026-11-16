@@ -214,7 +214,7 @@ async function updatePanel(guild, config, kind, channel) {
   };
 }
 
-async function secureLogsChannel(channel, guild, staffRoleId, previousStaffRoleId = null) {
+export async function secureLogsChannel(channel, guild, staffRoleId, previousStaffRoleId = null) {
   const everyoneId = guild.roles.everyone.id;
   await channel.permissionOverwrites.edit(everyoneId, { ViewChannel: false });
 
