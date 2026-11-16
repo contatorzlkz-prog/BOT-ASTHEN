@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { Client, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
 import { commandDefinitions } from './commands.js';
-import { getGuildConfig, loadStore, initializeStoreSync, updateGuildConfig, syncPluginKits } from './store.js';
+import { findTicketByDeliveryRequestId, getGuildConfig, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
 import { flushSupabaseSync } from './supabase.js';
 import { makeShopPanel, makeSupportPanel } from './ui.js';
 import { handleInteraction } from './interactions.js';
@@ -60,6 +60,99 @@ async function refreshPanelMessage(guild, channelId, messageId, payload, label, 
   } catch (error) {
     console.error('[Asthen] Não foi possível atualizar o painel de ' + label + ' em ' + guild.name + ':', error.message);
   }
+}
+
+async function findTicketChannel(client, ticket) {
+  if (!ticket) return null;
+  const guild = client.guilds.cache.get(ticket.guildId)
+    ?? await client.guilds.fetch(ticket.guildId).catch(() => null);
+  if (!guild) return null;
+  return guild.channels.cache.get(ticket.channelId)
+    ?? await guild.channels.fetch(ticket.channelId).catch(() => null);
+}
+
+async function handleBridgeResult(client, event) {
+  const requestId = event?.request?.request_id;
+  const ticket = findTicketByDeliveryRequestId(requestId);
+  if (!ticket) {
+    console.warn('[Asthen Bridge] Resultado recebido para request_id sem ticket local:', requestId);
+    return;
+  }
+
+  const result = event.result || {};
+  const status = String(result.status || 'UNKNOWN');
+  updateTicket(ticket.channelId, {
+    deliveryStatus: status,
+    deliveryResponse: String(result.message || ''),
+    deliveryUpdatedAt: new Date().toISOString(),
+    deliveryError: null
+  });
+
+  // Normal in-process delivery displays its own response. This path is for
+  // results recovered after a bot restart or received after the original timeout.
+  if (!event.resumed) return;
+
+  const channel = await findTicketChannel(client, ticket);
+  if (!channel?.send) {
+    console.warn('[Asthen Bridge] Resultado persistido, mas o canal do ticket não está disponível:', ticket.channelId);
+    return;
+  }
+
+  const pendingReason = status === 'KIT_PENDING' && /offline/i.test(String(result.message || ''))
+    ? 'offline'
+    : 'inventory';
+  await channel.send({
+    content: 'Atualização recuperada da entrega após reinício/timeout da integração.',
+    embeds: [makeDeliveryEmbed({
+      ...result,
+      message: String(result.message || 'O plugin respondeu à solicitação.'),
+      pendingReason,
+      player: result.player || ticket.minecraftNick,
+      platform: result.platform || ticket.platform,
+      kit: ticket.kitDisplayName || ticket.kitName
+    })],
+    components: status === 'KIT_DELIVERED' || status === 'KIT_PENDING'
+      ? [makeCloseRow()]
+      : []
+  });
+}
+
+async function handleBridgeDeliveryUpdate(client, event) {
+  const requestId = event?.update?.request_id;
+  const ticket = findTicketByDeliveryRequestId(requestId);
+  if (!ticket) {
+    console.error('[Asthen Bridge] Atualização de entrega sem ticket local:', requestId);
+    return;
+  }
+  if (ticket.deliveryStatus === 'KIT_DELIVERED') return;
+
+  const update = event.update || {};
+  updateTicket(ticket.channelId, {
+    deliveryStatus: 'KIT_DELIVERED',
+    deliveryResponse: String(update.message || 'Kit entregue após retirada da pendência.'),
+    deliveryUpdatedAt: update.updated_at || new Date().toISOString(),
+    deliveryError: null,
+    deliveryCompletedAt: update.updated_at || new Date().toISOString()
+  });
+
+  const channel = await findTicketChannel(client, ticket);
+  if (!channel?.send) {
+    console.warn('[Asthen Bridge] Kit marcado como entregue, mas o canal do ticket não está disponível:', ticket.channelId);
+    return;
+  }
+
+  await channel.send({
+    content: '<@' + ticket.userId + '> O Minecraft confirmou a retirada do kit que estava pendente.',
+    embeds: [makeDeliveryEmbed({
+      status: 'KIT_DELIVERED',
+      message: String(update.message || 'O kit pendente foi entregue com sucesso.'),
+      player: ticket.minecraftNick,
+      platform: ticket.platform,
+      kit: ticket.kitDisplayName || ticket.kitName
+    })],
+    components: [makeCloseRow()],
+    allowedMentions: { users: [ticket.userId], roles: [] }
+  });
 }
 
 async function refreshConfiguredPanels(client) {
@@ -168,6 +261,12 @@ async function main() {
       token: bridgeSecret.token,
       host: process.env.DKB_HOST?.trim() || '127.0.0.1',
       port: Number(process.env.DKB_PORT || 8787),
+      onResult: event => {
+        void handleBridgeResult(client, event).catch(error => console.error('[Asthen Bridge] Falha ao reconciliar resultado:', error));
+      },
+      onDeliveryUpdate: event => {
+        void handleBridgeDeliveryUpdate(client, event).catch(error => console.error('[Asthen Bridge] Falha ao atualizar ticket:', error));
+      },
       onKits: kits => {
         const enabled = kits.filter(kit => kit.enabled).map(kit => kit.name);
         let changedGuilds = 0;
