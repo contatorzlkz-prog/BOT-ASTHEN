@@ -101,7 +101,7 @@ export function makeSupportPanel() {
   return { embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] };
 }
 
-export function makeShopPanel(kits = []) {
+export function makeShopPanel() {
   const embed = new EmbedBuilder()
     .setColor(brandColor())
     .setTitle('Kits')
