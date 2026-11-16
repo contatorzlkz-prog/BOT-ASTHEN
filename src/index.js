@@ -49,8 +49,16 @@ async function refreshPanelMessage(guild, channelId, messageId, payload, label, 
     // state.json pode ter sido restaurado sem o ID da mensagem. Procura o painel
     // existente antes de publicar outro, evitando duplicatas em reinicializações.
     if (!message) {
-      const recent = await channel.messages.fetch({ limit: 50 }).catch(() => null);
-      message = recent?.find(item => messageHasPanel(item, customId, guild.client.user?.id)) || null;
+      let recent;
+      try {
+        recent = await channel.messages.fetch({ limit: 50 });
+      } catch (error) {
+        // Without history permission we cannot know whether the panel already exists.
+        // Do not post a second copy when discovery is inconclusive.
+        console.warn('[Asthen] Sem permissão para verificar mensagens recentes em #' + channel.name + '; painel não será duplicado.');
+        return;
+      }
+      message = recent.find(item => messageHasPanel(item, customId, guild.client.user?.id)) || null;
     }
 
     if (message) {
