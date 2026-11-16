@@ -1037,6 +1037,12 @@ async function closeTicket(interaction) {
   if (ticket.status !== 'open' || closingTickets.has(interaction.channelId)) {
     return replyPrivate(interaction, 'Este ticket já está sendo fechado.');
   }
+  if (ticket.type === 'shop' && ticket.orderStatus === 'approved'
+      && ['PLATFORM_REQUIRED', 'QUEUED', 'TIMEOUT', 'WAITING', 'KIT_PENDING'].includes(ticket.deliveryStatus)) {
+    return replyPrivate(interaction,
+      'Não é possível fechar este pedido enquanto a entrega estiver pendente ou sem confirmação. ' +
+      'Estado atual: ' + ticket.deliveryStatus + '. Aguarde a atualização do Minecraft ou faça a reconciliação com a equipe.');
+  }
 
   closingTickets.add(interaction.channelId);
   try {
@@ -1154,6 +1160,15 @@ async function decideOrder(interaction, decision) {
         stockReservedCount: reservation.reserved_count,
         stockRemaining: reservation.remaining
       } : {})
+    });
+    appendTicketHistory(interaction.channelId, {
+      type: 'order_decision',
+      eventId: 'order-decision:' + interaction.channelId,
+      decision,
+      staffId: interaction.user.id,
+      stockReservationId: reservation ? reservationId : null,
+      stockWeekStart: reservation ? reservation.week_start : null,
+      at: reviewedAt
     });
 
     try {
