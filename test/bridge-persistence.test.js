@@ -24,7 +24,7 @@ async function post(baseUrl, route, body) {
   });
 }
 
-test('Bridge recupera a mesma solicitação e request_id depois de reiniciar', async () => {
+test('Bridge recupera a mesma solicitação e request_id depois de reiniciar', { timeout: 15000 }, async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'asthen-bridge-restart-'));
   const previousDataDir = process.env.ASTHEN_DATA_DIR;
   process.env.ASTHEN_DATA_DIR = root;
@@ -78,6 +78,7 @@ test('Bridge recupera a mesma solicitação e request_id depois de reiniciar', a
       kit: 'Kit_Ferro'
     });
     assert.equal(posted.status, 200);
+    assert.equal((await posted.json()).success, true);
     assert.equal((await recoveredWaiter).status, 'KIT_DELIVERED');
     assert.equal(bridge.queueCounts().delivered, 1);
   } finally {
@@ -88,7 +89,7 @@ test('Bridge recupera a mesma solicitação e request_id depois de reiniciar', a
   }
 });
 
-test('KIT_PENDING pode ser atualizado para KIT_DELIVERED com idempotência', async () => {
+test('KIT_PENDING pode ser atualizado para KIT_DELIVERED com idempotência', { timeout: 15000 }, async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'asthen-bridge-update-'));
   const previousDataDir = process.env.ASTHEN_DATA_DIR;
   process.env.ASTHEN_DATA_DIR = root;
@@ -113,6 +114,7 @@ test('KIT_PENDING pode ser atualizado para KIT_DELIVERED com idempotência', asy
     });
     const pulled = await pull(baseUrl);
     assert.equal(pulled.status, 200);
+    assert.equal((await pulled.json()).requests[0].request_id, 'ticket-pending-001');
 
     const initial = await post(baseUrl, '/plugin/v1/result', {
       request_id: 'ticket-pending-001',
@@ -125,6 +127,7 @@ test('KIT_PENDING pode ser atualizado para KIT_DELIVERED com idempotência', asy
       message: 'Inventário cheio'
     });
     assert.equal(initial.status, 200);
+    assert.equal((await initial.json()).success, true);
     assert.equal((await pending).status, 'KIT_PENDING');
     assert.equal(bridge.queueCounts().kitPending, 1);
 
@@ -139,6 +142,7 @@ test('KIT_PENDING pode ser atualizado para KIT_DELIVERED com idempotência', asy
     };
     const updated = await post(baseUrl, '/plugin/v1/delivery-update', updateBody);
     assert.equal(updated.status, 200);
+    assert.equal((await updated.json()).success, true);
     const duplicate = await post(baseUrl, '/plugin/v1/delivery-update', updateBody);
     assert.equal(duplicate.status, 200);
     assert.equal((await duplicate.json()).duplicate, true);
@@ -150,6 +154,7 @@ test('KIT_PENDING pode ser atualizado para KIT_DELIVERED com idempotência', asy
       request_id: 'request-desconhecido'
     });
     assert.equal(unknown.status, 404);
+    assert.equal((await unknown.json()).status, 'NOT_FOUND');
   } finally {
     if (bridge) await bridge.close();
     if (previousDataDir === undefined) delete process.env.ASTHEN_DATA_DIR;
