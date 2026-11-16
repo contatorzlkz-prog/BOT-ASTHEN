@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { ChannelType, Client, Events, GatewayIntentBits, MessageFlags, REST, Routes } from 'discord.js';
 import { commandDefinitions } from './commands.js';
-import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, getShopKits, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
+import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
 import { flushSupabaseSync } from './supabase.js';
 import { makeShopPanel, makeSupportPanel } from './ui.js';
 import { handleInteraction, recoverApprovedDeliveries, secureLogsChannel } from './interactions.js';
@@ -82,18 +82,15 @@ async function discoverGuildChannels(guild) {
     shopPanelChannelId: 'shopPanelMessageId'
   };
 
-  for (const [key, detectedId] of Object.entries(found)) {
+  const channelKeys = [
+    'supportPanelChannelId', 'shopPanelChannelId', 'logsChannelId', 'buyersChannelId'
+  ];
+  for (const key of channelKeys) {
     const current = config[key] ? guild.channels.cache.get(config[key]) : null;
     if (current?.type === ChannelType.GuildText) continue;
-    if (detectedId && detectedId !== config[key]) changes[key] = detectedId;
-  }
-
-  for (const key of Object.keys(messageKeys)) {
-    const current = config[key] ? guild.channels.cache.get(config[key]) : null;
-    if (config[key] && current?.type !== ChannelType.GuildText && !(key in changes)) {
-      changes[key] = null;
-      changes[messageKeys[key]] = null;
-    }
+    const detectedId = found[key] || null;
+    if (detectedId !== config[key]) changes[key] = detectedId;
+    if (!detectedId && messageKeys[key]) changes[messageKeys[key]] = null;
   }
 
   if (Object.keys(changes).length) {
@@ -297,7 +294,7 @@ async function refreshConfiguredPanels(client) {
       guild,
       config.shopPanelChannelId,
       config.shopPanelMessageId,
-      makeShopPanel(getShopKits(guild.id)),
+      makeShopPanel(),
       'kits',
       { channel: 'shopPanelChannelId', message: 'shopPanelMessageId' },
       'shop:catalog'
