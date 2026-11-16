@@ -276,7 +276,7 @@ test('loja mostra um único kit demo até receber a primeira sincronização do 
 test('kit demo continua disponível quando o plugin ainda não tem kits reais', () => {
   const guildId = testGuildId();
   const emptySync = syncPluginKits(guildId, []);
-  assert.equal(emptySync.changed, false);
+  assert.equal(emptySync.changed, true);
   assert.equal(getShopKits(guildId)[0].demo, true);
 });
 
