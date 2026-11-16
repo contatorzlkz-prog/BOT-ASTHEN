@@ -1,3 +1,17 @@
+## 2.14.0 — candidato em revisão
+
+- Removida a sincronização redundante da tabela `asthen_bot_kits`; os kits ficam no snapshot `asthen_bot_state.payload` e vêm exclusivamente do Plugin-ASTHEN.
+- Supabase agora exige somente `asthen_bot_state`, `asthen_bot_weekly_stock`, `asthen_bot_stock_reservations` e `reserve_asthen_weekly_kit_stock(...)`.
+- Respostas HTTP 4xx de sincronização não geram tentativas repetidas indefinidamente; os detalhes do erro são mostrados uma vez.
+- `/kit criar` e `/kit remover` foram removidos. O plugin cria e sincroniza os kits; Discord oferece apenas `/kit listar` e `/kit editar`.
+- A loja mostra um Kit Demonstração não persistido antes da primeira sincronização; o demo não gera compra, Pix, reserva ou entrega.
+- Documentação do Supabase e da loja reescrita, variável `SUPABASE_KITS_TABLE` removida do instalador e dados locais/backups protegidos pelo `.gitignore`.
+- Removidas as antigas migrações 002–004 da tabela redundante de kits.
+- Adicionados testes de demo, catálogo sincronizado e esquema Supabase reduzido.
+
+> Ainda depende de CI e de teste de compra real no Discord/Paper. Não tratar como release até a validação.
+
+---
 ## 2.13.0 — 16/11/2026
 
 - Código integrado em `main` pela PR #3.
