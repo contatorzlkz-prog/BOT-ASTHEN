@@ -339,7 +339,7 @@ Pendências:
 
 Integração:
 29. plugin 1.3.0 + bot 2.12.0 continuam no polling/Long Polling sem endpoint posterior;
-30. plugin 1.3.0 + bot 2.13.0 envia atualização de KIT_PENDING para KIT_DELIVERED;
+30. plugin 1.3.0 + bot 2.15.0 envia atualização de KIT_PENDING para KIT_DELIVERED;
 31. repetir a atualização é idempotente;
 32. bot recusa request_id desconhecido;
 33. DKB_SECRET incorreto não apaga outbox;
@@ -373,7 +373,7 @@ A versão 1.3.0 só pode ser chamada de pronta se:
 - claim não entregar duplicado após falha de armazenamento;
 - auto-claim funcionar sem loop;
 - Java e Bedrock continuarem corretos;
-- compra pendente atualizar o bot 2.13.0 depois da entrega;
+- compra pendente atualizar o bot 2.15.0 depois da entrega;
 - configuração antiga continuar migrável;
 - todos os testes e o build passarem;
 - o teste Paper real estiver claramente separado.
