@@ -366,6 +366,12 @@ function startBridge(opts) {
     const job = jobs.get(body.request_id);
     if (!job) return { status: 404, body: { success: false, status: 'NOT_FOUND' } };
 
+    if ((body.player && body.player !== job.payload.player)
+        || (body.platform && body.platform !== job.payload.platform)
+        || (body.kit && body.kit !== job.payload.kit)) {
+      return { status: 409, body: { success: false, status: 'PAYLOAD_MISMATCH' } };
+    }
+
     if (job.result) {
       if (String(job.result.status || '') === String(body.status || '')
           && job.result.final === true) {
@@ -377,12 +383,6 @@ function startBridge(opts) {
         return { status: 200, body: { success: true, duplicate: true } };
       }
       return { status: 409, body: { success: false, status: 'RESULT_CONFLICT' } };
-    }
-
-    if ((body.player && body.player !== job.payload.player)
-        || (body.platform && body.platform !== job.payload.platform)
-        || (body.kit && body.kit !== job.payload.kit)) {
-      return { status: 409, body: { success: false, status: 'PAYLOAD_MISMATCH' } };
     }
 
     const hadWaiter = resultWaiters.has(job.requestId);
@@ -589,6 +589,11 @@ function startBridge(opts) {
   });
 
   function deliverKit(request) {
+    if (closing) {
+      return Promise.reject(Object.assign(new Error('Bridge está encerrando; o pedido não foi aceito nesta execução'), {
+        code: 'BRIDGE_SHUTTING_DOWN'
+      }));
+    }
     const {
       requestId,
       player,
