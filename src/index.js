@@ -1,10 +1,11 @@
 import 'dotenv/config';
-import { Client, Events, GatewayIntentBits, MessageFlags, REST, Routes } from 'discord.js';
+import { ChannelType, Client, Events, GatewayIntentBits, MessageFlags, REST, Routes } from 'discord.js';
 import { commandDefinitions } from './commands.js';
-import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, getShopKits, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
+import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
 import { flushSupabaseSync } from './supabase.js';
-import { makeShopPanel, makeSupportPanel } from './ui.js';
-import { handleInteraction, recoverApprovedDeliveries } from './interactions.js';
+import { makeShopPanel, makeSupportPanel, PANEL_LAYOUT_VERSION } from './ui.js';
+import { handleInteraction, recoverApprovedDeliveries, secureLogsChannel } from './interactions.js';
+import { discoverStandardChannels, messageHasPanel } from './channel-discovery.js';
 import { ensureBridgeSecret, startBridge } from './bridge.js';
 
 function assertRuntime() {
@@ -19,7 +20,7 @@ function isMissingDiscordMessage(error) {
   return code === 10008 || code === 10003 || error?.status === 404;
 }
 
-async function refreshPanelMessage(guild, channelId, messageId, payload, label, keys) {
+async function refreshPanelMessage(guild, channelId, messageId, payload, label, keys, customId) {
   if (!channelId) return;
 
   try {
@@ -29,9 +30,9 @@ async function refreshPanelMessage(guild, channelId, messageId, payload, label, 
         throw error;
       });
 
-    if (!channel?.isTextBased() || typeof channel.send !== 'function') {
-      updateGuildConfig(guild.id, { [keys.channel]: null, [keys.message]: null });
-      console.warn('[Asthen] O canal do painel de ' + label + ' não existe mais. Configure-o novamente com /configurar.');
+    if (!channel || channel.type !== ChannelType.GuildText) {
+      updateGuildConfig(guild.id, { [keys.channel]: null, [keys.message]: null, [keys.version]: null });
+      console.warn('[Asthen] O canal de ' + label + ' não existe mais. Será procurado novamente pelo nome.');
       return;
     }
 
@@ -39,26 +40,115 @@ async function refreshPanelMessage(guild, channelId, messageId, payload, label, 
     if (messageId) {
       try {
         message = await channel.messages.fetch(messageId);
+        if (!messageHasPanel(message, customId, guild.client.user?.id)) message = null;
       } catch (error) {
         if (!isMissingDiscordMessage(error)) throw error;
       }
+    }
+
+    // state.json pode ter sido restaurado sem o ID da mensagem. Procura o painel
+    // existente antes de publicar outro, evitando duplicatas em reinicializações.
+    if (!message) {
+      let recent;
+      try {
+        recent = await channel.messages.fetch({ limit: 50 });
+      } catch (error) {
+        // Without history permission we cannot know whether the panel already exists.
+        // Do not post a second copy when discovery is inconclusive.
+        console.warn('[Asthen] Sem permissão para verificar mensagens recentes em #' + channel.name + '; painel não será duplicado.');
+        return;
+      }
+      message = recent.find(item => messageHasPanel(item, customId, guild.client.user?.id)) || null;
     }
 
     if (message) {
-      try {
+      const savedConfig = getGuildConfig(guild.id);
+      if (savedConfig[keys.version] !== PANEL_LAYOUT_VERSION) {
+        // Migra uma única vez o painel legado (ex.: corrigir a descrição com \\n literal).
         await message.edit(payload);
-        return;
-      } catch (error) {
-        if (!isMissingDiscordMessage(error)) throw error;
+        updateGuildConfig(guild.id, {
+          [keys.message]: message.id,
+          [keys.version]: PANEL_LAYOUT_VERSION
+        });
+        console.log('[Asthen] Painel de ' + label + ' atualizado uma vez para o layout ' + PANEL_LAYOUT_VERSION + '.');
+      } else if (message.id !== messageId) {
+        updateGuildConfig(guild.id, { [keys.message]: message.id });
+      } else {
+        console.log('[Asthen] Painel de ' + label + ' encontrado em #' + channel.name + '; mensagem preservada.');
       }
+      return;
     }
 
-    // Um painel apagado ou com ID antigo é recriado e seu novo ID é salvo.
-    const replacement = await channel.send(payload);
-    updateGuildConfig(guild.id, { [keys.message]: replacement.id });
-    console.log('[Asthen] Painel de ' + label + ' recriado em #' + channel.name + '.');
+    // No boot, só publica se o painel não existir. Mensagens atuais não são editadas.
+    const created = await channel.send(payload);
+    updateGuildConfig(guild.id, {
+      [keys.message]: created.id,
+      [keys.version]: PANEL_LAYOUT_VERSION
+    });
+    console.log('[Asthen] Painel de ' + label + ' criado em #' + channel.name + '.');
   } catch (error) {
-    console.error('[Asthen] Não foi possível atualizar o painel de ' + label + ' em ' + guild.name + ':', error.message);
+    console.error('[Asthen] Não foi possível verificar o painel de ' + label + ' em ' + guild.name + ':', error.message);
+  }
+}
+
+async function discoverGuildChannels(guild) {
+  let channelsFetched = false;
+  try {
+    await guild.channels.fetch();
+    channelsFetched = true;
+  } catch (error) {
+    console.warn('[Asthen] Não foi possível listar os canais de ' + guild.name + ':', error.message);
+  }
+
+  const config = getGuildConfig(guild.id);
+  const found = discoverStandardChannels(guild.channels.cache);
+  const changes = {};
+  const messageKeys = {
+    supportPanelChannelId: { message: 'supportPanelMessageId', version: 'supportPanelVersion' },
+    shopPanelChannelId: { message: 'shopPanelMessageId', version: 'shopPanelVersion' }
+  };
+
+  const channelKeys = [
+    'supportPanelChannelId', 'shopPanelChannelId', 'logsChannelId', 'buyersChannelId'
+  ];
+  for (const key of channelKeys) {
+    const current = config[key] ? guild.channels.cache.get(config[key]) : null;
+    const detectedId = found[key] || null;
+    // An exact standard channel name wins over a stale manual ID.
+    if (detectedId) {
+      if (detectedId !== config[key]) changes[key] = detectedId;
+      continue;
+    }
+    if (channelsFetched && config[key] && current?.type !== ChannelType.GuildText) {
+      changes[key] = null;
+      if (messageKeys[key]) {
+        changes[messageKeys[key].message] = null;
+        changes[messageKeys[key].version] = null;
+      }
+    }
+  }
+
+  if (Object.keys(changes).length) {
+    updateGuildConfig(guild.id, changes);
+    const names = Object.entries(found)
+      .filter(([key, id]) => changes[key] === id)
+      .map(([key]) => ({
+        supportPanelChannelId: 'atendimento',
+        shopPanelChannelId: 'kits',
+        logsChannelId: 'logs',
+        buyersChannelId: 'compradores'
+      }[key]));
+    if (names.length) console.log('[Asthen] Canais reconhecidos em ' + guild.name + ': ' + names.join(', ') + '.');
+  }
+
+  // Aplica as permissões de #logs em cada boot, inclusive quando o ID já estava salvo.
+  const latestConfig = getGuildConfig(guild.id);
+  const logsId = latestConfig.logsChannelId;
+  const logsChannel = logsId ? guild.channels.cache.get(logsId) : null;
+  if (logsChannel?.type === ChannelType.GuildText) {
+    await secureLogsChannel(logsChannel, guild, latestConfig.staffRoleId || null).catch(error => {
+      console.warn('[Asthen] Não foi possível proteger automaticamente #logs:', error.message);
+    });
   }
 }
 
@@ -224,22 +314,25 @@ async function retryPendingTicketNotifications(client) {
 
 async function refreshConfiguredPanels(client) {
   for (const guild of client.guilds.cache.values()) {
+    await discoverGuildChannels(guild);
     const config = getGuildConfig(guild.id);
     await refreshPanelMessage(
       guild,
       config.supportPanelChannelId,
       config.supportPanelMessageId,
       makeSupportPanel(),
-      'suporte',
-      { channel: 'supportPanelChannelId', message: 'supportPanelMessageId' }
+      'atendimento',
+      { channel: 'supportPanelChannelId', message: 'supportPanelMessageId', version: 'supportPanelVersion' },
+      'support:select'
     );
     await refreshPanelMessage(
       guild,
       config.shopPanelChannelId,
       config.shopPanelMessageId,
-      makeShopPanel(getShopKits(guild.id)),
-      'loja',
-      { channel: 'shopPanelChannelId', message: 'shopPanelMessageId' }
+      makeShopPanel(),
+      'kits',
+      { channel: 'shopPanelChannelId', message: 'shopPanelMessageId', version: 'shopPanelVersion' },
+      'shop:catalog'
     );
   }
 }
@@ -358,18 +451,7 @@ async function main() {
 
         for (const guild of client.guilds.cache.values()) {
           const result = syncPluginKits(guild.id, kits);
-          if (result.changed) {
-            changedGuilds += 1;
-            const config = getGuildConfig(guild.id);
-            void refreshPanelMessage(
-              guild,
-              config.shopPanelChannelId,
-              config.shopPanelMessageId,
-              makeShopPanel(getShopKits(guild.id)),
-              'loja',
-              { channel: 'shopPanelChannelId', message: 'shopPanelMessageId' }
-            );
-          }
+          if (result.changed) changedGuilds += 1;
         }
 
         console.log('[Asthen API] Plugin sincronizou ' + kits.length + ' kit(s): ' +

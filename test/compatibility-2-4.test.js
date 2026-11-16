@@ -25,6 +25,10 @@ test('support selector uses Minecraft server departments', () => {
   );
   assert.ok(!JSON.stringify(menu.options).toLowerCase().includes('licen'));
   assert.ok(!JSON.stringify(menu.options).toLowerCase().includes('ativação'));
+
+  const description = panel.embeds[0].toJSON().description;
+  assert.ok(description.includes('\n\n'));
+  assert.equal(description.includes('\\n'), false);
 });
 
 test('admin commands are compact and Pix is no longer a slash command', () => {
@@ -32,23 +36,24 @@ test('admin commands are compact and Pix is no longer a slash command', () => {
   assert.deepEqual(names, ['configurar', 'kit', 'bridge']);
   assert.equal(command('pix'), undefined);
   assert.deepEqual(command('kit').options.map(option => option.name), ['listar', 'editar']);
+  assert.deepEqual(command('configurar').options.map(option => option.name), ['atendimento', 'kits', 'logs', 'compradores', 'equipe']);
   assert.deepEqual(command('bridge').options.map(option => option.name), ['status']);
   assert.equal(command('kit').default_member_permissions, '8');
 });
 
-test('shop button opens the catalog when plugin kits exist, even before price setup', () => {
-  const emptyPanel = makeShopPanel([{ id: 'a', name: 'Kit_Teste', price: '', enabled: true }]);
-  const emptyButton = emptyPanel.components[0].components[0].toJSON();
-  assert.equal(emptyButton.disabled, false);
-  assert.equal(emptyButton.label, 'Ver catálogo');
+test('painel de kits permanece clicável com catálogo vazio ou somente com demo', () => {
+  for (const panel of [makeShopPanel(), makeShopPanel()]) {
+    const button = panel.components[0].components[0].toJSON();
+    assert.equal(button.custom_id, 'shop:catalog');
+    assert.equal(button.disabled, false);
+    assert.equal(button.label, 'Abrir kits');
+  }
 
   const availablePanel = makeShopPanel([{
     id: 'a', name: 'Kit_Teste', price: 'R$ 5,00', enabled: true,
     pluginForSale: true, forSale: true
   }]);
-  const availableButton = availablePanel.components[0].components[0].toJSON();
-  assert.equal(availableButton.disabled, false);
-  assert.equal(availableButton.label, 'Escolher kit');
+  assert.equal(availablePanel.components[0].components[0].toJSON().disabled, false);
 });
 
 test('shop catalog shows friendly names and marks inactive or unpriced kits unavailable', () => {

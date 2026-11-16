@@ -10,7 +10,7 @@ Este é o trabalho pendente: atualizar o plugin Java/Paper para Long Polling, pe
 
 ## Estado atual dos repositórios
 
-- **BOT-ASTHEN:** 2.14.0, Node.js 22+, Discord.js 14. Loja sincronizada automaticamente com os kits do Minecraft; no Discord só existem `/kit listar` e `/kit editar`.
+- **BOT-ASTHEN:** 2.15.0, Node.js 22+, Discord.js 14. Loja sincronizada automaticamente com os kits do Minecraft; no Discord só existem `/kit listar` e `/kit editar`.
 - **Plugin-ASTHEN:** 1.2.0, Paper 26.3, Java 25. O polling tradicional continua compatível. A chamada de atualização posterior e o Long Polling dependem da versão 1.3.0.
 
 ## Regras para agentes de programação

@@ -11,11 +11,11 @@ export const commandDefinitions = [
     .setName('configurar')
     .setDescription('Configura os canais e o cargo da equipe.')
     .addChannelOption(option => textChannel(option
-      .setName('suporte')
-      .setDescription('Canal do painel de atendimento.')))
+      .setName('atendimento')
+      .setDescription('Canal com o painel de atendimento.')))
     .addChannelOption(option => textChannel(option
-      .setName('loja')
-      .setDescription('Canal do painel para escolher kits.')))
+      .setName('kits')
+      .setDescription('Canal com o painel da loja de kits.')))
     .addChannelOption(option => textChannel(option
       .setName('logs')
       .setDescription('Canal privado de registros administrativos.')))

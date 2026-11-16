@@ -3,7 +3,7 @@
 **Repositório:** https://github.com/ElbsxS1/Plugin-ASTHEN  
 **Bot correspondente:** https://github.com/contatorzlkz-prog/BOT-ASTHEN  
 **Base auditada:** Plugin 1.2.0, Paper 26.3, Java 25  
-**Alvo:** Plugin-ASTHEN 1.3.0, compatível com BOT-ASTHEN 2.13.0 e retrocompatível com o polling antigo.
+**Alvo:** Plugin-ASTHEN 1.3.0, compatível com BOT-ASTHEN 2.15.0 e retrocompatível com o polling antigo.
 
 > Este prompt está hospedado no repositório BOT-ASTHEN porque a integração GitHub usada para esta auditoria tem acesso de leitura, mas não de escrita, no repositório Plugin-ASTHEN. O código do plugin não foi alterado por esta publicação.
 
@@ -17,7 +17,7 @@ O alvo é uma atualização confiável para a versão **1.3.0**. Não faça uma 
 
 O plugin é responsável por cadastrar kits reais a partir de Shulker Boxes, guardar itens e metadados em arquivos locais, entregar a Shulker Box a jogadores Java e Bedrock, impedir entregas duplicadas, manter kits pendentes quando o jogador está offline ou sem espaço e comunicar-se com BOT-ASTHEN pela bridge autenticada.
 
-O BOT-ASTHEN 2.12.0 já aceita Long Polling, mas a integração coordenada de atualização posterior de status será concluída no BOT-ASTHEN 2.13.0. Consulte o prompt irmão no repositório do bot e o contrato conjunto em prompts/INTEGRACAO-ASTHEN-COMPLETA.md.
+O BOT-ASTHEN 2.15.0 já aceita Long Polling, mas a atualização posterior de status já está disponível no BOT-ASTHEN 2.15.0. Consulte o contrato vigente em ../docs/PLUGIN-INTEGRATION.md.
 
 ### 1. Diagnóstico obrigatório
 
@@ -56,7 +56,7 @@ Rotas existentes:
 - POST /plugin/v1/result
 - POST /plugin/v1/kits
 
-O BOT-ASTHEN 2.12.0 aceita o parâmetro opcional:
+O BOT-ASTHEN 2.15.0 aceita o parâmetro opcional:
 
 ~~~http
 GET /plugin/v1/pull?limit=5&wait_ms=20000
@@ -69,7 +69,7 @@ Comportamento:
 - HTTP 204: fila vazia após a espera; resposta normal, não é falha.
 - Sem wait_ms: mantém o comportamento antigo, retornando 204 imediatamente quando a fila está vazia.
 
-Para a integração posterior do KIT_PENDING, o contrato coordenado do BOT-ASTHEN 2.13.0 adicionará:
+Para a integração posterior do KIT_PENDING, o contrato coordenado do BOT-ASTHEN 2.15.0 adicionará:
 
 ~~~http
 POST /plugin/v1/delivery-update
@@ -93,7 +93,7 @@ Corpo esperado:
 
 Não envie uma atualização de sucesso antes de a retirada estar confirmada. O endpoint aceita apenas request_id que o bot já conhece e transições permitidas. A atualização é idempotente.
 
-**Regra crítica:** KIT_PENDING continua sendo o resultado final inicial enviado uma única vez em POST /plugin/v1/result. Quando o kit for efetivamente retirado depois, não envie um segundo resultado final em /plugin/v1/result, pois o pedido inicial já foi concluído. Use POST /plugin/v1/delivery-update somente quando o BOT-ASTHEN 2.13.0 estiver instalado. Para bot 2.12.0 ou anterior, não tente chamar um endpoint inexistente.
+**Regra crítica:** KIT_PENDING continua sendo o resultado final inicial enviado uma única vez em POST /plugin/v1/result. Quando o kit for efetivamente retirado depois, não envie um segundo resultado final em /plugin/v1/result, pois o pedido inicial já foi concluído. Use POST /plugin/v1/delivery-update somente quando o BOT-ASTHEN 2.15.0 estiver instalado. Para bot anterior ao 2.13.0, não tente chamar um endpoint inexistente.
 
 ### 3. Long Polling real no PollClient
 
@@ -293,7 +293,7 @@ Atualize config.yml, plugin.yml, README, TESTING e documentação:
 - connect-timeout, http-timeout, Long Polling;
 - configuração do auto-claim-when-space-freed;
 - diferença entre polling antigo e Long Polling;
-- bot mínimo recomendado: BOT-ASTHEN 2.13.0 para atualização posterior de pendências; Long Polling básico funciona com 2.12.0;
+- bot mínimo recomendado: BOT-ASTHEN 2.15.0 para atualização posterior de pendências; Long Polling também funciona em versões anteriores que suportem wait_ms;
 - arquivos de configuração existentes não são sobrescritos automaticamente;
 - passo a passo de migração de 1.2.0 para 1.3.0;
 - recuperação de arquivo pendente corrompido;
@@ -339,7 +339,7 @@ Pendências:
 
 Integração:
 29. plugin 1.3.0 + bot 2.12.0 continuam no polling/Long Polling sem endpoint posterior;
-30. plugin 1.3.0 + bot 2.13.0 envia atualização de KIT_PENDING para KIT_DELIVERED;
+30. plugin 1.3.0 + bot 2.15.0 envia atualização de KIT_PENDING para KIT_DELIVERED;
 31. repetir a atualização é idempotente;
 32. bot recusa request_id desconhecido;
 33. DKB_SECRET incorreto não apaga outbox;
@@ -373,7 +373,7 @@ A versão 1.3.0 só pode ser chamada de pronta se:
 - claim não entregar duplicado após falha de armazenamento;
 - auto-claim funcionar sem loop;
 - Java e Bedrock continuarem corretos;
-- compra pendente atualizar o bot 2.13.0 depois da entrega;
+- compra pendente atualizar o bot 2.15.0 depois da entrega;
 - configuração antiga continuar migrável;
 - todos os testes e o build passarem;
 - o teste Paper real estiver claramente separado.

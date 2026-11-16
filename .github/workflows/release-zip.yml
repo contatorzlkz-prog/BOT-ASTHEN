@@ -9,9 +9,13 @@ on:
       - VERSION.txt
       - README.md
       - CHANGELOG.md
-      - docs/INSTALLATION.md
-      - docs/PLUGIN-INTEGRATION.md
-      - docs/ARCHITECTURE.md
+      - docs/**
+      - src/**
+      - bot-integration/**
+      - linux/**
+      - assets/**
+      - INSTALAR.bat
+      - INICIAR.bat
       - supabase/**
       - .github/workflows/release-zip.yml
 

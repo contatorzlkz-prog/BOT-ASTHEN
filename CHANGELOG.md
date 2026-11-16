@@ -1,3 +1,16 @@
+## 2.15.0 — pronta para publicação
+
+- Painel `#kits` permanece clicável mesmo quando só existe o Kit Demonstração; o demo abre uma prévia sem compra, Pix ou entrega.
+- Corrigidas as quebras de linha do painel `#atendimento`.
+- `/configurar` passa a usar `atendimento` e `kits`; `logs` e `compradores` mantêm seus nomes.
+- Na inicialização, o bot reconhece automaticamente `#atendimento`, `#kits`, `#logs` e `#compradores`, inclusive nomes com emoji e separadores.
+- Painéis existentes são encontrados e preservados no boot; só são publicados quando não há mensagem válida. Sincronizar kits e editar metadados não altera o painel fixo.
+- README reduzido a uma página inicial; instalação, canais, loja, tickets e Supabase reunidos em `docs/GUIA.md`.
+- Removidos manuais duplicados e wrappers Linux redundantes; scripts principais permanecem em `linux/`.
+- CI da PR #5: verificações de sintaxe e slash commands aprovadas; 57 testes automatizados passaram.
+- O teste manual no Discord real (descoberta de canais, migração única do painel, permissões de `#logs`) e o fluxo real Paper ainda precisam ser confirmados após a atualização.
+
+---
 ## 2.14.0 — 16/11/2026
 
 - Removida a sincronização redundante da tabela `asthen_bot_kits`; os kits ficam no snapshot `asthen_bot_state.payload` e vêm exclusivamente do Plugin-ASTHEN.

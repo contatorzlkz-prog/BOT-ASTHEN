@@ -45,7 +45,8 @@ import {
   makePurchaseReviewEmbed,
   makeShopPanel,
   makeSupportPanel,
-  makeSupportTicketEmbed
+  makeSupportTicketEmbed,
+  PANEL_LAYOUT_VERSION
 } from './ui.js';
 import { archiveAndDeleteTicket, createPrivateTicket } from './tickets.js';
 import { CONFIG } from './config.js';
@@ -173,9 +174,10 @@ async function updatePanel(guild, config, kind, channel) {
   const isShop = kind === 'shop';
   const channelKey = isShop ? 'shopPanelChannelId' : 'supportPanelChannelId';
   const messageKey = isShop ? 'shopPanelMessageId' : 'supportPanelMessageId';
+  const versionKey = isShop ? 'shopPanelVersion' : 'supportPanelVersion';
   const oldChannelId = config[channelKey];
   const oldMessageId = config[messageKey];
-  const payload = isShop ? makeShopPanel(config.kits) : makeSupportPanel();
+  const payload = isShop ? makeShopPanel() : makeSupportPanel();
   let message = null;
 
   // Reaproveita o painel no canal atual, mas não deixa um ID antigo travar a configuração.
@@ -210,11 +212,12 @@ async function updatePanel(guild, config, kind, channel) {
 
   return {
     [channelKey]: channel.id,
-    [messageKey]: message.id
+    [messageKey]: message.id,
+    [versionKey]: PANEL_LAYOUT_VERSION
   };
 }
 
-async function secureLogsChannel(channel, guild, staffRoleId, previousStaffRoleId = null) {
+export async function secureLogsChannel(channel, guild, staffRoleId, previousStaffRoleId = null) {
   const everyoneId = guild.roles.everyone.id;
   await channel.permissionOverwrites.edit(everyoneId, { ViewChannel: false });
 
@@ -246,8 +249,8 @@ async function configureChannels(interaction) {
     return replyPrivate(interaction, 'Você precisa da permissão Gerenciar servidor para configurar os canais.');
   }
 
-  const supportChannel = interaction.options.getChannel('suporte');
-  const shopChannel = interaction.options.getChannel('loja');
+  const supportChannel = interaction.options.getChannel('atendimento');
+  const shopChannel = interaction.options.getChannel('kits');
   const logsChannel = interaction.options.getChannel('logs');
   const buyersChannel = interaction.options.getChannel('compradores');
   const staffRole = interaction.options.getRole('equipe');
@@ -255,7 +258,7 @@ async function configureChannels(interaction) {
   if (!supportChannel && !shopChannel && !logsChannel && !buyersChannel && !staffRole) {
     return replyPrivate(
       interaction,
-      'Informe pelo menos um campo. Exemplo: /configurar suporte:#suporte loja:#loja logs:#logs compradores:#compradores equipe:@Equipe'
+      'Informe pelo menos um campo. Exemplo: /configurar atendimento:#atendimento kits:#kits logs:#logs compradores:#compradores equipe:@Equipe'
     );
   }
 
@@ -265,12 +268,12 @@ async function configureChannels(interaction) {
 
   if (supportChannel) {
     Object.assign(changes, await updatePanel(interaction.guild, config, 'support', supportChannel));
-    updated.push('suporte: ' + supportChannel.toString());
+    updated.push('atendimento: ' + supportChannel.toString());
   }
 
   if (shopChannel) {
     Object.assign(changes, await updatePanel(interaction.guild, config, 'shop', shopChannel));
-    updated.push('loja: ' + shopChannel.toString());
+    updated.push('kits: ' + shopChannel.toString());
   }
 
   if (staffRole) {
@@ -304,7 +307,7 @@ async function configureChannels(interaction) {
   return replyPrivate(
     interaction,
     'Configuração atualizada.\n' + updated.map(item => '• ' + item).join('\n') +
-    '\n\nOs tickets serão criados na categoria do canal de suporte ou loja correspondente.'
+    '\n\nOs tickets serão criados na categoria de atendimento ou de kits, conforme o tipo de solicitação.'
   );
 }
 
@@ -440,7 +443,6 @@ async function handleKitEditModal(interaction) {
   }
 
   const updated = updateKit(interaction.guildId, kitId, changes);
-  await syncShopPanel(interaction.guild, getGuildConfig(interaction.guildId));
   return interaction.reply({
     content: 'Informação do kit atualizada. Você pode selecionar outro campo para editar.',
     embeds: updated ? [makeKitPreviewEmbed(updated)] : [],
@@ -448,36 +450,6 @@ async function handleKitEditModal(interaction) {
     flags: MessageFlags.Ephemeral
   });
 }
-
-async function syncShopPanel(guild, config = getGuildConfig(guild.id)) {
-  if (!config.shopPanelChannelId) return false;
-  const channel = await fetchTextChannel(guild, config.shopPanelChannelId);
-  if (!channel) {
-    updateGuildConfig(guild.id, {
-      shopPanelChannelId: null,
-      shopPanelMessageId: null
-    });
-    return false;
-  }
-
-  const payload = makeShopPanel(getShopKits(guild.id));
-  let message = await fetchPanelMessage(channel, config.shopPanelMessageId);
-  if (message) {
-    try {
-      await message.edit(payload);
-      return true;
-    } catch (error) {
-      if (!isMissingDiscordMessage(error)) throw error;
-    }
-  }
-
-  // Painel apagado ou perdido: publica outro e salva o novo ID.
-  message = await channel.send(payload);
-  updateGuildConfig(guild.id, { shopPanelMessageId: message.id });
-  return true;
-}
-
-
 
 function makeMinecraftNickModal(customId, currentNick = '') {
   const input = new TextInputBuilder()

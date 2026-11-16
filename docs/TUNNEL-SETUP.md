@@ -134,7 +134,7 @@ Não acrescente /plugin/v1 à URL. Copie DKB_SECRET localmente do .env do bot pa
 
 O Plugin-ASTHEN 1.2.0 ainda não envia wait_ms. Portanto, ele continuará usando polling tradicional até receber a atualização 1.3.0.
 
-Depois que o Plugin-ASTHEN 1.3.0 implementar Long Polling para o BOT-ASTHEN 2.12.0, a configuração recomendada será:
+Depois que o Plugin-ASTHEN 1.3.0 implementar Long Polling para o BOT-ASTHEN 2.15.0, a configuração recomendada será:
 
 ~~~yaml
 bridge:

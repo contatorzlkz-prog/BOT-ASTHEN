@@ -1,4 +1,4 @@
-# ASTHEN BOT 2.12.0 — Contrato técnico com Plugin-ASTHEN 1.2.0 / 1.3.0
+# ASTHEN BOT 2.15.0 — Contrato técnico com Plugin-ASTHEN 1.2.0 / 1.3.0 + BOT-ASTHEN 2.15.0
 
 Este documento descreve a integração atualmente esperada entre o bot Discord e o plugin Minecraft. O Plugin-ASTHEN 1.2.0 já implementa o contrato de preço, disponibilidade e entrega em Shulker Box. Não reescreva o plugin nem duplique no bot as responsabilidades que pertencem ao Minecraft.
 
@@ -64,7 +64,7 @@ Content-Type: application/json
 
 O plugin envia a lista completa de kits ao iniciar, depois de alterações e periodicamente. O bot reconcilia a lista sem apagar os registros comerciais antigos.
 
-### Long Polling — BOT-ASTHEN 2.12.0 (suporte do plugin previsto na 1.3.0)
+### Long Polling — BOT-ASTHEN 2.15.0 (suporte do plugin previsto na 1.3.0)
 
 O GET tradicional continua disponível:
 
@@ -72,7 +72,7 @@ O GET tradicional continua disponível:
 GET /plugin/v1/pull?limit=5
 ~~~
 
-O BOT-ASTHEN 2.12.0 também aceita:
+O BOT-ASTHEN 2.15.0 também aceita:
 
 ~~~http
 GET /plugin/v1/pull?limit=5&wait_ms=20000
@@ -83,9 +83,9 @@ GET /plugin/v1/pull?limit=5&wait_ms=20000
 - Se não houver pedido até o fim do tempo, responde HTTP 204 sem corpo.
 - HTTP 204 é fila vazia normal, não falha.
 - O plugin deve configurar timeout HTTP superior à espera; valor recomendado: 35 segundos.
-- O BOT-ASTHEN 2.12.0 continua compatível com o plugin 1.2.0, que não envia wait_ms.
+- O BOT-ASTHEN 2.15.0 continua compatível com o plugin 1.2.0, que não envia wait_ms.
 - A economia de consultas só acontece quando o plugin 1.3.0 ou posterior implementa Long Polling.
-- O prompt completo está em [PLUGIN-LONG-POLLING-PROMPT.md](PLUGIN-LONG-POLLING-PROMPT.md).
+- O prompt completo está em [prompt completo do Plugin-ASTHEN 1.3.0](../prompts/PLUGIN-ASTHEN-1.3.0-CORRECOES.md).
 
 ## 4. Contrato de preço e disponibilidade — versão 1.2.0
 
@@ -132,7 +132,7 @@ Comandos do plugin:
 
 O bot usa `price_cents` em vez de recalcular o valor a partir do decimal `price`. Quando recebe `price_cents: null` ou `for_sale: false`, deve limpar o preço de venda anterior e impedir novas compras. Nunca pode manter um preço antigo do Discord como substituto do preço removido no plugin.
 
-O BOT-ASTHEN 2.14.0 não aplica bloqueio manual nem remove kits pelo Discord. O estado de venda vem exclusivamente de `enabled` e `for_sale` enviados pelo plugin.
+O BOT-ASTHEN 2.15.0 não aplica bloqueio manual nem remove kits pelo Discord. O estado de venda vem exclusivamente de `enabled` e `for_sale` enviados pelo plugin.
 
 ## 5. Fluxo de cadastro comercial
 
