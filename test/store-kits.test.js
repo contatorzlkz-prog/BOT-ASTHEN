@@ -249,7 +249,8 @@ test('friendly kit names remove underscores and hyphens', () => {
 test('store tests use a temporary directory and never the production data folder', () => {
   const directory = getStoreDataDir();
   assert.match(directory, /asthen-bot-tests-/);
-  assert.notEqual(path.basename(directory), 'data');
+  assert.match(path.basename(path.dirname(directory)), /^asthen-bot-tests-/);
+  assert.notEqual(directory, path.resolve(process.cwd(), 'data'));
 });
 
 test('a corrupt state.json is preserved and copied instead of being replaced by empty data', () => {
