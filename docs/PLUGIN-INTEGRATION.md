@@ -187,18 +187,11 @@ A Shulker Box ocupa um único slot do inventário. Se não houver espaço, o plu
 Isso confirma os testes automatizados e a compilação, mas não executa um servidor Minecraft. A montagem, abertura, cor, slots e retirada da Shulker Box ainda precisam de teste dentro de um servidor Paper real.
 
 
-## 8. Long Polling — BOT-ASTHEN 2.14.0
+## 8. Configurar Long Polling no Plugin-ASTHEN 1.3.0
 
-O bot agora aceita o parâmetro opcional wait_ms em GET /plugin/v1/pull. Exemplo: /plugin/v1/pull?limit=5&wait_ms=20000.
+O BOT-ASTHEN 2.14.0 aceita `wait_ms` de até 25 segundos e mantém compatibilidade com o polling tradicional. Para reduzir consultas repetidas, atualize o plugin para a versão 1.3.0 com `wait-seconds: 20` e `http-timeout: 35`.
 
-- Com wait_ms, o bot deixa a requisição HTTP aguardando por até 20 segundos.
-- Quando a equipe aprova uma compra, a fila acorda o pull imediatamente e responde HTTP 200 com os pedidos.
-- Quando nada chega, retorna HTTP 204 ao final do tempo.
-- O limite do bot é 25 segundos por pull.
-- A rota antiga sem wait_ms continua funcionando, então o plugin 1.2.0 não quebra.
-
-Para ativar a economia de consultas, atualize também o plugin para a versão 1.3.0 conforme o [prompt completo do Plugin-ASTHEN](../prompts/PLUGIN-ASTHEN-1.3.0-CORRECOES.md). Ele configura `wait-seconds: 20` e `http-timeout: 35`. O plugin 1.2.0 continua usando polling tradicional até ser atualizado.
-
+Use o [prompt completo de atualização do Plugin-ASTHEN 1.3.0](../prompts/PLUGIN-ASTHEN-1.3.0-CORRECOES.md). O Plugin-ASTHEN 1.2.0 continua funcionando com polling tradicional até ser atualizado.
 ## 9. Endereço público fixo
 
 Veja [TUNNEL-SETUP.md](TUNNEL-SETUP.md) para tunnel.to Registered Free e Cloudflare Tunnel. O bot continua em 127.0.0.1:8787; somente o hostname HTTPS configurado no plugin muda conforme o provedor do túnel.
