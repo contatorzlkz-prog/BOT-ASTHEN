@@ -1,8 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   getGuildConfig,
+  getStoreDataDir,
+  loadStore,
   makeKitDisplayName,
   removeKit,
   syncPluginKits,
@@ -239,4 +243,25 @@ test('legacy decimal price strings and numeric prices convert to exact cents', (
 
 test('friendly kit names remove underscores and hyphens', () => {
   assert.equal(makeKitDisplayName('Kit_Netherita-Plus'), 'Kit Netherita Plus');
+});
+
+
+test('store tests use a temporary directory and never the production data folder', () => {
+  const directory = getStoreDataDir();
+  assert.match(directory, /asthen-bot-tests-/);
+  assert.notEqual(path.basename(directory), 'data');
+});
+
+test('a corrupt state.json is preserved and copied instead of being replaced by empty data', () => {
+  const directory = getStoreDataDir();
+  const file = path.join(directory, 'state.json');
+  const corrupt = '{"guilds":';
+  writeFileSync(file, corrupt, 'utf8');
+
+  assert.throws(() => loadStore(), /arquivo data\/state\.json está inválido ou ilegível/i);
+  assert.equal(readFileSync(file, 'utf8'), corrupt);
+
+  const backups = readdirSync(directory).filter(name => name.startsWith('state.json.corrupt-') && name.endsWith('.bak'));
+  assert.equal(backups.length, 1);
+  assert.equal(readFileSync(path.join(directory, backups[0]), 'utf8'), corrupt);
 });
