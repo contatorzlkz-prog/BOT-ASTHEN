@@ -10,6 +10,7 @@ const dataFile = path.join(dataDir, 'state.json');
 
 const emptyState = () => ({ guilds: {}, tickets: {}, purchaseDrafts: {} });
 let state = emptyState();
+let pluginSyncReceivedThisSession = false;
 
 function normalizeKitName(name) {
   return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -239,7 +240,9 @@ const DEMO_KIT = Object.freeze({
 export function getShopKits(guildId) {
   const config = ensureGuildConfig(guildId);
   const pluginKits = config.kits.filter(kit => kit.pluginManaged === true);
-  return pluginKits.length > 0 ? pluginKits : [{ ...DEMO_KIT }];
+  return pluginSyncReceivedThisSession && pluginKits.length > 0
+    ? pluginKits
+    : [{ ...DEMO_KIT }];
 }
 
 export function updateGuildConfig(guildId, changes) {
@@ -260,6 +263,7 @@ export function syncPluginKits(guildId, pluginKits) {
       && /^[A-Za-z0-9_-]{1,32}$/.test(item.name))
     : null;
   if (!incoming) return { changed: false, kits: config.kits };
+  pluginSyncReceivedThisSession = true;
   const incomingByName = new Map();
   for (const item of incoming) incomingByName.set(normalizeKitName(item.name), item);
 
