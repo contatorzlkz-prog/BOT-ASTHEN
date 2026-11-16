@@ -6,11 +6,11 @@ Bot de Discord para o servidor Minecraft ASTHEN: atendimento privado, loja de ki
 ![Discord.js](https://img.shields.io/badge/discord.js-14-5865F2?logo=discord&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-estoque_persistente-3ECF8E?logo=supabase&logoColor=white)
 [![Checks](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/vers%C3%A3o-2.13.0-candidato-7C5CFC)
+![Version](https://img.shields.io/badge/vers%C3%A3o-2.13.0-7C5CFC)
 
 <p align="center">
-  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/latest/download/ASTHEN-BOT-v2.12.0.zip">
-    <img src="assets/download-zip.svg" alt="Baixar ASTHEN BOT em ZIP" width="264" height="58">
+  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/latest/download/ASTHEN-BOT-v2.13.0.zip">
+    <img src="assets/download-zip.svg" alt="Baixar ASTHEN BOT 2.13.0 em ZIP" width="264" height="58">
   </a>
 </p>
 
@@ -18,9 +18,10 @@ Bot de Discord para o servidor Minecraft ASTHEN: atendimento privado, loja de ki
   <strong>Windows 10/11 · Node.js 22 ou mais recente · Paper + Plugin-ASTHEN</strong>
 </p>
 
-## Versão em revisão
+## Versão 2.13.0
 
-A versão 2.13.0 está em revisão na [PR #3](https://github.com/contatorzlkz-prog/BOT-ASTHEN/pull/3). O botão de download continua apontando para a última versão estável publicada (2.12.0); não substitua a instalação de produção pelo código da PR antes da validação e publicação da release.
+O código está integrado ao `main` e a [release 2.13.0](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/tag/v2.13.0) já contém o ZIP de instalação. O bot mantém compatibilidade com o Plugin-ASTHEN 1.2.0; a atualização automática posterior de `KIT_PENDING` para `KIT_DELIVERED` exige o Plugin-ASTHEN 1.3.0.
+
 ## Começar
 
 1. Baixe o ZIP pelo botão acima e extraia a pasta.
@@ -74,7 +75,7 @@ Quando um kit é desativado ou removido do plugin, ou perde o preço, continua v
 - Registro privado das decisões e avisos de falha de entrega para a equipe.
 - Anúncio de compra com nome e valor do produto.
 - Escolha de Minecraft Java ou Bedrock antes de abrir o ticket.
-- API HTTP autenticada para o Plugin-ASTHEN com Long Polling e fila persistente de pedidos na proposta 2.13.0.
+- API HTTP autenticada para o Plugin-ASTHEN com Long Polling, fila persistente de pedidos e atualização posterior de entrega.
 - Tentativa automática adicional quando a entrega expira, reutilizando o mesmo identificador para evitar duplicidade.
 - Entrega do kit pelo plugin em uma Shulker Box com nome e itens preservados.
 - Jogador offline: kit fica pendente no plugin e é tentado automaticamente quando entrar.
