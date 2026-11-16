@@ -116,7 +116,13 @@ function startBridge(opts) {
     }
 
     if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.jobs)) {
-      throw new Error('A estrutura de data/bridge-queue.json é incompatível. O arquivo foi preservado; não será iniciada uma fila vazia.');
+      const backup = queueFile + '.invalid-' + new Date().toISOString().replace(/[:.]/g, '-') + '.bak';
+      try {
+        fs.copyFileSync(queueFile, backup, fs.constants.COPYFILE_EXCL);
+      } catch (backupError) {
+        log.error && log.error('[asthen-bridge] não foi possível copiar a fila incompatível:', backupError.message);
+      }
+      throw new Error('A estrutura de data/bridge-queue.json é incompatível. O arquivo original foi preservado; não será iniciada uma fila vazia.');
     }
 
     for (const item of parsed.jobs) {
@@ -236,11 +242,20 @@ function startBridge(opts) {
   function takeRequests(limit) {
     const now = Date.now();
     const out = [];
+    const changed = [];
     for (const job of jobs.values()) {
       if (out.length >= limit) break;
       const available = job.status === 'QUEUED'
         || (job.status === 'LEASED' && job.leaseUntil <= now);
       if (!available) continue;
+      changed.push({
+        job,
+        status: job.status,
+        leasedAt: job.leasedAt,
+        leaseUntil: job.leaseUntil,
+        attempts: job.attempts,
+        updatedAt: job.updatedAt
+      });
       job.status = 'LEASED';
       job.leasedAt = now;
       job.leaseUntil = now + Math.max(1000, leaseMs);
@@ -248,7 +263,22 @@ function startBridge(opts) {
       job.updatedAt = now;
       out.push(clone(job.payload));
     }
-    if (out.length) persistJobs();
+    if (out.length) {
+      try {
+        persistJobs();
+      } catch (error) {
+        for (const previous of changed) {
+          Object.assign(previous.job, {
+            status: previous.status,
+            leasedAt: previous.leasedAt,
+            leaseUntil: previous.leaseUntil,
+            attempts: previous.attempts,
+            updatedAt: previous.updatedAt
+          });
+        }
+        throw error;
+      }
+    }
     return out;
   }
 
@@ -338,13 +368,24 @@ function startBridge(opts) {
     }
 
     const hadWaiter = resultWaiters.has(job.requestId);
+    const previous = {
+      result: job.result,
+      status: job.status,
+      updatedAt: job.updatedAt,
+      leaseUntil: job.leaseUntil
+    };
     job.result = clone(body);
     job.status = body.status === 'KIT_PENDING'
       ? 'KIT_PENDING'
       : body.status === 'KIT_DELIVERED' ? 'KIT_DELIVERED' : 'FAILED';
     job.updatedAt = Date.now();
     job.leaseUntil = 0;
-    persistJobs();
+    try {
+      persistJobs();
+    } catch (error) {
+      Object.assign(job, previous);
+      throw error;
+    }
 
     settleResultWaiter(job.requestId, body);
     notifyCallback(onResult, 'onResult', { request: job.payload, result: body, resumed: !hadWaiter });
@@ -366,6 +407,12 @@ function startBridge(opts) {
 
     if (job.status === 'KIT_DELIVERED') {
       if (job.deliveryUpdate?.status === 'KIT_DELIVERED') {
+        notifyCallback(onDeliveryUpdate, 'onDeliveryUpdate', {
+          request: job.payload,
+          initialResult: job.result,
+          update: job.deliveryUpdate,
+          replayed: true
+        });
         return { status: 200, body: { success: true, duplicate: true } };
       }
       return { status: 409, body: { success: false, status: 'INVALID_TRANSITION' } };
@@ -383,10 +430,20 @@ function startBridge(opts) {
       message: String(body.message || 'Kit entregue após retirada da pendência.').slice(0, 500),
       updated_at: String(body.updated_at || new Date().toISOString())
     };
+    const previous = {
+      deliveryUpdate: job.deliveryUpdate,
+      status: job.status,
+      updatedAt: job.updatedAt
+    };
     job.deliveryUpdate = update;
     job.status = 'KIT_DELIVERED';
     job.updatedAt = Date.now();
-    persistJobs();
+    try {
+      persistJobs();
+    } catch (error) {
+      Object.assign(job, previous);
+      throw error;
+    }
 
     notifyCallback(onDeliveryUpdate, 'onDeliveryUpdate', {
       request: job.payload,
