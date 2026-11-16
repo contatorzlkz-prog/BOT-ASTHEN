@@ -256,6 +256,15 @@ export function updateGuildConfig(guildId, changes) {
  * Reconcile the plugin's complete list without deleting historical products.
  * Missing products remain in the store as unavailable. Plugin 1.2.0 is authoritative for price and sale status.
  */
+export function updateKit(guildId, kitId, changes) {
+  const config = ensureGuildConfig(guildId);
+  const index = config.kits.findIndex(kit => kit.id === kitId);
+  if (index < 0) return null;
+  config.kits[index] = { ...config.kits[index], ...changes };
+  saveStore();
+  return config.kits[index];
+}
+
 export function syncPluginKits(guildId, pluginKits) {
   const config = ensureGuildConfig(guildId);
   const incoming = Array.isArray(pluginKits)
