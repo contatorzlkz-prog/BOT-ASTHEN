@@ -4,7 +4,7 @@ import { commandDefinitions } from './commands.js';
 import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
 import { flushSupabaseSync } from './supabase.js';
 import { makeShopPanel, makeSupportPanel } from './ui.js';
-import { handleInteraction } from './interactions.js';
+import { handleInteraction, recoverApprovedDeliveries } from './interactions.js';
 import { ensureBridgeSecret, startBridge } from './bridge.js';
 
 function assertRuntime() {
@@ -287,6 +287,7 @@ async function main() {
     console.log(`Servidores conectados: ${readyClient.guilds.cache.size}`);
     await refreshConfiguredPanels(readyClient);
     await retryPendingTicketNotifications(readyClient);
+    if (bridgeServer) await recoverApprovedDeliveries(readyClient);
   });
 
   client.on(Events.InteractionCreate, async interaction => {
@@ -377,6 +378,11 @@ async function main() {
       }
     });
     console.log('[Asthen Bridge] API ativa em http://' + bridgeServer.host + ':' + bridgeServer.port + '.');
+    if (client.isReady()) {
+      void recoverApprovedDeliveries(client).catch(error => {
+        console.error('[Asthen] Falha ao recuperar entregas aprovadas após reinício:', error.message);
+      });
+    }
   } catch (error) {
     console.error('[Asthen Bridge] Não foi possível iniciar a API de integração:', error.message);
     console.error('[Asthen Bridge] O bot do Discord continuará online, mas a entrega automática ficará indisponível.');
