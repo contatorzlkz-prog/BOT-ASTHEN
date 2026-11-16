@@ -1361,6 +1361,7 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
     deliveryStatus: 'QUEUED',
     deliveryUpdatedAt: new Date().toISOString(),
     deliveryError: null,
+    deliveryResultNotificationPending: true,
     deliveryResultNotificationSent: false
   }) || ticket;
   appendTicketHistory(ticket.channelId, {
@@ -1459,7 +1460,11 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
       })],
       components: success ? [makeCloseRow()] : [makeDeliveryRetryControls(result.final === true ? 'new' : 'same')]
     });
-    updateTicket(ticket.channelId, { deliveryResultNotificationSent: true, deliveryNotificationError: null });
+    updateTicket(ticket.channelId, {
+      deliveryResultNotificationPending: false,
+      deliveryResultNotificationSent: true,
+      deliveryNotificationError: null
+    });
   } catch (notificationError) {
     // The Minecraft result is already final. Never relabel a delivered kit as WAITING
     // merely because Discord failed to publish the embed.
