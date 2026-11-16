@@ -143,7 +143,7 @@ test('KIT_PENDING pode ser atualizado para KIT_DELIVERED com idempotência', asy
     assert.equal(duplicate.status, 200);
     assert.equal((await duplicate.json()).duplicate, true);
     assert.equal(bridge.queueCounts().delivered, 1);
-    assert.equal(updates.length, 1);
+    assert.equal(updates.length, 2, 'reenvio idempotente permite tentar novamente a notificação sem duplicar o estado');
 
     const unknown = await post(baseUrl, '/plugin/v1/delivery-update', {
       ...updateBody,
