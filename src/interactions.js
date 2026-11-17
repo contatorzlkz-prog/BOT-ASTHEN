@@ -1266,6 +1266,17 @@ async function submitStockReleaseInternal(interaction) {
   });
 
   try {
+    if (interaction.channel?.send) {
+      await interaction.channel.send({
+        content: '<@' + ticket.userId + '> O pedido foi cancelado pela equipe e a reserva semanal foi liberada. Consulte a equipe sobre a confirmação do pagamento/estorno.',
+        allowedMentions: { users: [ticket.userId], roles: [] }
+      });
+    }
+  } catch (error) {
+    console.error('[Asthen Stock] Reserva liberada, mas a notificação no ticket não foi publicada:', error);
+  }
+
+  try {
     const config = getGuildConfig(interaction.guildId);
     const logsChannel = await fetchTextChannel(interaction.guild, config.logsChannelId);
     if (logsChannel) {
