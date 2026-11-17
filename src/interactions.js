@@ -952,7 +952,7 @@ async function decideOrder(interaction, decision) {
       } catch (error) {
         console.error('[Asthen Stock] Não foi possível reservar o estoque:', error);
         await interaction.followUp({
-          content: 'Pagamento não aprovado pelo bot: não consegui reservar uma das 10 unidades semanais no Supabase. Confira a conexão e a migração 005; depois tente novamente.',
+          content: 'Pagamento não aprovado pelo bot: não consegui reservar uma das 10 unidades semanais no Supabase. Confira a conexão e execute supabase/SETUP.sql; depois tente novamente.',
           flags: MessageFlags.Ephemeral
         });
         return;
