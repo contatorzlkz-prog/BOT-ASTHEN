@@ -1149,8 +1149,8 @@ async function requestStockRelease(interaction) {
     .setCustomId('confirmation')
     .setLabel('Digite ESTORNO CONFIRMADO')
     .setStyle(TextInputStyle.Short)
-    .setMinLength(19)
-    .setMaxLength(19)
+    .setMinLength(18)
+    .setMaxLength(18)
     .setRequired(true);
   modal.addComponents(
     new ActionRowBuilder().addComponents(reason),
@@ -1162,8 +1162,8 @@ async function requestStockRelease(interaction) {
       .setCustomId('revoked')
       .setLabel('Kit removido no jogo? Digite KIT REMOVIDO')
       .setStyle(TextInputStyle.Short)
-      .setMinLength(11)
-      .setMaxLength(11)
+      .setMinLength(12)
+      .setMaxLength(12)
       .setRequired(true);
     modal.addComponents(new ActionRowBuilder().addComponents(revoked));
   }
