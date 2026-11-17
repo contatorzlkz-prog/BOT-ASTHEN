@@ -279,3 +279,6 @@ A equipe só deve usar **Registrar estorno** depois de concluir o cancelamento/r
 - A operação usa `release_asthen_weekly_kit_stock`, identificada por `guild_id + stockReservationId`. Repetir após timeout de rede não decrementa o estoque novamente.
 
 Depois de atualizar o bot, execute novamente o arquivo completo `supabase/SETUP.sql` no SQL Editor. Ele adiciona `released_at` às reservas existentes e cria a função de liberação idempotente sem apagar o histórico. O banco não é atualizado automaticamente pelo bot.
+
+
+**Prompt de atualização do plugin:** veja [`prompts/PLUGIN-ASTHEN-1.3.1-PERSISTENCE-AND-BRIDGE.md`](../prompts/PLUGIN-ASTHEN-1.3.1-PERSISTENCE-AND-BRIDGE.md). A conexão atual tem permissão de leitura no repositório Plugin-ASTHEN; portanto, o prompt está versionado aqui para ser aplicado por alguém com permissão de escrita naquele repositório.
