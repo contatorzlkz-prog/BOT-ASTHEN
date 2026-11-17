@@ -1450,11 +1450,6 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
   });
 
   const success = status === 'KIT_DELIVERED' || status === 'KIT_PENDING';
-  const retryableFinalFailures = new Set([
-    'PLAYER_OFFLINE', 'PLATFORM_MISMATCH', 'PLATFORM_UNVERIFIABLE',
-    'KIT_NOT_FOUND', 'KIT_DISABLED', 'INVENTORY_FULL', 'DELIVERY_DISABLED',
-    'KIT_CORRUPT', 'INVALID_REQUEST'
-  ]);
   const pluginFinalTimeout = status === 'TIMEOUT'
     && getBridgeJob(requestId)?.result?.status === 'TIMEOUT';
   const canRetryWithNewRequest = retryableFinalFailures.has(status) || pluginFinalTimeout;
