@@ -270,7 +270,7 @@ O endpoint legado `/plugin/v1/delivery-update` e a rota de eventos `/plugin/v1/e
 
 ## 13. Cancelamentos, estornos e liberação de estoque — BOT-ASTHEN 2.17.0
 
-A equipe só deve usar **Registrar estorno** depois de concluir o cancelamento/reembolso fora do bot. O botão aparece no pedido após a aprovação do pagamento.
+A equipe só deve usar **Registrar cancelamento/estorno** depois de concluir o cancelamento/reembolso fora do bot. O botão aparece no pedido após a aprovação do pagamento.
 
 - Se o plugin informou uma falha final segura (por exemplo, jogador offline, plataforma incompatível ou kit inexistente), a equipe pode registrar o cancelamento e liberar a reserva semanal.
 - Se o estado for `KIT_PENDING`, a liberação é bloqueada: o jogador ainda pode receber o kit. A equipe precisa resolver/remover essa pendência no servidor Minecraft primeiro.
