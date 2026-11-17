@@ -212,6 +212,7 @@ async function handleBridgeResult(client, event) {
     deliveryResponse: String(result.message || ''),
     deliveryUpdatedAt: new Date().toISOString(),
     deliveryError: null,
+    deliveryPluginFinal: true,
     deliveryResultNotificationPending: true
   });
   appendTicketHistory(ticket.channelId, {
@@ -254,7 +255,7 @@ async function retryPendingDeliveryNotification(client, channelId) {
   ]);
   const bridgeJob = getBridgeJob(ticket.deliveryRequestId || '');
   const pluginFinalTimeout = ticket.deliveryStatus === 'TIMEOUT'
-    && bridgeJob?.result?.status === 'TIMEOUT';
+    && (ticket.deliveryPluginFinal === true || bridgeJob?.result?.status === 'TIMEOUT');
   const canRetryWithNewRequest = retryableFinalFailures.has(ticket.deliveryStatus) || pluginFinalTimeout;
   const canRetryWithSameRequest = ticket.deliveryStatus === 'WAITING'
     || (ticket.deliveryStatus === 'TIMEOUT' && Boolean(bridgeJob) && !bridgeJob.result);
@@ -287,6 +288,7 @@ async function handleBridgeDeliveryUpdate(client, event) {
     deliveryUpdatedAt: update.updated_at || new Date().toISOString(),
     deliveryError: null,
     deliveryCompletedAt: update.updated_at || new Date().toISOString(),
+    deliveryPluginFinal: true,
     deliveryUpdateNotificationPending: !alreadySent
   });
   appendTicketHistory(ticket.channelId, {
