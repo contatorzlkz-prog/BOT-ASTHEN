@@ -3,7 +3,7 @@ import { ChannelType, Client, Events, GatewayIntentBits, MessageFlags, REST, Rou
 import { commandDefinitions } from './commands.js';
 import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, getShopKits, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
 import { flushSupabaseSync } from './supabase.js';
-import { makeDeliveryMessage, makeShopPanel, makeSupportPanel, PANEL_LAYOUT_VERSION } from './ui.js';
+import { makeDeliveryMessage, makeDeliveryRetryControls, makeShopPanel, makeSupportPanel, PANEL_LAYOUT_VERSION } from './ui.js';
 import { handleInteraction, recoverApprovedDeliveries, secureLogsChannel } from './interactions.js';
 import { discoverStandardChannels, messageHasPanel } from './channel-discovery.js';
 import { ensureBridgeSecret, startBridge } from './bridge.js';
@@ -247,8 +247,16 @@ async function retryPendingDeliveryNotification(client, channelId) {
       ? 'offline'
       : 'inventory'
   };
+  const retryableFinalFailures = new Set([
+    'PLAYER_OFFLINE', 'PLATFORM_MISMATCH', 'PLATFORM_UNVERIFIABLE',
+    'KIT_NOT_FOUND', 'KIT_DISABLED', 'INVENTORY_FULL', 'DELIVERY_DISABLED',
+    'KIT_CORRUPT', 'INVALID_REQUEST'
+  ]);
+  const canRetryWithNewRequest = retryableFinalFailures.has(ticket.deliveryStatus)
+    || ticket.deliveryStatus === 'TIMEOUT';
   await channel.send({
     content: makeDeliveryMessage({ ...result, userId: ticket.userId }),
+    ...(canRetryWithNewRequest ? { components: [makeDeliveryRetryControls('new')] } : {}),
     allowedMentions: { users: [ticket.userId], roles: [] }
   });
   updateTicket(ticket.channelId, {
