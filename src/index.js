@@ -6,7 +6,7 @@ import { flushSupabaseSync } from './supabase.js';
 import { makeDeliveryMessage, makeDeliveryRetryControls, makeShopPanel, makeSupportPanel, PANEL_LAYOUT_VERSION } from './ui.js';
 import { handleInteraction, recoverApprovedDeliveries, secureLogsChannel } from './interactions.js';
 import { discoverStandardChannels, messageHasPanel } from './channel-discovery.js';
-import { ensureBridgeSecret, startBridge } from './bridge.js';
+import { ensureBridgeSecret, getBridgeJob, startBridge } from './bridge.js';
 
 function assertRuntime() {
   const major = Number(process.versions.node.split('.')[0]);
@@ -252,11 +252,16 @@ async function retryPendingDeliveryNotification(client, channelId) {
     'KIT_NOT_FOUND', 'KIT_DISABLED', 'INVENTORY_FULL', 'DELIVERY_DISABLED',
     'KIT_CORRUPT', 'INVALID_REQUEST'
   ]);
-  const canRetryWithNewRequest = retryableFinalFailures.has(ticket.deliveryStatus)
-    || ticket.deliveryStatus === 'TIMEOUT';
+  const bridgeJob = getBridgeJob(ticket.deliveryRequestId || '');
+  const pluginFinalTimeout = ticket.deliveryStatus === 'TIMEOUT'
+    && bridgeJob?.result?.status === 'TIMEOUT';
+  const canRetryWithNewRequest = retryableFinalFailures.has(ticket.deliveryStatus) || pluginFinalTimeout;
+  const canRetryWithSameRequest = ticket.deliveryStatus === 'WAITING'
+    || (ticket.deliveryStatus === 'TIMEOUT' && Boolean(bridgeJob) && !bridgeJob.result);
+  const retryMode = canRetryWithNewRequest ? 'new' : canRetryWithSameRequest ? 'same' : null;
   await channel.send({
     content: makeDeliveryMessage({ ...result, userId: ticket.userId }),
-    ...(canRetryWithNewRequest ? { components: [makeDeliveryRetryControls('new')] } : {}),
+    ...(retryMode ? { components: [makeDeliveryRetryControls(retryMode)] } : {}),
     allowedMentions: { users: [ticket.userId], roles: [] }
   });
   updateTicket(ticket.channelId, {
