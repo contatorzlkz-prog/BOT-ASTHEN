@@ -1,6 +1,8 @@
-# Integração do ASTHEN BOT 2.16.0 com Plugin-ASTHEN 1.2.0 / 1.3.0
+# Integração do ASTHEN BOT 2.17.0 com Plugin-ASTHEN 1.2.0 / 1.3.0
 
 A integração usa o modo poll: o plugin faz as conexões de saída para buscar pedidos e devolver resultados. O servidor Minecraft não precisa aceitar conexões de entrada.
+
+> **Fonte oficial da Bridge:** use sempre `bot-integration/asthen-bridge.js` deste repositório BOT-ASTHEN. A cópia antiga que ainda aparece em versões do repositório Plugin-ASTHEN é legada e não deve ser copiada por cima desta. Ela não contém fila persistente, long polling e recuperação completa de eventos. O plugin só precisa cumprir o contrato HTTP documentado abaixo.
 
 ## 1. Arquitetura
 
@@ -265,3 +267,18 @@ O endpoint legado `/plugin/v1/delivery-update` e a rota de eventos `/plugin/v1/e
 - [ ] Uma entrega confirmada atualiza o ticket.
 - [ ] Repetir um pedido com o mesmo `request_id` não cria uma segunda entrega.
 - [ ] Testes de inventário, Shulker Box e retirada pendente são feitos em servidor Paper real.
+
+## 13. Cancelamentos, estornos e liberação de estoque — BOT-ASTHEN 2.17.0
+
+A equipe só deve usar **Registrar cancelamento/estorno** depois de concluir o cancelamento/reembolso fora do bot. O botão aparece no pedido após a aprovação do pagamento.
+
+- Se o plugin informou uma falha final segura (por exemplo, jogador offline, plataforma incompatível ou kit inexistente), a equipe pode registrar o cancelamento e liberar a reserva semanal.
+- Se o estado for `KIT_PENDING`, a liberação é bloqueada: o jogador ainda pode receber o kit. A equipe precisa resolver/remover essa pendência no servidor Minecraft primeiro.
+- Se o estado for `KIT_DELIVERED`, a equipe precisa remover o kit do jogador no Minecraft antes de confirmar `KIT REMOVIDO` no formulário.
+- Em estados `QUEUED`, `WAITING` ou timeout apenas de comunicação, não libere o estoque: a entrega ainda pode ser concluída.
+- A operação usa `release_asthen_weekly_kit_stock`, identificada por `guild_id + stockReservationId`. Repetir após timeout de rede não decrementa o estoque novamente.
+
+Depois de atualizar o bot, execute novamente o arquivo completo `supabase/SETUP.sql` no SQL Editor. Ele adiciona `released_at` às reservas existentes e cria a função de liberação idempotente sem apagar o histórico. O banco não é atualizado automaticamente pelo bot.
+
+
+**Prompt de atualização do plugin:** veja [`prompts/PLUGIN-ASTHEN-1.3.1-PERSISTENCE-AND-BRIDGE.md`](../prompts/PLUGIN-ASTHEN-1.3.1-PERSISTENCE-AND-BRIDGE.md). A conexão atual tem permissão de leitura no repositório Plugin-ASTHEN; portanto, o prompt está versionado aqui para ser aplicado por alguém com permissão de escrita naquele repositório.

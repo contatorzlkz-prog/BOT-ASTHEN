@@ -485,6 +485,15 @@ export function makeOrderControls() {
   );
 }
 
+export function makeApprovedOrderControls() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('order:release-stock')
+      .setLabel('Registrar cancelamento/estorno')
+      .setStyle(ButtonStyle.Danger)
+  );
+}
+
 export function makeCloseRow() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -506,17 +515,22 @@ export function makeChannelLinkRow(channel) {
 export function makeOrderLogEmbed({ ticket, decision, staffUser }) {
   const closed = decision === 'closed_without_result';
   const approved = decision === 'approved';
+  const released = decision === 'refunded';
   return new EmbedBuilder()
-    .setColor(closed ? 0xD49B42 : approved ? 0x3BA55D : 0xD45B5B)
-    .setTitle(closed ? 'Pedido fechado sem resultado' : approved ? 'Pedido confirmado' : 'Pedido recusado')
+    .setColor(closed ? 0xD49B42 : approved ? 0x3BA55D : released ? 0xD45B5B : 0xD45B5B)
+    .setTitle(closed ? 'Pedido fechado sem resultado'
+      : approved ? 'Pedido confirmado'
+        : released ? 'Pedido cancelado / estornado'
+          : 'Pedido recusado')
     .addFields(
       { name: 'Cliente', value: '<@' + ticket.userId + '>', inline: true },
       { name: 'Kit', value: String(ticket.kitName || '—'), inline: true },
       { name: 'Valor', value: String(ticket.kitPrice || '—'), inline: true },
       { name: 'Nick Minecraft', value: String(ticket.minecraftNick || '—'), inline: true },
       { name: 'Edição', value: 'Bedrock', inline: true },
-      { name: closed ? 'Fechado por' : 'Responsável', value: String(staffUser), inline: true },
-      { name: 'Canal do pedido', value: '<#' + ticket.channelId + '>', inline: true }
+      { name: released ? 'Registrado por' : closed ? 'Fechado por' : 'Responsável', value: String(staffUser), inline: true },
+      { name: 'Canal do pedido', value: '<#' + ticket.channelId + '>', inline: true },
+      ...(released ? [{ name: 'Motivo', value: String(ticket.stockReleaseReason || 'Não informado').slice(0, 1000), inline: false }] : [])
     )
     .setTimestamp();
 }

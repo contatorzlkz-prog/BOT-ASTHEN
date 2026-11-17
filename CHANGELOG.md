@@ -1,3 +1,14 @@
+## 2.17.0 — 17/11/2026
+
+- Recuperação de entregas diferencia timeout de transporte (reenvio com o mesmo request_id) de TIMEOUT final confirmado pelo plugin (nova tentativa com identificador novo).
+- Tickets de suporte e compra são serializados por servidor, usuário e tipo para impedir canais duplicados em cliques simultâneos.
+- Pedidos aprovados podem registrar cancelamento/estorno; a reserva semanal é liberada uma única vez pelo RPC idempotente do Supabase.
+- O fluxo bloqueia a liberação enquanto um kit estiver pendente no Minecraft; para kits já entregues exige confirmação explícita de remoção no jogo.
+- Diagnóstico da loja diferencia credenciais configuradas de esquema Supabase efetivamente verificado; mensagens apontam para supabase/SETUP.sql.
+- Adicionados testes para o bloqueio de tickets e para a chamada idempotente de liberação de estoque.
+- Incluído prompt técnico para o Plugin-ASTHEN 1.3.1 corrigir a persistência antes da entrega e remover a Bridge legada duplicada.
+
+---
 ## 2.16.0 — 16/11/2026
 
 - A loja fixa #kits mostra a seleção de kits diretamente no painel; a lista privada completa continua disponível quando há mais de 25 kits.

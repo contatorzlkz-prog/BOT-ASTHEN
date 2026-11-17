@@ -1,6 +1,7 @@
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { appendTicketHistory, findOpenTicket, getGuildConfig, saveTicket, updateTicket } from './store.js';
 import { CONFIG } from './config.js';
+import { runWithKeyedLock } from './keyed-lock.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -15,7 +16,20 @@ function slug(value) {
     .slice(0, 30) || 'membro';
 }
 
-export async function createPrivateTicket({ guild, user, type, kit = null, minecraftNick = null, platform = null }) {
+export async function createPrivateTicket(options) {
+  const guild = options?.guild;
+  const user = options?.user;
+  const type = options?.type;
+  if (!guild?.id || !user?.id || typeof type !== 'string' || !type) {
+    throw new Error('Dados insuficientes para criar o ticket.');
+  }
+
+  const kind = type === 'shop' ? 'shop' : 'support';
+  const lockKey = guild.id + ':' + user.id + ':' + kind;
+  return runWithKeyedLock(lockKey, () => createPrivateTicketUnlocked(options));
+}
+
+async function createPrivateTicketUnlocked({ guild, user, type, kit = null, minecraftNick = null, platform = null }) {
   const config = getGuildConfig(guild.id);
   const isShop = type === 'shop';
   const panelId = isShop ? config.shopPanelChannelId : config.supportPanelChannelId;

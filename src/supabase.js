@@ -7,6 +7,8 @@ let retryCount = 0;
 let lastSyncError = null;
 let lastLoggedSyncError = null;
 let lastSyncedAt = null;
+let lastStockCheckAt = null;
+let lastStockCheckError = null;
 let snapshotProvider = null;
 
 export function normalizeSupabaseUrl(value) {
@@ -308,12 +310,16 @@ export async function getWeeklyKitStock(guildId) {
     config.weeklyStockTable
   );
   if (!response.ok) {
+    lastStockCheckAt = new Date().toISOString();
+    lastStockCheckError = 'Consulta do estoque: HTTP ' + response.status;
     throw new Error(
       'Não foi possível consultar o estoque semanal no Supabase (HTTP ' + response.status +
-      '). Execute supabase/005_asthen_bot_weekly_kit_stock.sql.'
+      '). Confira a tabela e execute supabase/SETUP.sql.'
     );
   }
 
+  lastStockCheckAt = new Date().toISOString();
+  lastStockCheckError = null;
   const rows = await response.json();
   const items = {};
   for (const row of Array.isArray(rows) ? rows : []) {
@@ -364,25 +370,93 @@ export async function reserveWeeklyKitStock({ guildId, kitId, requestId } = {}) 
   }
 
   if (!response.ok) {
+    lastStockCheckAt = new Date().toISOString();
+    lastStockCheckError = 'Reserva de estoque: HTTP ' + response.status;
     throw new Error(
       'O Supabase não conseguiu reservar o estoque (HTTP ' + response.status +
-      '). Confira a migração supabase/005_asthen_bot_weekly_kit_stock.sql.'
+      '). Confira a tabela e a função de reserva em supabase/SETUP.sql.'
     );
   }
   let result = await response.json();
   if (Array.isArray(result)) result = result[0];
   if (!result || typeof result.ok !== 'boolean') {
+    lastStockCheckAt = new Date().toISOString();
+    lastStockCheckError = 'A função de reserva retornou uma resposta inválida.';
     throw new Error('O Supabase respondeu com um resultado inválido para a reserva semanal.');
   }
+  lastStockCheckAt = new Date().toISOString();
+  lastStockCheckError = null;
   return { ...result, week_start: result.week_start || weekStart };
+}
+
+/**
+ * Releases one approved reservation after staff has completed the cancellation/refund
+ * outside the bot. The SQL function is idempotent by (guild_id, request_id).
+ */
+export async function releaseWeeklyKitStock({ guildId, requestId } = {}) {
+  if (!String(guildId || '').trim() || !String(requestId || '').trim()) {
+    throw new Error('Não foi possível liberar o estoque: servidor ou identificador da reserva ausente.');
+  }
+  const config = requireWeeklyStockConfig();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  let response;
+  try {
+    response = await fetch(config.projectUrl + '/rest/v1/rpc/release_asthen_weekly_kit_stock', {
+      method: 'POST',
+      headers: buildHeaders(config),
+      body: JSON.stringify({
+        p_guild_id: String(guildId),
+        p_request_id: String(requestId)
+      }),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Tempo limite ao liberar a unidade semanal no Supabase. Repita a ação com o mesmo pedido; a operação é idempotente.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!response.ok) {
+    lastStockCheckAt = new Date().toISOString();
+    lastStockCheckError = 'Liberação de estoque: HTTP ' + response.status;
+    throw new Error(
+      'O Supabase não conseguiu liberar a reserva (HTTP ' + response.status +
+      '). Confira a função release_asthen_weekly_kit_stock em supabase/SETUP.sql.'
+    );
+  }
+
+  let result = await response.json();
+  if (Array.isArray(result)) result = result[0];
+  if (!result || typeof result.ok !== 'boolean') {
+    lastStockCheckAt = new Date().toISOString();
+    lastStockCheckError = 'A função de liberação retornou uma resposta inválida.';
+    throw new Error('O Supabase respondeu com um resultado inválido para a liberação do estoque.');
+  }
+  lastStockCheckAt = new Date().toISOString();
+  lastStockCheckError = null;
+  return result;
 }
 
 export function getSupabaseStatus() {
   const config = getSupabaseConfig();
+  const weeklyStockHealth = !config
+    ? 'disabled'
+    : lastStockCheckError
+      ? 'error'
+      : lastStockCheckAt
+        ? 'ready'
+        : 'not_checked';
   return {
     enabled: Boolean(config),
     weeklyStockTable: config?.weeklyStockTable || null,
     weeklyStockEnabled: Boolean(config),
+    weeklyStockHealth,
+    lastStockCheckAt,
+    lastStockCheckError,
     lastSyncedAt,
     lastError: lastSyncError
   };
