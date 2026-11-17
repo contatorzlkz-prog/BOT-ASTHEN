@@ -56,6 +56,7 @@ import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock, releaseWee
 const closingTickets = new Set();
 const orderDecisionsInFlight = new Set();
 const deliveryAttemptsInFlight = new Set();
+const stockReleaseAttemptsInFlight = new Set();
 
 function normalizeImageUrl(value) {
   if (!value) return '';
@@ -1171,6 +1172,19 @@ async function requestStockRelease(interaction) {
 }
 
 async function submitStockRelease(interaction) {
+  const channelId = interaction.channelId;
+  if (stockReleaseAttemptsInFlight.has(channelId)) {
+    return replyPrivate(interaction, 'A liberação desta reserva já está sendo processada.');
+  }
+  stockReleaseAttemptsInFlight.add(channelId);
+  try {
+    return await submitStockReleaseInternal(interaction);
+  } finally {
+    stockReleaseAttemptsInFlight.delete(channelId);
+  }
+}
+
+async function submitStockReleaseInternal(interaction) {
   const ticket = getTicket(interaction.channelId);
   if (!ticket || ticket.type !== 'shop' || ticket.orderStatus !== 'approved') {
     return replyPrivate(interaction, 'Este pedido não está aprovado ou já foi encerrado.');
