@@ -2,7 +2,7 @@
 
 Bot Discord do ASTHEN MC: atendimento privado, loja de kits Bedrock, pagamentos por Pix e entrega pelo Plugin-ASTHEN.
 
-[**Baixar ASTHEN BOT 2.16.0**](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/download/v2.16.0/ASTHEN-BOT-v2.16.0.zip) · [Todas as versões](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases) · [Guia](docs/GUIA.md) · [Integração Minecraft](docs/PLUGIN-INTEGRATION.md)
+[**Baixar ASTHEN BOT 2.17.0**](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/download/v2.17.0/ASTHEN-BOT-v2.17.0.zip) · [Todas as versões](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases) · [Guia](docs/GUIA.md) · [Integração Minecraft](docs/PLUGIN-INTEGRATION.md)
 
 ![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)
 ![discord.js 14](https://img.shields.io/badge/discord.js-14-5865F2?logo=discord&logoColor=white)
@@ -14,8 +14,8 @@ Bot Discord do ASTHEN MC: atendimento privado, loja de kits Bedrock, pagamentos 
 - Tickets privados de suporte e compra.
 - Catálogo de kits sincronizado com o Minecraft.
 - Aprovação manual de pagamentos pela equipe.
-- Reserva semanal de estoque no Supabase.
-- Entrega e recuperação de pedidos pelo Plugin-ASTHEN.
+- Reserva semanal de estoque no Supabase, com liberação idempotente após cancelamentos/estornos confirmados.
+- Entrega e recuperação de pedidos pelo Plugin-ASTHEN, com proteção contra tickets duplicados.
 
 ## Instalação
 
