@@ -1158,16 +1158,15 @@ async function requestStockRelease(interaction) {
     new ActionRowBuilder().addComponents(confirmation)
   );
 
-  if (status === 'KIT_DELIVERED') {
-    const revoked = new TextInputBuilder()
-      .setCustomId('revoked')
-      .setLabel('Kit removido no jogo? Digite KIT REMOVIDO')
-      .setStyle(TextInputStyle.Short)
-      .setMinLength(12)
-      .setMaxLength(12)
-      .setRequired(true);
-    modal.addComponents(new ActionRowBuilder().addComponents(revoked));
-  }
+  const gameConfirmation = new TextInputBuilder()
+    .setCustomId('game-confirmation')
+    .setLabel('Confirmação do estado do kit no Minecraft')
+    .setPlaceholder(status === 'KIT_DELIVERED' ? 'KIT REMOVIDO' : 'NAO ENTREGUE')
+    .setStyle(TextInputStyle.Short)
+    .setMinLength(12)
+    .setMaxLength(12)
+    .setRequired(true);
+  modal.addComponents(new ActionRowBuilder().addComponents(gameConfirmation));
   return interaction.showModal(modal);
 }
 
@@ -1216,13 +1215,18 @@ async function submitStockReleaseInternal(interaction) {
   if (status === 'KIT_PENDING') {
     return replyPrivate(interaction, 'A pendência ainda pode ser recebida no Minecraft. Resolva-a no servidor antes de liberar o estoque.');
   }
+  const gameConfirmation = interaction.fields.getTextInputValue('game-confirmation').trim().toUpperCase();
   if (status === 'KIT_DELIVERED') {
-    const revoked = interaction.fields.getTextInputValue('revoked').trim().toUpperCase();
-    if (revoked !== 'KIT REMOVIDO') {
+    if (gameConfirmation !== 'KIT REMOVIDO') {
       return replyPrivate(interaction, 'Não liberei o estoque. Primeiro remova o kit do jogador no Minecraft e confirme com KIT REMOVIDO.');
     }
-  } else if (!safeFinalFailures.has(status) && !pluginFinalTimeout) {
-    return replyPrivate(interaction, 'O estado ' + status + ' não permite liberar a reserva com segurança. Aguarde a reconciliação da entrega.');
+  } else {
+    if (gameConfirmation !== 'NAO ENTREGUE') {
+      return replyPrivate(interaction, 'Confirme NAO ENTREGUE somente depois de verificar que nenhuma Shulker Box está entregue ou pendente.');
+    }
+    if (!safeFinalFailures.has(status) && !pluginFinalTimeout) {
+      return replyPrivate(interaction, 'O estado ' + status + ' não permite liberar a reserva com segurança. Aguarde a reconciliação da entrega.');
+    }
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
