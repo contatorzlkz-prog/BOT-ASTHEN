@@ -11,6 +11,7 @@ on:
       - CHANGELOG.md
       - docs/**
       - src/**
+      - test/**
       - bot-integration/**
       - linux/**
       - assets/**
