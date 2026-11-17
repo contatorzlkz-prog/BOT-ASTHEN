@@ -1212,7 +1212,7 @@ async function submitStockReleaseInternal(interaction) {
     'KIT_CORRUPT', 'INVALID_REQUEST'
   ]);
   const pluginFinalTimeout = status === 'TIMEOUT'
-    && getBridgeJob(ticket.deliveryRequestId || '')?.result?.status === 'TIMEOUT';
+    && (ticket.deliveryPluginFinal === true || getBridgeJob(ticket.deliveryRequestId || '')?.result?.status === 'TIMEOUT');
   if (status === 'KIT_PENDING') {
     return replyPrivate(interaction, 'A pendência ainda pode ser recebida no Minecraft. Resolva-a no servidor antes de liberar o estoque.');
   }
