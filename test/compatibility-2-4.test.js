@@ -41,19 +41,22 @@ test('admin commands are compact and Pix is no longer a slash command', () => {
   assert.equal(command('kit').default_member_permissions, '8');
 });
 
-test('painel de kits permanece clicável com catálogo vazio ou somente com demo', () => {
+test('painel fixo de kits abre a seleção direta mesmo sem catálogo real', () => {
   for (const panel of [makeShopPanel(), makeShopPanel()]) {
-    const button = panel.components[0].components[0].toJSON();
-    assert.equal(button.custom_id, 'shop:catalog');
-    assert.equal(button.disabled, false);
-    assert.equal(button.label, 'Abrir kits');
+    const menu = panel.components[0].components[0].toJSON();
+    assert.equal(menu.custom_id, 'shop:select:0');
+    assert.equal(menu.options.length, 1);
+    assert.equal(menu.options[0].value, 'asthen-demo-kit');
+    assert.match(menu.options[0].label, /^DEMO/);
   }
 
   const availablePanel = makeShopPanel([{
     id: 'a', name: 'Kit_Teste', price: 'R$ 5,00', enabled: true,
     pluginForSale: true, forSale: true
   }]);
-  assert.equal(availablePanel.components[0].components[0].toJSON().disabled, false);
+  const availableMenu = availablePanel.components[0].components[0].toJSON();
+  assert.equal(availableMenu.custom_id, 'shop:select:0');
+  assert.equal(availableMenu.options[0].value, 'a');
 });
 
 test('shop catalog shows friendly names and marks inactive or unpriced kits unavailable', () => {
