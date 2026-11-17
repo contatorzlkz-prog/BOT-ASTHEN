@@ -489,7 +489,7 @@ export function makeApprovedOrderControls() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('order:release-stock')
-      .setLabel('Registrar cancelamento')
+      .setLabel('Registrar cancelamento/estorno')
       .setStyle(ButtonStyle.Danger)
   );
 }
