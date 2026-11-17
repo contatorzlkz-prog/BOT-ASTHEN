@@ -1,8 +1,8 @@
 # Guia do ASTHEN BOT
 
-Guia operacional único para instalar, configurar e manter o bot. O contrato técnico da integração fica em [PLUGIN-INTEGRATION.md](PLUGIN-INTEGRATION.md); endereços HTTPS ficam em [TUNNEL-SETUP.md](TUNNEL-SETUP.md).
+Guia operacional para instalar, configurar e manter o bot. O contrato técnico da integração está em [PLUGIN-INTEGRATION.md](PLUGIN-INTEGRATION.md); os endereços HTTPS estão em [TUNNEL-SETUP.md](TUNNEL-SETUP.md).
 
-## 1. Instalar
+## 1. Instalação
 
 ### Windows
 
@@ -11,115 +11,100 @@ Guia operacional único para instalar, configurar e manter o bot. O contrato té
 3. Informe o token do bot e o Application ID.
 4. Execute `INICIAR.bat`.
 
-Requisito: Node.js 22 ou mais recente.
-
 ### Linux
 
-~~~bash
+```bash
 bash linux/setup-linux.sh
 bash linux/start-linux.sh
-~~~
+```
+
+Requisito: Node.js 22 ou superior.
 
 ## 2. Canais do Discord
 
-Use estes quatro nomes. O bot procura os canais automaticamente quando inicia ou reinicia; emoji e separadores não atrapalham a identificação. Quando encontra os nomes padrão, eles têm prioridade sobre IDs manuais antigos.
+O bot procura estes nomes ao iniciar. Emoji e separadores no nome não impedem a identificação.
 
 | Canal | Uso |
 |---|---|
-| `#atendimento` | Painel de suporte e tickets gerais. |
-| `#kits` | Painel da loja e catálogo do Minecraft. |
-| `#logs` | Registros administrativos, privado para equipe. |
-| `#compradores` | Avisos de compras confirmadas. |
+| `#atendimento` | Painel de suporte e tickets gerais |
+| `#kits` | Painel da loja e catálogo Minecraft |
+| `#logs` | Registros administrativos; somente administradores e o bot |
+| `#compradores` | Avisos de compras confirmadas |
 
-Configure também o cargo autorizado a revisar pagamentos:
+Configure canais e cargo da equipe:
 
-~~~text
+```text
 /configurar atendimento:#atendimento kits:#kits logs:#logs compradores:#compradores equipe:@Equipe
-~~~
+```
 
-Os campos `atendimento` e `kits` são opcionais quando os canais já existem com esses nomes. `logs` é protegido contra visualização pública quando o bot o reconhece pela primeira vez; configure `equipe` para liberar o canal ao grupo responsável. Administradores continuam tendo acesso.
+Os campos são opcionais quando o bot já reconhece os canais pelos nomes padrão. O cargo `equipe` autoriza revisar pagamentos e fechar tickets; **não concede acesso a `#logs`**. Esse canal permanece restrito a administradores e ao bot.
 
-### Mensagens dos painéis
+### Painéis
 
-- Na primeira inicialização da 2.15.0, cada painel legado é atualizado uma vez para corrigir o layout e o texto. A versão do painel fica salva.
-- Nas próximas inicializações, o bot procura a mensagem do próprio painel e preserva o conteúdo sem editar nem republicar.
-- Se a mensagem tiver sido apagada, o bot publica outra.
-- Se o ID local tiver sido perdido, procura os 50 envios mais recentes do próprio bot para evitar duplicar o painel.
-- Sincronizar kits e editar nome/descrição/imagem não altera a mensagem fixa de `#kits`; o catálogo atualizado aparece quando alguém clica em **Abrir kits**.
-- Para atualizar manualmente um painel depois de uma mudança de texto, execute `/configurar atendimento:#atendimento` ou `/configurar kits:#kits`.
+Na primeira inicialização da versão 2.15.0, os painéis antigos foram atualizados para corrigir o layout. Nas inicializações seguintes, o bot procura e preserva as mensagens existentes. Se um painel for apagado, o bot poderá publicar outro. Para atualizar manualmente um painel, use `/configurar atendimento:#atendimento` ou `/configurar kits:#kits`.
 
 ## 3. Loja e kits
 
-O **Plugin-ASTHEN é a única origem dos kits reais**. O painel #kits já exibe o seletor diretamente: o cliente escolhe ali, confere a prévia e segue para a gamertag Bedrock sem escolher Java/Bedrock. Crie o kit no Minecraft, configure preço e disponibilidade no plugin e aguarde a sincronização. Ele aparece automaticamente no catálogo.
+O **Plugin-ASTHEN é a única origem dos kits reais**. Crie o kit no Minecraft, configure preço e disponibilidade no plugin e aguarde a sincronização. O kit aparece no seletor do canal `#kits`.
 
-No Discord, os únicos comandos de administração de kits são:
+Comandos administrativos no Discord:
 
-- `/kit listar`: mostra kits recebidos do Minecraft e o estado de venda.
+- `/kit listar`: consulta os kits e o estado de venda recebido do Minecraft.
 - `/kit editar`: altera nome exibido, descrição e imagem HTTPS.
 
-O Discord não cria kits, não altera seus itens, preço ou disponibilidade oficial. Para controlar o preço no Minecraft, use `/dk price Kit_Ferro 19,90`; sem preço ou com a venda desativada, o kit fica indisponível.
+O Discord não cria kits, não altera seus itens nem define preço ou disponibilidade oficial. Essas ações pertencem ao Plugin-ASTHEN.
 
 ### Kit Demonstração
 
-Enquanto não houver kits reais sincronizados nesta execução do bot, o catálogo mostra **Kit Demonstração**. O botão do painel `#kits` permanece ativo mesmo nesse estado.
+Enquanto o plugin ainda não sincronizou kits nesta execução do bot, o catálogo mostra um Kit Demonstração. Ele serve apenas para pré-visualização: não cria compra, Pix, reserva de estoque ou entrega.
 
-O demo pode ser selecionado para conferir a prévia, mas não abre ticket de compra, não gera Pix, não reserva estoque e não chama a entrega do Minecraft. Quando um kit real chega, ele substitui o demo automaticamente.
+## 4. Atendimento e pagamentos
 
-## 4. Atendimento e tickets
+O painel `#atendimento` abre tickets privados por assunto. O cliente e a equipe autorizada conversam dentro do canal privado.
 
-No painel `#atendimento`, o cliente seleciona um assunto: compras/kits, ajuda no servidor, problemas, denúncias ou outros assuntos. O bot cria um canal privado dentro da categoria do painel, quando houver uma categoria definida.
+As compras são abertas pelo catálogo. O bot apresenta os dados Pix e o QR Code; a equipe confere o comprovante manualmente antes de aprovar. A aprovação reserva uma unidade do estoque semanal no Supabase e inicia a solicitação de entrega ao plugin.
 
-O cliente e a equipe autorizada conseguem ver o ticket. O cliente pode enviar detalhes, imagens e logs. A equipe continua o atendimento dentro do canal.
-
-Tickets de compra são abertos pela loja. O bot mostra QR Code, chave Pix e valor; a equipe confere o comprovante manualmente antes de aprovar. A reserva semanal só ocorre na aprovação.
+**Importante:** a chave Pix e a imagem QR desta distribuição estão fixas no código e publicadas no repositório. Confira os dados antes de usar o bot em outra loja; substituir apenas a imagem ou apenas a chave deixa as informações inconsistentes.
 
 ## 5. Supabase
 
 Abra **Supabase → SQL Editor → New query** e execute o arquivo completo `supabase/SETUP.sql`.
 
-Ele cria as três tabelas e a função de reserva necessárias:
-
 | Objeto | Uso |
 |---|---|
-| `asthen_bot_state` | Snapshot de configurações, kits sincronizados e tickets. |
-| `asthen_bot_weekly_stock` | Contagem semanal por kit e servidor. |
-| `asthen_bot_stock_reservations` | Reserva idempotente por compra aprovada. |
-| `reserve_asthen_weekly_kit_stock(...)` | Reserva transacional, com limite de 10 por kit/semana. |
+| `asthen_bot_state` | Configurações, catálogo sincronizado e tickets |
+| `asthen_bot_weekly_stock` | Estoque semanal por kit e servidor |
+| `asthen_bot_stock_reservations` | Reserva idempotente de cada compra aprovada |
+| `reserve_asthen_weekly_kit_stock(...)` | Reserva transacional, limitada a 10 unidades por kit/semana |
 
-Não crie `asthen_bot_kits` para esta versão. Uma tabela antiga com esse nome pode permanecer no projeto; o bot 2.15.0 não a consulta.
+Não crie `asthen_bot_kits` para a versão 2.16.0. Uma tabela antiga com esse nome pode permanecer no projeto; o bot não a consulta.
 
-No `.env`, use:
+Configure no `.env`:
 
-~~~env
+```env
 SUPABASE_URL=https://SEU-PROJETO.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_SUA_CHAVE
 SUPABASE_TABLE=asthen_bot_state
-~~~
+```
 
-`SUPABASE_URL` é a URL base, sem `/rest/v1`. A chave secreta fica só no `.env` do bot. Não publique esse arquivo.
+Use a URL base do projeto, sem `/rest/v1`. A chave secreta deve ficar apenas no `.env`. O estoque reinicia domingo às 00:00, horário de Brasília. Abrir catálogo ou ticket não consome unidade; a reserva ocorre na aprovação.
 
-Cada kit tem até 10 unidades por semana, por servidor Discord. O estoque reinicia domingo às 00:00, horário de Brasília. Abrir o catálogo ou ticket não consome unidade; a reserva acontece na aprovação.
+## 6. Atualização e backups
 
-## 6. Logs administrativos
-
-O canal #logs fica visível somente para cargos com a permissão Administrador e para o bot. O cargo comum de atendimento não recebe acesso aos registros.
-
-## 7. Atualizar sem perder dados
-
-Antes de substituir os arquivos, faça cópia de `.env` e de toda a pasta `data/`.
+Antes de atualizar, faça cópia de `.env` e de toda a pasta `data/`.
 
 - `.env`: token Discord, `DKB_SECRET` e credenciais Supabase.
-- `data/state.json`: configurações, kits sincronizados, tickets e pedidos.
+- `data/state.json`: configurações, catálogo, tickets e pedidos.
 - `data/bridge-queue.json`: fila persistente de entregas.
 
-Substitua o restante pelos arquivos da nova versão. Não compartilhe `.env`, `DKB_SECRET`, chave Pix ou credenciais do Supabase.
+Substitua os demais arquivos pelos da nova versão. Nunca compartilhe esses arquivos ou credenciais.
 
 ## 7. Verificações
 
-~~~bash
+```bash
 npm run check
 npm run check:commands
 npm test
-~~~
+```
 
-Para o fluxo de entrega, mantenha o bot e o servidor Paper conectados. Os testes automatizados não substituem a validação de uma compra real em servidor de teste.
+Os testes automatizados não substituem a validação de uma compra e entrega em um servidor Paper de teste.
