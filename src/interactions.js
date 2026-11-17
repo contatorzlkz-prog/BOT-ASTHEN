@@ -1129,7 +1129,7 @@ async function requestStockRelease(interaction) {
     'KIT_CORRUPT', 'INVALID_REQUEST'
   ]);
   const pluginFinalTimeout = status === 'TIMEOUT'
-    && getBridgeJob(ticket.deliveryRequestId || '')?.result?.status === 'TIMEOUT';
+    && (ticket.deliveryPluginFinal === true || getBridgeJob(ticket.deliveryRequestId || '')?.result?.status === 'TIMEOUT');
   if (status !== 'KIT_DELIVERED' && !safeFinalFailures.has(status) && !pluginFinalTimeout) {
     return replyPrivate(interaction,
       'Ainda não existe um resultado final seguro para liberar o estoque. Estado atual: ' + status +
@@ -1367,7 +1367,7 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
     throw new Error('Este pedido já está pendente/entregue e não pode gerar outra entrega.');
   }
   const previousPluginTimedOut = ticket.deliveryStatus === 'TIMEOUT'
-    && getBridgeJob(ticket.deliveryRequestId || '')?.result?.status === 'TIMEOUT';
+    && (ticket.deliveryPluginFinal === true || getBridgeJob(ticket.deliveryRequestId || '')?.result?.status === 'TIMEOUT');
   if (newRequest && !retryableFinalFailures.has(ticket.deliveryStatus) && !previousPluginTimedOut) {
     throw new Error('Não é seguro criar outro request_id para o estado ' + String(ticket.deliveryStatus || 'desconhecido') + '.');
   }
@@ -1382,6 +1382,7 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
     deliveryStatus: 'QUEUED',
     deliveryUpdatedAt: new Date().toISOString(),
     deliveryError: null,
+    deliveryPluginFinal: false,
     deliveryResultNotificationPending: true,
     deliveryResultNotificationSent: false
   }) || ticket;
@@ -1414,6 +1415,7 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
     updateTicket(ticket.channelId, {
       deliveryStatus: nextStatus,
       deliveryError: String(error.message || 'Falha ao solicitar a entrega.'),
+      deliveryPluginFinal: false,
       deliveryUpdatedAt: new Date().toISOString()
     });
     appendTicketHistory(ticket.channelId, {
@@ -1452,6 +1454,7 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
     deliveryResponse: String(result.message || ''),
     deliveryUpdatedAt: resultAt,
     deliveryError: null,
+    deliveryPluginFinal: true,
     deliveryResultNotificationSent: false
   });
   appendTicketHistory(ticket.channelId, {
@@ -1578,7 +1581,7 @@ async function retryApprovedDelivery(interaction, mode) {
   ]);
   const previousJob = getBridgeJob(ticket.deliveryRequestId || '');
   const previousPluginTimedOut = ticket.deliveryStatus === 'TIMEOUT'
-    && previousJob?.result?.status === 'TIMEOUT';
+    && (ticket.deliveryPluginFinal === true || previousJob?.result?.status === 'TIMEOUT');
   if (mode === 'new' && !retryableFinalFailures.has(ticket.deliveryStatus) && !previousPluginTimedOut) {
     return replyPrivate(interaction,
       'Não é seguro criar outro request_id para este estado (' + String(ticket.deliveryStatus || 'desconhecido') +
