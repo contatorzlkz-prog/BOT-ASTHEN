@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeCatalogMenu, makeCatalogPaginationRow, makeKitAdminMenu, makeKitAdminPaginationRow } from '../src/ui.js';
+import { makeCatalogMenu, makeCatalogPaginationRow, makeKitAdminMenu, makeKitAdminPaginationRow, makeShopPanel, makeSupportTicketEmbed } from '../src/ui.js';
+import { CONFIG } from '../src/config.js';
 
 function makeKits(count) {
   return Array.from({ length: count }, (_, index) => ({
@@ -51,6 +52,33 @@ test('paginação desabilita anterior na primeira e próxima na última página'
   assert.equal(last[2].disabled, true);
 });
 
+
+
+test('fixed shop panel contains the kit selector without an intermediate button', () => {
+  const panel = makeShopPanel(makeKits(3));
+  assert.equal(panel.embeds[0].toJSON().title, 'Loja ASTHEN');
+  assert.equal(panel.components[0].toJSON().components[0].custom_id, 'shop:select:0');
+  assert.equal(panel.components[0].toJSON().components[0].options.length, 3);
+  assert.equal(panel.components.length, 1);
+});
+
+test('shop panel with more than 25 kits adds a path to the full private list', () => {
+  const panel = makeShopPanel(makeKits(30));
+  assert.equal(panel.components[0].toJSON().components[0].options.length, 25);
+  assert.equal(panel.components[1].toJSON().components[0].custom_id, 'shop:catalog');
+});
+
+test('ticket text converts a literal backslash-n into a real line break', () => {
+  const previous = CONFIG.support.descriptions.outros;
+  try {
+    CONFIG.support.descriptions.outros = 'Primeira linha\\nSegunda linha';
+    const description = makeSupportTicketEmbed('outros', { id: '123456789012345678' }).toJSON().description;
+    assert.match(description, /Primeira linha\nSegunda linha/);
+    assert.equal(description.includes('\\n'), false);
+  } finally {
+    CONFIG.support.descriptions.outros = previous;
+  }
+});
 
 test('menus administrativos também exibem todos os 200 kits em páginas de 25', () => {
   const kits = makeKits(200);

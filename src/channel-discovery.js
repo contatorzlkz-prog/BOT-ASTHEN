@@ -33,9 +33,11 @@ export function discoverStandardChannels(channels) {
 
 export function messageHasPanel(message, customId, botUserId) {
   if (!message || !customId || !botUserId || message.author?.id !== botUserId) return false;
+  const acceptedIds = new Set([customId]);
+  if (customId === 'shop:select:0') acceptedIds.add('shop:catalog');
   return Boolean(message.components?.some(row =>
     row.components?.some(component =>
-      (component.customId || component.data?.custom_id) === customId
+      acceptedIds.has(component.customId || component.data?.custom_id)
     )
   ));
 }

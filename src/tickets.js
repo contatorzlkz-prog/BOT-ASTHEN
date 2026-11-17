@@ -117,7 +117,7 @@ export async function createPrivateTicket({ guild, user, type, kit = null, minec
     kitWeeklyRemainingAtOrder: Number.isInteger(kit?.weeklyRemaining) ? kit.weeklyRemaining : null,
     kitWeekStart: kit?.weeklyWeekStart ?? null,
     minecraftNick,
-    platform,
+    platform: isShop ? 'bedrock' : platform,
     orderStatus: isShop ? 'pending' : null,
     status: 'open',
     createdAt: new Date().toISOString()

@@ -29,10 +29,10 @@ export const CONFIG = {
   shop: {
     maxKits: 25,
     closeDelaySeconds: 3,
-    panelDescription: 'Escolha um kit para consultar a imagem, o preço e a descrição. Você poderá trocar de produto antes de continuar para o pagamento.',
-    catalogPrompt: 'Selecione o kit que deseja comprar. A prévia será exibida antes de pedir seu nick.',
-    previewPrompt: 'Confira a imagem, o nome e o preço. Confirme para informar seu nick do Minecraft.',
-    reviewDescription: 'Confira o kit e o nick informado. Confirme para abrir seu atendimento privado de pagamento.'
+    panelDescription: 'Escolha um kit diretamente no menu abaixo. Ao selecionar, você verá os detalhes e poderá confirmar para abrir seu ticket privado de pagamento.',
+    catalogPrompt: 'Escolha um kit para consultar os detalhes. A compra só começa depois que você confirmar a prévia.',
+    previewPrompt: 'Confira o kit e o preço. Confirme para informar sua gamertag Bedrock.',
+    reviewDescription: 'Confira o kit, o valor e sua gamertag Bedrock. Confirme para abrir o ticket privado de pagamento.'
   },
   order: {
     title: 'Pedido de compra',

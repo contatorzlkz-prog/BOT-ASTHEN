@@ -1,3 +1,16 @@
+## 2.16.0 — 16/11/2026
+
+- A loja fixa #kits mostra a seleção de kits diretamente no painel; a lista privada completa continua disponível quando há mais de 25 kits.
+- Novas compras são Bedrock por padrão e não exibem seleção de plataforma. Pedidos antigos com payload já enfileirado preservam a plataforma original para evitar conflitos de request_id.
+- Aprovar um pagamento não edita a mensagem original do pedido. O ticket recebe a confirmação final somente depois da resposta do plugin.
+- Mensagens de sucesso foram simplificadas para uma única linha "Kit entregue"; pendências e falhas continuam identificadas.
+- #logs remove sobrescritas antigas e fica restrito a cargos com Administrator e ao bot.
+- O BOT-ASTHEN aceita POST /plugin/v1/events, rota usada pelo Plugin-ASTHEN 1.3.0 para KIT_PENDING → KIT_DELIVERED; /plugin/v1/delivery-update permanece compatível.
+- Textos de ticket convertem sequências literais \n em quebras de linha reais.
+- Catálogo sincronizado atualiza o painel existente sem duplicar a mensagem; fila persistente, DKB_SECRET e estoque semanal são preservados.
+
+---
+
 ## 2.15.0 — publicada
 
 - Painel `#kits` permanece clicável mesmo quando só existe o Kit Demonstração; o demo abre uma prévia sem compra, Pix ou entrega.

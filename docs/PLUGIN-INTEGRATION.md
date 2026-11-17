@@ -1,4 +1,4 @@
-# Integração do ASTHEN BOT 2.15.0 com Plugin-ASTHEN 1.2.0 / 1.3.0
+# Integração do ASTHEN BOT 2.16.0 com Plugin-ASTHEN 1.2.0 / 1.3.0
 
 A integração usa o modo poll: o plugin faz as conexões de saída para buscar pedidos e devolver resultados. O servidor Minecraft não precisa aceitar conexões de entrada.
 
@@ -99,7 +99,7 @@ Depois de alterar o arquivo, execute /dk reload se a versão do plugin oferecer 
 
 O administrador cria o kit real no Minecraft usando o comando do Plugin-ASTHEN (por exemplo, `/dk create Kit_Ferro`, conforme a versão instalada). O plugin envia a lista completa em `POST /plugin/v1/kits` e o bot importa os novos identificadores.
 
-Depois da sincronização, os kits aparecem automaticamente no catálogo do Discord. Um administrador pode:
+Depois da sincronização, os kits aparecem diretamente no seletor fixo de #kits; o cliente escolhe sem passar por um botão intermediário. Um administrador pode:
 - `/dk price <nome> <valor>` no Minecraft: definir o preço em reais.
 - `/dk price <nome> remover`: tirar o kit da venda sem apagar seus itens.
 - `/dk enable <nome>` e `/dk disable <nome>`: ativar/desativar o kit no servidor.
@@ -124,9 +124,9 @@ Authorization: Bearer <DKB_SECRET>
 - O BOT-ASTHEN 2.15.0 também aceita GET /plugin/v1/pull?limit=5&wait_ms=20000: mantém a conexão aberta por até 20 segundos, acordando-a imediatamente quando um pedido chega. O bot aceita no máximo 25.000 ms e retorna 204 quando o prazo termina sem pedidos. O plugin 1.2.0 continua compatível, mas só a versão 1.3.0 com suporte a Long Polling enviará wait_ms.
 - POST /plugin/v1/result: recebe resultado final de entrega.
 - POST /plugin/v1/kits: recebe a lista completa dos kits do plugin, incluindo `name`, `enabled`, `items`, `price`, `price_cents` e `for_sale`.
-- POST /plugin/v1/delivery-update: disponível no BOT-ASTHEN 2.15.0 para registrar a transição posterior `KIT_PENDING` → `KIT_DELIVERED`. Exige `request_id` previamente conhecido e não reserva estoque novamente. O Plugin-ASTHEN 1.2.0 ainda não chama essa rota.
+- POST /plugin/v1/events: rota usada pelo Plugin-ASTHEN 1.3.0 para registrar a transição posterior KIT_PENDING → KIT_DELIVERED, com event_id idempotente. O endpoint legado /plugin/v1/delivery-update continua aceito.
 
-A API do bot envia request_id, player, a plataforma escolhida pelo cliente (java ou bedrock) e o identificador exato do kit. O plugin continua responsável por entregar os itens.
+A API envia request_id, gamertag e o identificador exato do kit. A plataforma é definida internamente como bedrock; a loja não oferece mais a escolha Java/Bedrock. O servidor Paper precisa ter Geyser e Floodgate ativos para validar conexões Bedrock.
 
 ### Fila persistente e status posterior — BOT-ASTHEN 2.15.0
 
@@ -140,12 +140,12 @@ Essa atualização posterior exige os dois lados atualizados: BOT-ASTHEN 2.15.0 
 
 1. O cliente escolhe um kit e confirma a prévia.
 2. Informa o nick do Minecraft.
-3. O bot abre o ticket com QR Pix, chave, valor e instrução compacta para anexar o comprovante.
-4. Um membro autorizado da equipe confere o comprovante e confirma o pagamento.
+3. O bot abre o ticket privado com QR Pix, chave, valor e instrução para anexar o comprovante. O ticket registra Bedrock automaticamente.
+4. Um membro autorizado da equipe confere o comprovante e confirma o pagamento. A mensagem original do pedido não é editada na aprovação.
 5. O bot solicita a entrega ao plugin com o nick e a plataforma Java ou Bedrock escolhida pelo cliente.
 6. Se o jogador estiver offline e kits.require-online: false, o plugin guarda o kit como pendente e tenta entregá-lo automaticamente quando ele entrar.
 7. Se o inventário estiver cheio, delivery.pending-if-inventory-full: true mantém o kit pendente; o servidor pede para liberar espaço e usar /dk claim.
-8. O plugin devolve o resultado. O comprador recebe uma mensagem clara e a equipe recebe detalhes técnicos. Em caso de timeout, o bot tenta novamente uma vez com o mesmo request_id.
+8. O plugin devolve o resultado. O ticket recebe uma mensagem simples quando o Paper confirma KIT_DELIVERED; situações pendentes ou falhas recebem aviso próprio. Em caso de timeout, o bot tenta novamente uma vez com o mesmo request_id.
 
 O mesmo request_id deve ser reutilizado em uma repetição de entrega para evitar duplicidade.
 
@@ -195,3 +195,11 @@ Use o [prompt completo de atualização do Plugin-ASTHEN 1.3.0](../prompts/PLUGI
 ## 9. Endereço público fixo
 
 Veja [TUNNEL-SETUP.md](TUNNEL-SETUP.md) para tunnel.to Registered Free e Cloudflare Tunnel. O bot continua em 127.0.0.1:8787; somente o hostname HTTPS configurado no plugin muda conforme o provedor do túnel.
+
+
+## 10. Loja, mensagens e permissões — 2.16.0
+
+- O painel #kits mostra o seletor diretamente; um botão para abrir a lista completa aparece apenas acima de 25 kits.
+- Compras novas são Bedrock. Pedidos antigos que já têm request_id na fila preservam a plataforma do payload durante recuperação/reenvio, para evitar conflito e duplicidade.
+- #logs substitui sobrescritas antigas e permite acesso somente a cargos com Administrator e ao bot. O cargo de atendimento não recebe acesso aos logs.
+- Após sincronização com mudança no catálogo, o bot atualiza o seletor fixo sem republicar outro painel.

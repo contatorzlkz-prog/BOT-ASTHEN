@@ -528,10 +528,20 @@ function startBridge(opts) {
         return sendJson(res, accepted.status, accepted.body);
       }
 
-      if (req.method === 'POST' && url.pathname === '/plugin/v1/delivery-update') {
+      if (req.method === 'POST' && (
+        url.pathname === '/plugin/v1/events'
+        || url.pathname === '/plugin/v1/delivery-update'
+      )) {
         const body = await readJson(req);
         if (typeof body.request_id !== 'string' || !ID_RE.test(body.request_id)) {
           return sendJson(res, 400, { success: false, status: 'INVALID_REQUEST_ID' });
+        }
+        if (url.pathname === '/plugin/v1/events'
+            && (body.final !== true
+              || body.success !== true
+              || typeof body.event_id !== 'string'
+              || body.event_id !== body.request_id + ':' + body.status)) {
+          return sendJson(res, 400, { success: false, status: 'INVALID_EVENT' });
         }
         const accepted = acceptDeliveryUpdate(body);
         return sendJson(res, accepted.status, accepted.body);

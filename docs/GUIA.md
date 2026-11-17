@@ -50,7 +50,7 @@ Os campos `atendimento` e `kits` são opcionais quando os canais já existem com
 
 ## 3. Loja e kits
 
-O **Plugin-ASTHEN é a única origem dos kits reais**. Crie o kit no Minecraft, configure preço e disponibilidade no plugin e aguarde a sincronização. Ele aparece automaticamente no catálogo.
+O **Plugin-ASTHEN é a única origem dos kits reais**. O painel #kits já exibe o seletor diretamente: o cliente escolhe ali, confere a prévia e segue para a gamertag Bedrock sem escolher Java/Bedrock. Crie o kit no Minecraft, configure preço e disponibilidade no plugin e aguarde a sincronização. Ele aparece automaticamente no catálogo.
 
 No Discord, os únicos comandos de administração de kits são:
 
@@ -100,7 +100,11 @@ SUPABASE_TABLE=asthen_bot_state
 
 Cada kit tem até 10 unidades por semana, por servidor Discord. O estoque reinicia domingo às 00:00, horário de Brasília. Abrir o catálogo ou ticket não consome unidade; a reserva acontece na aprovação.
 
-## 6. Atualizar sem perder dados
+## 6. Logs administrativos
+
+O canal #logs fica visível somente para cargos com a permissão Administrador e para o bot. O cargo comum de atendimento não recebe acesso aos registros.
+
+## 7. Atualizar sem perder dados
 
 Antes de substituir os arquivos, faça cópia de `.env` e de toda a pasta `data/`.
 

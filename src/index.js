@@ -1,9 +1,9 @@
 import 'dotenv/config';
 import { ChannelType, Client, Events, GatewayIntentBits, MessageFlags, REST, Routes } from 'discord.js';
 import { commandDefinitions } from './commands.js';
-import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
+import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, getShopKits, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
 import { flushSupabaseSync } from './supabase.js';
-import { makeShopPanel, makeSupportPanel, PANEL_LAYOUT_VERSION } from './ui.js';
+import { makeDeliveryMessage, makeShopPanel, makeSupportPanel, PANEL_LAYOUT_VERSION } from './ui.js';
 import { handleInteraction, recoverApprovedDeliveries, secureLogsChannel } from './interactions.js';
 import { discoverStandardChannels, messageHasPanel } from './channel-discovery.js';
 import { ensureBridgeSecret, startBridge } from './bridge.js';
@@ -89,6 +89,40 @@ async function refreshPanelMessage(guild, channelId, messageId, payload, label, 
   } catch (error) {
     console.error('[Asthen] Não foi possível verificar o painel de ' + label + ' em ' + guild.name + ':', error.message);
   }
+}
+
+async function refreshShopCatalogPanel(guild) {
+  const config = getGuildConfig(guild.id);
+  if (!config.shopPanelChannelId) return;
+  const channel = guild.channels.cache.get(config.shopPanelChannelId)
+    ?? await guild.channels.fetch(config.shopPanelChannelId).catch(() => null);
+  if (!channel || channel.type !== ChannelType.GuildText) return;
+
+  let message = null;
+  if (config.shopPanelMessageId) {
+    message = await channel.messages.fetch(config.shopPanelMessageId).catch(error => {
+      if (isMissingDiscordMessage(error)) return null;
+      throw error;
+    });
+  }
+  if (message) {
+    await message.edit(makeShopPanel(getShopKits(guild.id)));
+    updateGuildConfig(guild.id, {
+      shopPanelMessageId: message.id,
+      shopPanelVersion: PANEL_LAYOUT_VERSION
+    });
+    return;
+  }
+  updateGuildConfig(guild.id, { shopPanelMessageId: null, shopPanelVersion: null });
+  await refreshPanelMessage(
+    guild,
+    config.shopPanelChannelId,
+    null,
+    makeShopPanel(getShopKits(guild.id)),
+    'kits',
+    { channel: 'shopPanelChannelId', message: 'shopPanelMessageId', version: 'shopPanelVersion' },
+    'shop:select:0'
+  );
 }
 
 async function discoverGuildChannels(guild) {
@@ -214,11 +248,8 @@ async function retryPendingDeliveryNotification(client, channelId) {
       : 'inventory'
   };
   await channel.send({
-    content: 'Resultado da entrega recuperado pela integração.',
-    embeds: [makeDeliveryEmbed(result)],
-    components: ticket.deliveryStatus === 'KIT_DELIVERED' || ticket.deliveryStatus === 'KIT_PENDING'
-      ? [makeCloseRow()]
-      : []
+    content: makeDeliveryMessage({ ...result, userId: ticket.userId }),
+    allowedMentions: { users: [ticket.userId], roles: [] }
   });
   updateTicket(ticket.channelId, {
     deliveryResultNotificationPending: false,
@@ -270,15 +301,13 @@ async function handleBridgeDeliveryUpdate(client, event) {
   }
 
   await channel.send({
-    content: '<@' + ticket.userId + '> O Minecraft confirmou a retirada do kit que estava pendente.',
-    embeds: [makeDeliveryEmbed({
+    content: makeDeliveryMessage({
       status: 'KIT_DELIVERED',
-      message: String(update.message || 'O kit pendente foi entregue com sucesso.'),
+      userId: ticket.userId,
       player: ticket.minecraftNick,
-      platform: ticket.platform,
-      kit: ticket.kitDisplayName || ticket.kitName
-    })],
-    components: [makeCloseRow()],
+      kitDisplayName: ticket.kitDisplayName,
+      kit: ticket.kitName
+    }),
     allowedMentions: { users: [ticket.userId], roles: [] }
   });
   updateTicket(ticket.channelId, {
@@ -329,10 +358,10 @@ async function refreshConfiguredPanels(client) {
       guild,
       config.shopPanelChannelId,
       config.shopPanelMessageId,
-      makeShopPanel(),
+      makeShopPanel(getShopKits(guild.id)),
       'kits',
       { channel: 'shopPanelChannelId', message: 'shopPanelMessageId', version: 'shopPanelVersion' },
-      'shop:catalog'
+      'shop:select:0'
     );
   }
 }
@@ -445,15 +474,20 @@ async function main() {
       onDeliveryUpdate: event => {
         void handleBridgeDeliveryUpdate(client, event).catch(error => console.error('[Asthen Bridge] Falha ao atualizar ticket:', error));
       },
-      onKits: kits => {
+      onKits: async kits => {
         const enabled = kits.filter(kit => kit.enabled).map(kit => kit.name);
         let changedGuilds = 0;
-
         for (const guild of client.guilds.cache.values()) {
           const result = syncPluginKits(guild.id, kits);
-          if (result.changed) changedGuilds += 1;
+          if (result.changed) {
+            changedGuilds += 1;
+            try {
+              await refreshShopCatalogPanel(guild);
+            } catch (error) {
+              console.error('[Asthen API] Kits sincronizados, mas o painel da loja não pôde ser atualizado em ' + guild.name + ':', error.message);
+            }
+          }
         }
-
         console.log('[Asthen API] Plugin sincronizou ' + kits.length + ' kit(s): ' +
           (enabled.join(', ') || 'nenhum ativo') +
           '. Catálogos atualizados: ' + changedGuilds + '.');

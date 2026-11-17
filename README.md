@@ -1,6 +1,6 @@
 # ASTHEN BOT
 
-Bot do Discord do ASTHEN MC. Organiza atendimento, loja de kits, pagamentos e entrega pelo Plugin-ASTHEN.
+Bot do Discord do ASTHEN MC. Organiza atendimento, loja Bedrock, pagamentos e entrega pelo Plugin-ASTHEN. Código atual: 2.16.0.
 
 <p>
   <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/latest/download/ASTHEN-BOT-v2.15.0.zip"><strong>Baixar ASTHEN BOT 2.15.0</strong></a>
@@ -38,7 +38,7 @@ Para vincular manualmente os canais e o cargo da equipe:
 /configurar atendimento:#atendimento kits:#kits logs:#logs compradores:#compradores equipe:@Equipe
 ~~~
 
-O bot reconhece os canais pelo nome. Na primeira inicialização da 2.15.0, atualiza os painéis antigos uma vez; depois preserva as mensagens nos reinícios.
+O bot reconhece os canais pelo nome. Na atualização 2.16.0, migra o painel da loja para seleção direta, preserva pedidos existentes e restringe #logs a administradores.
 
 ## Loja
 
@@ -47,6 +47,7 @@ O Plugin-ASTHEN cria os kits, define seus itens, preços e disponibilidade. O bo
 - `/kit listar`: consulta os kits sincronizados.
 - `/kit editar`: altera nome exibido, descrição e imagem.
 - **Kit Demonstração:** aparece quando ainda não há kit real; abre uma prévia, mas não gera Pix, compra ou entrega.
+- Novos pedidos usam Bedrock automaticamente; o servidor Paper precisa de Geyser + Floodgate.
 
 ## Integração
 

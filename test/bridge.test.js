@@ -140,6 +140,55 @@ test('a API entrega pedidos ao plugin e recebe o resultado final no modo antigo'
   });
 });
 
+
+test('plugin 1.3.0 posts pending-delivery completion through /plugin/v1/events', async () => {
+  const requestId = 'test-event-route-001';
+  const pendingResult = deliverKit({
+    requestId,
+    player: 'Elber Player',
+    platform: 'bedrock',
+    kit: 'Kit_Ferro',
+    timeoutMs: 5000
+  });
+  const pull = await fetch(baseUrl + '/plugin/v1/pull?limit=5', { headers: authHeaders() });
+  assert.equal(pull.status, 200);
+  const queued = await pull.json();
+  assert.equal(queued.requests[0].request_id, requestId);
+  const initial = await postResult(requestId, {
+    player: 'Elber Player',
+    platform: 'bedrock',
+    kit: 'Kit_Ferro',
+    status: 'KIT_PENDING',
+    message: 'Inventário cheio; kit guardado.'
+  });
+  assert.equal(initial.status, 200);
+  assert.equal((await pendingResult).status, 'KIT_PENDING');
+  const event = {
+    event_id: requestId + ':KIT_DELIVERED',
+    request_id: requestId,
+    status: 'KIT_DELIVERED',
+    final: true,
+    success: true,
+    player: 'Elber Player',
+    kit: 'Kit_Ferro',
+    at: Date.now()
+  };
+  const delivered = await fetch(baseUrl + '/plugin/v1/events', {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(event)
+  });
+  assert.equal(delivered.status, 200);
+  assert.deepEqual(await delivered.json(), { success: true });
+  const duplicate = await fetch(baseUrl + '/plugin/v1/events', {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(event)
+  });
+  assert.equal(duplicate.status, 200);
+  assert.equal((await duplicate.json()).duplicate, true);
+});
+
 test('a API aceita Bedrock e valida Java separadamente', async () => {
   const requestId = 'test-bedrock-001';
   const pendingResult = deliverKit({
