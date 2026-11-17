@@ -869,7 +869,7 @@ async function closeTicket(interaction) {
   if (ticket.type === 'shop' && ticket.orderStatus === 'approved'
       && ticket.deliveryStatus !== 'KIT_DELIVERED' && !ticket.stockReleasedAt) {
     return replyPrivate(interaction,
-      'A entrega não foi confirmada. Antes de fechar o pedido, tente novamente ou use "Registrar estorno" depois de concluir o cancelamento/reembolso. A reserva semanal só é liberada após essa confirmação.');
+      'A entrega não foi confirmada. Antes de fechar o pedido, tente novamente ou use "Registrar cancelamento/estorno" depois de concluir o cancelamento/reembolso. A reserva semanal só é liberada após essa confirmação.');
   }
 
   closingTickets.add(interaction.channelId);
@@ -1039,6 +1039,15 @@ async function decideOrder(interaction, decision) {
         });
       } catch (error) {
         console.warn('[Asthen] Pagamento aprovado, mas não foi possível atualizar os controles do pedido:', error.message);
+        try {
+          await interaction.channel.send({
+            content: 'Pagamento aprovado. Use os controles abaixo para registrar um cancelamento/estorno, se necessário.',
+            components: [makeApprovedOrderControls(), makeCloseRow()],
+            allowedMentions: { users: [], roles: [] }
+          });
+        } catch (fallbackError) {
+          console.error('[Asthen] Não foi possível publicar os controles alternativos do pedido:', fallbackError.message);
+        }
       }
     }
 
@@ -1272,7 +1281,7 @@ async function submitStockReleaseInternal(interaction) {
   try {
     if (interaction.channel?.send) {
       await interaction.channel.send({
-        content: '<@' + ticket.userId + '> O pedido foi cancelado pela equipe e a reserva semanal foi liberada. Consulte a equipe sobre a confirmação do pagamento/estorno.',
+        content: '<@' + ticket.userId + '> O cancelamento/estorno foi registrado pela equipe e a reserva semanal do kit foi liberada.',
         allowedMentions: { users: [ticket.userId], roles: [] }
       });
     }
