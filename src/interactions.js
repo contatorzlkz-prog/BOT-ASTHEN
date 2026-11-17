@@ -37,6 +37,7 @@ import {
   makeDeliveryMessage,
   makeDeliveryRetryControls,
   makeOrderControls,
+  makeApprovedOrderControls,
   makeOrderEmbed,
   makeOrderLogEmbed,
   makePurchaseReviewControls,
@@ -50,7 +51,7 @@ import { archiveAndDeleteTicket, createPrivateTicket } from './tickets.js';
 import { CONFIG } from './config.js';
 import { deliverKit, getBridgeJob, getBridgeStatus } from './bridge.js';
 import { PIX_KEY_DEFAULT, PIX_QR_FILENAME, PIX_QR_IMAGE_PATH } from './pix.js';
-import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock } from './supabase.js';
+import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock, releaseWeeklyKitStock } from './supabase.js';
 
 const closingTickets = new Set();
 const orderDecisionsInFlight = new Set();
@@ -136,7 +137,7 @@ function catalogPromptText(kits) {
 }
 
 function weeklyStockErrorMessage(error) {
-  return 'A loja não conseguiu consultar o estoque semanal no Supabase. Verifique a configuração do banco e execute supabase/005_asthen_bot_weekly_kit_stock.sql. ' +
+  return 'A loja não conseguiu consultar o estoque semanal no Supabase. Verifique a configuração do banco e execute supabase/SETUP.sql. ' +
     (error?.message ? 'Detalhe: ' + String(error.message).slice(0, 220) : '');
 }
 
@@ -864,6 +865,11 @@ async function closeTicket(interaction) {
       'Não é possível fechar este pedido enquanto a entrega estiver pendente ou sem confirmação. ' +
       'Estado atual: ' + ticket.deliveryStatus + '. Aguarde a atualização do Minecraft ou faça a reconciliação com a equipe.');
   }
+  if (ticket.type === 'shop' && ticket.orderStatus === 'approved'
+      && ticket.deliveryStatus !== 'KIT_DELIVERED' && !ticket.stockReleasedAt) {
+    return replyPrivate(interaction,
+      'A entrega não foi confirmada. Antes de fechar o pedido, tente novamente ou use "Registrar estorno" depois de concluir o cancelamento/reembolso. A reserva semanal só é liberada após essa confirmação.');
+  }
 
   closingTickets.add(interaction.channelId);
   try {
@@ -1024,6 +1030,18 @@ async function decideOrder(interaction, decision) {
     }
 
     if (decision === 'approved') {
+      try {
+        await interaction.message.edit({
+          content: 'Pagamento confirmado por ' + interaction.user.toString() +
+            '. A entrega está sendo processada pelo Plugin-ASTHEN. O botão de estorno só deve ser usado depois de concluir o cancelamento fora do bot.',
+          components: [makeApprovedOrderControls(), makeCloseRow()]
+        });
+      } catch (error) {
+        console.warn('[Asthen] Pagamento aprovado, mas não foi possível atualizar os controles do pedido:', error.message);
+      }
+    }
+
+    if (decision === 'approved') {
       const approvedTicket = getTicket(interaction.channelId);
       void processApprovedDelivery(interaction.channel, approvedTicket, { interaction })
         .catch(error => console.error('[Asthen] Falha ao iniciar entrega do kit:', error));
@@ -1062,12 +1080,195 @@ async function handleBridgeCommand(interaction) {
     'Kits recebidos do plugin: ' + status.kits.length,
     status.lastKitsSyncAt ? 'Última lista recebida: ' + status.lastKitsSyncAt : 'Aguardando primeira sincronização do plugin.',
     'Supabase: ' + (database.enabled ? 'configurado' : 'desativado'),
-    'Estoque semanal: ' + (database.weeklyStockEnabled ? '10 unidades por kit, reserva no Supabase, reinício domingo 00:00 (Brasília)' : 'indisponível — configure o Supabase e execute a migração 005'),
+    'Estoque semanal: ' + (
+      database.weeklyStockHealth === 'ready'
+        ? 'conexão e tabela verificadas; 10 unidades por kit, reinício domingo 00:00 (Brasília)'
+        : database.weeklyStockHealth === 'error'
+          ? 'erro na consulta/liberação — ' + String(database.lastStockCheckError || 'verifique supabase/SETUP.sql')
+          : database.weeklyStockHealth === 'not_checked'
+            ? 'credenciais configuradas, mas o esquema ainda não foi verificado'
+            : 'indisponível — configure o Supabase e execute supabase/SETUP.sql'
+    ),
     database.lastSyncedAt ? 'Última sincronização do banco: ' + database.lastSyncedAt : '',
     database.lastError ? 'Aviso Supabase: ' + database.lastError : '',
     '',
     kits
   ].filter(Boolean).join('\n'));
+}
+
+async function requestStockRelease(interaction) {
+  const ticket = getTicket(interaction.channelId);
+  if (!ticket || ticket.type !== 'shop') {
+    return replyPrivate(interaction, 'Este canal não contém um pedido válido.');
+  }
+  if (!isStaff(interaction, getGuildConfig(interaction.guildId))) {
+    return replyPrivate(interaction, 'Somente a equipe autorizada pode registrar o cancelamento/estorno.');
+  }
+  if (ticket.orderStatus !== 'approved') {
+    return replyPrivate(interaction, 'Somente pedidos aprovados podem liberar uma reserva semanal.');
+  }
+  if (ticket.stockReleasedAt) {
+    return replyPrivate(interaction, 'A reserva semanal deste pedido já foi liberada.');
+  }
+  if (!ticket.stockReservationId) {
+    return replyPrivate(interaction, 'Este pedido não possui um identificador de reserva. A equipe precisa conferir o estoque manualmente.');
+  }
+  if (deliveryAttemptsInFlight.has(ticket.channelId)) {
+    return replyPrivate(interaction, 'A entrega ainda está em processamento. Aguarde um resultado definitivo antes de cancelar.');
+  }
+
+  const status = String(ticket.deliveryStatus || 'UNKNOWN');
+  if (status === 'KIT_PENDING') {
+    return replyPrivate(interaction,
+      'Este kit ainda está guardado como pendência no Minecraft e pode ser recebido depois. Resolva/remova a pendência no servidor antes de registrar um estorno.');
+  }
+  const safeFinalFailures = new Set([
+    'PLAYER_OFFLINE', 'PLATFORM_MISMATCH', 'PLATFORM_UNVERIFIABLE',
+    'KIT_NOT_FOUND', 'KIT_DISABLED', 'INVENTORY_FULL', 'DELIVERY_DISABLED',
+    'KIT_CORRUPT', 'INVALID_REQUEST'
+  ]);
+  const pluginFinalTimeout = status === 'TIMEOUT'
+    && getBridgeJob(ticket.deliveryRequestId || '')?.result?.status === 'TIMEOUT';
+  if (status !== 'KIT_DELIVERED' && !safeFinalFailures.has(status) && !pluginFinalTimeout) {
+    return replyPrivate(interaction,
+      'Ainda não existe um resultado final seguro para liberar o estoque. Estado atual: ' + status +
+      '. Não cancele enquanto a Bridge ou o Minecraft ainda puderem concluir a entrega.');
+  }
+
+  const modal = new ModalBuilder()
+    .setCustomId('order:release-stock:submit')
+    .setTitle('Registrar cancelamento / estorno');
+  const reason = new TextInputBuilder()
+    .setCustomId('reason')
+    .setLabel('Motivo do cancelamento ou estorno')
+    .setStyle(TextInputStyle.Paragraph)
+    .setMinLength(5)
+    .setMaxLength(300)
+    .setRequired(true);
+  const confirmation = new TextInputBuilder()
+    .setCustomId('confirmation')
+    .setLabel('Digite ESTORNO CONFIRMADO')
+    .setStyle(TextInputStyle.Short)
+    .setMinLength(19)
+    .setMaxLength(19)
+    .setRequired(true);
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(reason),
+    new ActionRowBuilder().addComponents(confirmation)
+  );
+
+  if (status === 'KIT_DELIVERED') {
+    const revoked = new TextInputBuilder()
+      .setCustomId('revoked')
+      .setLabel('Kit removido no jogo? Digite KIT REMOVIDO')
+      .setStyle(TextInputStyle.Short)
+      .setMinLength(11)
+      .setMaxLength(11)
+      .setRequired(true);
+    modal.addComponents(new ActionRowBuilder().addComponents(revoked));
+  }
+  return interaction.showModal(modal);
+}
+
+async function submitStockRelease(interaction) {
+  const ticket = getTicket(interaction.channelId);
+  if (!ticket || ticket.type !== 'shop' || ticket.orderStatus !== 'approved') {
+    return replyPrivate(interaction, 'Este pedido não está aprovado ou já foi encerrado.');
+  }
+  if (!isStaff(interaction, getGuildConfig(interaction.guildId))) {
+    return replyPrivate(interaction, 'Somente a equipe autorizada pode registrar o cancelamento/estorno.');
+  }
+  if (ticket.stockReleasedAt) {
+    return replyPrivate(interaction, 'A reserva semanal deste pedido já foi liberada.');
+  }
+  if (deliveryAttemptsInFlight.has(ticket.channelId)) {
+    return replyPrivate(interaction, 'A entrega ainda está em processamento. Aguarde um resultado definitivo.');
+  }
+
+  const reason = interaction.fields.getTextInputValue('reason').trim();
+  const confirmation = interaction.fields.getTextInputValue('confirmation').trim().toUpperCase();
+  if (reason.length < 5 || confirmation !== 'ESTORNO CONFIRMADO') {
+    return replyPrivate(interaction, 'Confirmação inválida. Registre somente depois de concluir o cancelamento/estorno fora do bot.');
+  }
+
+  const status = String(ticket.deliveryStatus || 'UNKNOWN');
+  const safeFinalFailures = new Set([
+    'PLAYER_OFFLINE', 'PLATFORM_MISMATCH', 'PLATFORM_UNVERIFIABLE',
+    'KIT_NOT_FOUND', 'KIT_DISABLED', 'INVENTORY_FULL', 'DELIVERY_DISABLED',
+    'KIT_CORRUPT', 'INVALID_REQUEST'
+  ]);
+  const pluginFinalTimeout = status === 'TIMEOUT'
+    && getBridgeJob(ticket.deliveryRequestId || '')?.result?.status === 'TIMEOUT';
+  if (status === 'KIT_PENDING') {
+    return replyPrivate(interaction, 'A pendência ainda pode ser recebida no Minecraft. Resolva-a no servidor antes de liberar o estoque.');
+  }
+  if (status === 'KIT_DELIVERED') {
+    const revoked = interaction.fields.getTextInputValue('revoked').trim().toUpperCase();
+    if (revoked !== 'KIT REMOVIDO') {
+      return replyPrivate(interaction, 'Não liberei o estoque. Primeiro remova o kit do jogador no Minecraft e confirme com KIT REMOVIDO.');
+    }
+  } else if (!safeFinalFailures.has(status) && !pluginFinalTimeout) {
+    return replyPrivate(interaction, 'O estado ' + status + ' não permite liberar a reserva com segurança. Aguarde a reconciliação da entrega.');
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  let release;
+  try {
+    release = await releaseWeeklyKitStock({
+      guildId: ticket.guildId || interaction.guildId,
+      requestId: ticket.stockReservationId
+    });
+  } catch (error) {
+    console.error('[Asthen Stock] Não foi possível liberar a reserva semanal:', error);
+    return interaction.editReply(
+      'Não consegui confirmar a liberação no Supabase. O pedido continua aprovado e a reserva não foi marcada como liberada no bot. Você pode repetir esta ação com segurança; a operação do banco é idempotente.'
+    );
+  }
+
+  if (!release.ok) {
+    const detail = release.reason === 'reservation_not_found'
+      ? 'A reserva não foi encontrada no Supabase.'
+      : 'O Supabase não confirmou a liberação (' + String(release.reason || 'motivo desconhecido') + ').';
+    return interaction.editReply(detail + ' Nenhum status local foi alterado.');
+  }
+
+  const releasedAt = new Date().toISOString();
+  const updated = updateTicket(interaction.channelId, {
+    orderStatus: 'cancelled',
+    stockReleasedAt: releasedAt,
+    stockReleaseReason: reason,
+    stockReleasedBy: interaction.user.id,
+    stockReleaseAlreadyApplied: release.already_released === true
+  }) || ticket;
+  appendTicketHistory(interaction.channelId, {
+    type: 'stock_released',
+    eventId: 'stock-release:' + ticket.stockReservationId,
+    reservationId: ticket.stockReservationId,
+    staffId: interaction.user.id,
+    reason,
+    alreadyReleased: release.already_released === true,
+    remaining: release.remaining,
+    at: releasedAt
+  });
+
+  try {
+    const config = getGuildConfig(interaction.guildId);
+    const logsChannel = await fetchTextChannel(interaction.guild, config.logsChannelId);
+    if (logsChannel) {
+      await logsChannel.send({
+        embeds: [makeOrderLogEmbed({ ticket: { ...updated, stockReleaseReason: reason }, decision: 'refunded', staffUser: interaction.user })],
+        allowedMentions: { users: [], roles: [] }
+      });
+    }
+  } catch (error) {
+    console.error('[Asthen Stock] Reserva liberada, mas o log do estorno não foi publicado:', error);
+  }
+
+  await interaction.editReply(
+    'Cancelamento registrado. A reserva semanal foi liberada no Supabase' +
+    (release.already_released ? ' (a operação já havia sido aplicada)' : '') +
+    '. Restante nesta semana: ' + String(release.remaining ?? '—') + '.'
+  );
 }
 
 async function notifyStaffPrivately(interaction, content) {
@@ -1151,7 +1352,9 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
   if (ticket.deliveryStatus === 'KIT_PENDING' || ticket.deliveryStatus === 'KIT_DELIVERED') {
     throw new Error('Este pedido já está pendente/entregue e não pode gerar outra entrega.');
   }
-  if (newRequest && !retryableFinalFailures.has(ticket.deliveryStatus)) {
+  const previousPluginTimedOut = ticket.deliveryStatus === 'TIMEOUT'
+    && getBridgeJob(ticket.deliveryRequestId || '')?.result?.status === 'TIMEOUT';
+  if (newRequest && !retryableFinalFailures.has(ticket.deliveryStatus) && !previousPluginTimedOut) {
     throw new Error('Não é seguro criar outro request_id para o estado ' + String(ticket.deliveryStatus || 'desconhecido') + '.');
   }
   const requestId = newRequest
@@ -1247,6 +1450,14 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
   });
 
   const success = status === 'KIT_DELIVERED' || status === 'KIT_PENDING';
+  const retryableFinalFailures = new Set([
+    'PLAYER_OFFLINE', 'PLATFORM_MISMATCH', 'PLATFORM_UNVERIFIABLE',
+    'KIT_NOT_FOUND', 'KIT_DISABLED', 'INVENTORY_FULL', 'DELIVERY_DISABLED',
+    'KIT_CORRUPT', 'INVALID_REQUEST'
+  ]);
+  const pluginFinalTimeout = status === 'TIMEOUT'
+    && getBridgeJob(requestId)?.result?.status === 'TIMEOUT';
+  const canRetryWithNewRequest = retryableFinalFailures.has(status) || pluginFinalTimeout;
   try {
     await channel.send({
       content: makeDeliveryMessage({
@@ -1259,6 +1470,7 @@ async function processApprovedDeliveryInternal(channel, ticket, { newRequest = f
         message: friendlyDeliveryMessage(status, result.message),
         pendingReason: status === 'KIT_PENDING' && /offline/i.test(String(result.message || '')) ? 'offline' : 'inventory'
       }),
+      ...(success ? {} : canRetryWithNewRequest ? { components: [makeDeliveryRetryControls('new')] } : {}),
       allowedMentions: { users: [ticket.userId], roles: [] }
     });
     updateTicket(ticket.channelId, {
@@ -1355,10 +1567,13 @@ async function retryApprovedDelivery(interaction, mode) {
     'KIT_CORRUPT',
     'INVALID_REQUEST'
   ]);
-  if (mode === 'new' && !retryableFinalFailures.has(ticket.deliveryStatus)) {
+  const previousJob = getBridgeJob(ticket.deliveryRequestId || '');
+  const previousPluginTimedOut = ticket.deliveryStatus === 'TIMEOUT'
+    && previousJob?.result?.status === 'TIMEOUT';
+  if (mode === 'new' && !retryableFinalFailures.has(ticket.deliveryStatus) && !previousPluginTimedOut) {
     return replyPrivate(interaction,
       'Não é seguro criar outro request_id para este estado (' + String(ticket.deliveryStatus || 'desconhecido') +
-      '). Reutilize o mesmo identificador ou faça a reconciliação com o Minecraft primeiro.');
+      '). Se o timeout foi apenas de comunicação, reutilize o mesmo identificador; uma nova tentativa só é segura após TIMEOUT final confirmado pelo plugin.');
   }
 
   deliveryAttemptsInFlight.add(ticket.channelId);
@@ -1465,6 +1680,7 @@ export async function handleInteraction(interaction) {
     if (interaction.customId === 'pix:copy') return showPixKey(interaction);
     if (interaction.customId === 'order:approve') return decideOrder(interaction, 'approved');
     if (interaction.customId === 'order:reject') return decideOrder(interaction, 'rejected');
+    if (interaction.customId === 'order:release-stock') return requestStockRelease(interaction);
     if (interaction.customId.startsWith('delivery:retry:')) {
       return retryApprovedDelivery(interaction, interaction.customId.split(':')[2]);
     }
@@ -1485,6 +1701,7 @@ export async function handleInteraction(interaction) {
   }
 
   if (interaction.isModalSubmit()) {
+    if (interaction.customId === 'order:release-stock:submit') return submitStockRelease(interaction);
     if (interaction.customId.startsWith('kit:edit-modal:')) return handleKitEditModal(interaction);
     if (interaction.customId === 'shop:nick:submit' || interaction.customId.startsWith('shop:nick:edit:')) {
       return handleNickSubmit(interaction);
