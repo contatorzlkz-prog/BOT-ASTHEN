@@ -113,25 +113,15 @@ export function makeSupportPanel() {
 }
 
 export function makeShopPanel(kits = []) {
-  const entries = Array.isArray(kits) && kits.length ? kits : [{
-    id: 'asthen-demo-kit',
-    name: 'ASTHEN_DEMO_KIT',
-    displayName: 'Kit Demonstração',
-    description: 'Amostra visual. Não gera compra, Pix ou entrega.',
-    price: 'Demonstração',
-    demo: true,
-    enabled: false,
-    pluginEnabled: false,
-    pluginForSale: false,
-    forSale: false
-  }];
-
+  const entries = Array.isArray(kits) ? kits : [];
   const embed = new EmbedBuilder()
     .setColor(brandColor())
     .setTitle('Loja ASTHEN')
-    .setDescription(CONFIG.shop.panelDescription);
+    .setDescription(entries.length
+      ? CONFIG.shop.panelDescription
+      : 'Nenhum kit está disponível na loja no momento.');
 
-  const components = [makeCatalogMenu(entries, 0)];
+  const components = entries.length ? [makeCatalogMenu(entries, 0)] : [];
   if (entries.length > Math.min(25, Math.max(1, Number(CONFIG.shop.maxKits) || 25))) {
     components.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder()
