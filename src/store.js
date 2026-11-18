@@ -104,6 +104,7 @@ function ensureGuildConfig(guildId) {
     pluginEnabled: typeof kit.pluginEnabled === 'boolean'
       ? kit.pluginEnabled
       : kit.missingFromPlugin === true ? false : kit.enabled !== false,
+    storeVisible: kit.storeVisible !== false,
     storeConfigured: typeof kit.storeConfigured === 'boolean'
       ? kit.storeConfigured
       : Boolean(String(kit.description || '').trim()
@@ -242,9 +243,13 @@ const DEMO_KIT = Object.freeze({
 export function getShopKits(guildId) {
   const config = ensureGuildConfig(guildId);
   const pluginKits = config.kits.filter(kit => kit.pluginManaged === true);
-  return pluginSyncedGuildsThisSession.has(guildId) && pluginKits.length > 0
-    ? pluginKits
-    : [{ ...DEMO_KIT }];
+
+  // Keep the demo only until the first real catalog arrives. An administrator
+  // may intentionally hide every real kit from the Discord storefront.
+  if (!pluginSyncedGuildsThisSession.has(guildId) || pluginKits.length === 0) {
+    return [{ ...DEMO_KIT }];
+  }
+  return pluginKits.filter(kit => kit.storeVisible !== false);
 }
 
 export function updateGuildConfig(guildId, changes) {
@@ -330,6 +335,7 @@ export function syncPluginKits(guildId, pluginKits) {
       missingFromPlugin: false,
       storeConfigured: wasConfigured,
       itemCount: Number.isFinite(Number(item.items)) ? Number(item.items) : (old?.itemCount || 0),
+      storeVisible: old?.storeVisible !== false,
       pluginManaged: true
     });
   }
