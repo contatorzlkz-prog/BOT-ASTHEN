@@ -171,7 +171,7 @@ export function makeCatalogMenu(kits = [], page = 0) {
       const reason = kit.demo
         ? 'Amostra visual · não gera compra nem cobrança'
         : soldOut
-          ? priceDescription + ' · ' + stockDescription + ' · volta domingo 00h'
+          ? 'Limite semanal atingido · ' + stockDescription + ' · volta domingo 00h'
           : kit.missingFromPlugin
             ? 'Removido do servidor'
             : kit.manuallyUnavailable
