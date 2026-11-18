@@ -64,6 +64,29 @@ test('plugin kits are imported and keep Discord shop metadata across full syncs'
   assert.equal(saved.imageUrl, 'https://cdn.example.test/kit.png');
 });
 
+test('kit removido da loja permanece oculto após novas sincronizações do plugin e pode ser recolocado', () => {
+  const guildId = testGuildId();
+  const payload = [
+    { name: 'Kit_Ferro', enabled: true, items: 12, price: 8.9, price_cents: 890, for_sale: true },
+    { name: 'Kit_Dima', enabled: true, items: 18, price: 9.9, price_cents: 990, for_sale: true }
+  ];
+  const first = syncPluginKits(guildId, payload);
+  const iron = first.kits.find(kit => kit.name === 'Kit_Ferro');
+  assert.ok(iron);
+
+  const removed = updateKit(guildId, iron.id, { storeVisible: false });
+  assert.equal(removed.storeVisible, false);
+  assert.deepEqual(getShopKits(guildId).map(kit => kit.name), ['Kit_Dima']);
+
+  const refreshed = syncPluginKits(guildId, payload);
+  assert.equal(refreshed.kits.find(kit => kit.id === iron.id).storeVisible, false);
+  assert.deepEqual(getShopKits(guildId).map(kit => kit.name), ['Kit_Dima']);
+
+  const restored = updateKit(guildId, iron.id, { storeVisible: true });
+  assert.equal(restored.storeVisible, true);
+  assert.deepEqual(getShopKits(guildId).map(kit => kit.name), ['Kit_Ferro', 'Kit_Dima']);
+});
+
 test('plugin price_cents is the exact source of truth for the displayed BRL price', () => {
   const guildId = testGuildId();
   const first = syncPluginKits(guildId, [
