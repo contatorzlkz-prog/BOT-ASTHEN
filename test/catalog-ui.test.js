@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeCatalogMenu, makeCatalogPaginationRow, makeKitAdminMenu, makeKitAdminPaginationRow, makeShopPanel, makeSupportTicketEmbed } from '../src/ui.js';
+import { makeCatalogMenu, makeCatalogPaginationRow, makeKitAdminMenu, makeKitAdminPaginationRow, makeKitEditFieldMenu, makeShopPanel, makeSupportTicketEmbed } from '../src/ui.js';
 import { CONFIG } from '../src/config.js';
 
 function makeKits(count) {
@@ -94,6 +94,19 @@ test('menus administrativos também exibem todos os 200 kits em páginas de 25',
 
   assert.equal(allValues.length, 200);
   assert.equal(new Set(allValues).size, 200);
+});
+
+test('menu de edição permite retirar um kit da loja e recolocá-lo depois', () => {
+  const visibleOptions = makeKitEditFieldMenu(makeKits(1)[0]).toJSON().components[0].options;
+  const remove = visibleOptions.find(option => option.value === 'removeFromStore');
+  assert.ok(remove);
+  assert.equal(remove.label, 'Excluir da loja');
+  assert.match(remove.description, /não apaga no Minecraft/i);
+
+  const hiddenOptions = makeKitEditFieldMenu({ ...makeKits(1)[0], storeVisible: false }).toJSON().components[0].options;
+  const restore = hiddenOptions.find(option => option.value === 'restoreFromStore');
+  assert.ok(restore);
+  assert.equal(restore.label, 'Recolocar na loja');
 });
 
 test('paginação administrativa mantém ação vinculada e desabilita limites', () => {
