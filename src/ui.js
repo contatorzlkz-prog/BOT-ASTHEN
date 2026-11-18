@@ -112,8 +112,19 @@ export function makeSupportPanel() {
   return { embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] };
 }
 
-export function makeShopPanel(kits = []) {
-  const entries = Array.isArray(kits) ? kits : [];
+export function makeShopPanel(kits) {
+  const entries = Array.isArray(kits) ? kits : [{
+    id: 'asthen-demo-kit',
+    name: 'ASTHEN_DEMO_KIT',
+    displayName: 'Kit Demonstração',
+    description: 'Amostra visual. Não gera compra, Pix ou entrega.',
+    price: 'Demonstração',
+    demo: true,
+    enabled: false,
+    pluginEnabled: false,
+    pluginForSale: false,
+    forSale: false
+  }];
   const embed = new EmbedBuilder()
     .setColor(brandColor())
     .setTitle('Loja ASTHEN')
