@@ -62,6 +62,12 @@ test('fixed shop panel contains the kit selector without an intermediate button'
   assert.equal(panel.components.length, 1);
 });
 
+test('shop panel with no visible kits does not republish a demo product', () => {
+  const panel = makeShopPanel([]);
+  assert.match(panel.embeds[0].toJSON().description, /Nenhum kit está disponível/i);
+  assert.equal(panel.components.length, 0);
+});
+
 test('shop panel with more than 25 kits adds a path to the full private list', () => {
   const panel = makeShopPanel(makeKits(30));
   assert.equal(panel.components[0].toJSON().components[0].options.length, 25);
