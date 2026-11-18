@@ -217,11 +217,23 @@ export function makeKitAdminMenu(kits = [], page = 0) {
     .setPlaceholder('Selecione um kit · página ' + (currentPage + 1) + '/' + totalPages)
     .setMinValues(1)
     .setMaxValues(1)
-    .addOptions(listed.map(kit => ({
-      label: (canBuyKit(kit) ? '' : 'Indisponível · ').concat(displayKitName(kit)).slice(0, 100),
-      description: ((kit.missingFromPlugin ? 'Removido do servidor' : kit.pluginEnabled === false ? 'Desativado no Minecraft' : kit.pluginForSale !== true ? (kit.priceCents ? 'Venda desativada' : 'Sem preço no Minecraft') : String(kit.price || 'À venda')) + ' · ' + String(kit.name)).slice(0, 100),
-      value: String(kit.id)
-    })));
+    .addOptions(listed.map(kit => {
+      const status = kit.storeVisible === false
+        ? 'Retirado da loja'
+        : kit.missingFromPlugin
+          ? 'Removido do servidor'
+          : kit.pluginEnabled === false
+            ? 'Desativado no Minecraft'
+            : kit.pluginForSale !== true
+              ? (kit.priceCents ? 'Venda desativada' : 'Sem preço no Minecraft')
+              : String(kit.price || 'À venda');
+      return {
+        label: (kit.storeVisible === false ? 'Fora da loja · ' : canBuyKit(kit) ? '' : 'Indisponível · ')
+          .concat(displayKitName(kit)).slice(0, 100),
+        description: (status + ' · ' + String(kit.name)).slice(0, 100),
+        value: String(kit.id)
+      };
+    }));
   return new ActionRowBuilder().addComponents(menu);
 }
 
@@ -256,9 +268,29 @@ export function makeKitEditFieldMenu(kit) {
     .addOptions(
       { label: 'Nome exibido na loja', description: 'Nome que o cliente verá no catálogo.', value: 'displayName' },
       { label: 'Descrição', description: 'Texto que aparece na prévia da loja.', value: 'description' },
-      { label: 'Imagem', description: 'Link HTTPS da imagem do kit.', value: 'imageUrl' }
+      { label: 'Imagem', description: 'Link HTTPS da imagem do kit.', value: 'imageUrl' },
+      {
+        label: kit.storeVisible === false ? 'Recolocar na loja' : 'Excluir da loja',
+        description: kit.storeVisible === false
+          ? 'Volta a aparecer no catálogo do Discord.'
+          : 'Remove só do catálogo do Discord; não apaga no Minecraft.',
+        value: kit.storeVisible === false ? 'restoreFromStore' : 'removeFromStore'
+      }
     );
   return new ActionRowBuilder().addComponents(menu);
+}
+
+export function makeKitStoreDeleteControls(kit) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('kit:store-delete:confirm:' + kit.id)
+      .setLabel('Confirmar exclusão')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId('kit:store-delete:cancel:' + kit.id)
+      .setLabel('Cancelar')
+      .setStyle(ButtonStyle.Secondary)
+  );
 }
 
 export function makeKitPreviewEmbed(kit) {
