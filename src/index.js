@@ -1,10 +1,10 @@
 import 'dotenv/config';
 import { ChannelType, Client, Events, GatewayIntentBits, MessageFlags, REST, Routes } from 'discord.js';
 import { commandDefinitions } from './commands.js';
-import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, getShopKits, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
-import { flushSupabaseSync } from './supabase.js';
+import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
+import { flushSupabaseSync, getNextBrasiliaSundayAt } from './supabase.js';
 import { makeDeliveryMessage, makeDeliveryRetryControls, makeShopPanel, makeSupportPanel, PANEL_LAYOUT_VERSION } from './ui.js';
-import { handleInteraction, recoverApprovedDeliveries, secureLogsChannel } from './interactions.js';
+import { handleInteraction, getShopKitsWithCurrentStock, recoverApprovedDeliveries, secureLogsChannel } from './interactions.js';
 import { discoverStandardChannels, messageHasPanel } from './channel-discovery.js';
 import { ensureBridgeSecret, getBridgeJob, startBridge } from './bridge.js';
 
@@ -97,6 +97,7 @@ async function refreshShopCatalogPanel(guild) {
   const channel = guild.channels.cache.get(config.shopPanelChannelId)
     ?? await guild.channels.fetch(config.shopPanelChannelId).catch(() => null);
   if (!channel || channel.type !== ChannelType.GuildText) return;
+  const shopPayload = makeShopPanel(await getShopKitsWithCurrentStock(guild.id));
 
   let message = null;
   if (config.shopPanelMessageId) {
@@ -106,7 +107,7 @@ async function refreshShopCatalogPanel(guild) {
     });
   }
   if (message) {
-    await message.edit(makeShopPanel(getShopKits(guild.id)));
+    await message.edit(shopPayload);
     updateGuildConfig(guild.id, {
       shopPanelMessageId: message.id,
       shopPanelVersion: PANEL_LAYOUT_VERSION
@@ -118,7 +119,7 @@ async function refreshShopCatalogPanel(guild) {
     guild,
     config.shopPanelChannelId,
     null,
-    makeShopPanel(getShopKits(guild.id)),
+    shopPayload,
     'kits',
     { channel: 'shopPanelChannelId', message: 'shopPanelMessageId', version: 'shopPanelVersion' },
     'shop:select:0'
@@ -369,16 +370,47 @@ async function refreshConfiguredPanels(client) {
       { channel: 'supportPanelChannelId', message: 'supportPanelMessageId', version: 'supportPanelVersion' },
       'support:select'
     );
-    await refreshPanelMessage(
-      guild,
-      config.shopPanelChannelId,
-      config.shopPanelMessageId,
-      makeShopPanel(getShopKits(guild.id)),
-      'kits',
-      { channel: 'shopPanelChannelId', message: 'shopPanelMessageId', version: 'shopPanelVersion' },
-      'shop:select:0'
-    );
+    try {
+      // Refresh even if the saved panel layout version is unchanged.
+      await refreshShopCatalogPanel(guild);
+    } catch (error) {
+      console.error('[Asthen] Não foi possível atualizar o estoque do painel #kits em ' + guild.name + ':', error.message);
+    }
   }
+}
+
+function scheduleWeeklyShopRefresh(client) {
+  let timer = null;
+  let stopped = false;
+
+  const schedule = delay => {
+    if (stopped) return;
+    timer = setTimeout(run, Math.min(2_147_000_000, Math.max(1_000, delay)));
+    timer.unref?.();
+  };
+
+  const run = async () => {
+    let failed = false;
+    for (const guild of client.guilds.cache.values()) {
+      if (!getGuildConfig(guild.id).shopPanelChannelId) continue;
+      try {
+        await refreshShopCatalogPanel(guild);
+      } catch (error) {
+        failed = true;
+        console.error('[Asthen] Falha ao atualizar o estoque semanal do painel #kits em ' + guild.name + ':', error.message);
+      }
+    }
+    const nextDelay = failed
+      ? 5 * 60 * 1000
+      : getNextBrasiliaSundayAt().getTime() - Date.now();
+    schedule(nextDelay);
+  };
+
+  schedule(getNextBrasiliaSundayAt().getTime() - Date.now());
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+  };
 }
 
 async function main() {
@@ -421,10 +453,12 @@ async function main() {
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
   let bridgeServer = null;
   let shutdownPromise = null;
+  let stopWeeklyShopRefresh = null;
   client.once(Events.ClientReady, async readyClient => {
     console.log(`Bot online como ${readyClient.user.tag}.`);
     console.log(`Servidores conectados: ${readyClient.guilds.cache.size}`);
     await refreshConfiguredPanels(readyClient);
+    stopWeeklyShopRefresh = scheduleWeeklyShopRefresh(readyClient);
     await retryPendingTicketNotifications(readyClient);
     if (bridgeServer) await recoverApprovedDeliveries(readyClient);
   });
@@ -455,6 +489,7 @@ async function main() {
     if (shutdownPromise) return shutdownPromise;
     shutdownPromise = (async () => {
       console.log('[Asthen] Encerrando com segurança (' + signal + ')...');
+      stopWeeklyShopRefresh?.();
       try {
         await bridgeServer?.close();
       } catch (error) {

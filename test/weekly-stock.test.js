@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getBrasiliaWeekStart,
+  getNextBrasiliaSundayAt,
   getWeeklyKitStock,
   reserveWeeklyKitStock
 } from '../src/supabase.js';
@@ -10,6 +11,14 @@ test('semana comercial começa domingo à meia-noite no horário de Brasília', 
   assert.equal(getBrasiliaWeekStart(new Date('2026-11-15T02:59:59.000Z')), '2026-11-08');
   assert.equal(getBrasiliaWeekStart(new Date('2026-11-15T03:00:00.000Z')), '2026-11-15');
   assert.equal(getBrasiliaWeekStart(new Date('2026-11-22T02:59:59.000Z')), '2026-11-15');
+  assert.equal(
+    getNextBrasiliaSundayAt(new Date('2026-11-18T18:00:00.000Z')).toISOString(),
+    '2026-11-22T03:00:00.000Z'
+  );
+  assert.equal(
+    getNextBrasiliaSundayAt(new Date('2026-11-22T03:00:00.000Z')).toISOString(),
+    '2026-11-29T03:00:00.000Z'
+  );
 });
 
 function withSupabaseEnv(run) {

@@ -133,6 +133,10 @@ async function withCurrentStock(guildId, kits) {
   return kits.map(kit => kit.demo ? kit : withWeeklyStock([kit], snapshot)[0]);
 }
 
+export async function getShopKitsWithCurrentStock(guildId) {
+  return withCurrentStock(guildId, getShopKits(guildId));
+}
+
 function catalogPromptText(kits) {
   return kits.some(kit => !kit.demo && isKitPurchasable(kit))
     ? CONFIG.shop.catalogPrompt + '\n\nCada kit tem até 10 unidades por semana. O estoque reinicia domingo às 00:00 (horário de Brasília).'
@@ -179,7 +183,9 @@ async function updatePanel(guild, config, kind, channel) {
   const versionKey = isShop ? 'shopPanelVersion' : 'supportPanelVersion';
   const oldChannelId = config[channelKey];
   const oldMessageId = config[messageKey];
-  const payload = isShop ? makeShopPanel(getShopKits(guild.id)) : makeSupportPanel();
+  const payload = isShop
+    ? makeShopPanel(await getShopKitsWithCurrentStock(guild.id))
+    : makeSupportPanel();
   let message = null;
 
   // Reaproveita o painel no canal atual, mas não deixa um ID antigo travar a configuração.
@@ -1075,6 +1081,10 @@ async function decideOrder(interaction, decision) {
       at: reviewedAt
     });
 
+    if (reservation) {
+      await refreshPublishedShopPanel(interaction.guild, interaction.guildId);
+    }
+
     try {
       await logsChannel.send({
         embeds: [makeOrderLogEmbed({ ticket: { ...ticket, orderStatus: decision }, decision, staffUser: interaction.user })],
@@ -1353,6 +1363,8 @@ async function submitStockReleaseInternal(interaction) {
     remaining: release.remaining,
     at: releasedAt
   });
+
+  await refreshPublishedShopPanel(interaction.guild, interaction.guildId);
 
   try {
     if (interaction.channel?.send) {

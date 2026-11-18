@@ -54,6 +54,20 @@ test('paginação desabilita anterior na primeira e próxima na última página'
 
 
 
+test('menu mostra o total e as unidades disponíveis antes de selecionar o kit', () => {
+  const kit = { ...makeKits(1)[0], weeklyRemaining: 3, weeklyLimit: 10 };
+  const option = makeCatalogMenu([kit]).toJSON().components[0].options[0];
+  assert.equal(option.description, 'R$ 1,00 · 3/10 disponíveis');
+});
+
+test('kit esgotado informa zero unidades e reposição no domingo', () => {
+  const kit = { ...makeKits(1)[0], weeklyRemaining: 0, weeklyLimit: 10 };
+  const option = makeCatalogMenu([kit]).toJSON().components[0].options[0];
+  assert.match(option.label, /^Esgotado · /);
+  assert.match(option.description, /0\/10 disponíveis/);
+  assert.match(option.description, /volta domingo 00h/);
+});
+
 test('fixed shop panel contains the kit selector without an intermediate button', () => {
   const panel = makeShopPanel(makeKits(3));
   assert.equal(panel.embeds[0].toJSON().title, 'Loja ASTHEN');

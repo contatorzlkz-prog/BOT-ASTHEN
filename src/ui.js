@@ -8,7 +8,7 @@ import {
 import { CONFIG, hexToInt } from './config.js';
 import { PIX_KEY_DEFAULT } from './pix.js';
 
-export const PANEL_LAYOUT_VERSION = '2.16.0';
+export const PANEL_LAYOUT_VERSION = '2.18.0';
 
 const brandColor = () => hexToInt(CONFIG.brand.color);
 
@@ -162,10 +162,16 @@ export function makeCatalogMenu(kits = [], page = 0) {
       const hasWeeklyStock = Number.isInteger(kit.weeklyRemaining);
       const soldOut = hasWeeklyStock && kit.weeklyRemaining <= 0;
       const available = canBuyKit(kit);
+      const weeklyLimit = Number.isInteger(kit.weeklyLimit) && kit.weeklyLimit > 0
+        ? kit.weeklyLimit : 10;
+      const stockDescription = hasWeeklyStock
+        ? Math.max(0, kit.weeklyRemaining) + '/' + weeklyLimit + ' disponíveis'
+        : '';
+      const priceDescription = String(kit.price || 'Preço indisponível');
       const reason = kit.demo
         ? 'Amostra visual · não gera compra nem cobrança'
         : soldOut
-          ? 'Limite semanal atingido · volta domingo 00h'
+          ? priceDescription + ' · ' + stockDescription + ' · volta domingo 00h'
           : kit.missingFromPlugin
             ? 'Removido do servidor'
             : kit.manuallyUnavailable
@@ -174,8 +180,7 @@ export function makeCatalogMenu(kits = [], page = 0) {
                 ? 'Desativado no servidor'
                 : kit.pluginForSale !== true
                   ? (kit.priceCents ? 'Venda desativada no plugin' : 'Preço ainda não definido no Minecraft')
-                  : String(kit.price || 'Preço indisponível') +
-                    (hasWeeklyStock ? ' · ' + kit.weeklyRemaining + '/' + (kit.weeklyLimit || 10) + ' esta semana' : '');
+                  : priceDescription + (stockDescription ? ' · ' + stockDescription : '');
       return {
         label: (kit.demo ? 'DEMO · ' : soldOut ? 'Esgotado · ' : available ? '' : 'Indisponível · ')
           .concat(displayKitName(kit)).slice(0, 100),

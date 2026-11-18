@@ -283,6 +283,52 @@ export function getBrasiliaWeekStart(now = new Date()) {
   return localDate.toISOString().slice(0, 10);
 }
 
+/**
+ * Returns the next Sunday at 00:00 in Brasilia, as an absolute Date.
+ * This avoids relying on the host machine's local timezone or a fixed UTC offset.
+ */
+export function getNextBrasiliaSundayAt(now = new Date()) {
+  const timeZone = 'America/Sao_Paulo';
+  const getParts = date => Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23'
+    }).formatToParts(date).map(part => [part.type, part.value])
+  );
+  const current = getParts(now);
+  const currentDateUtc = Date.UTC(
+    Number(current.year),
+    Number(current.month) - 1,
+    Number(current.day)
+  );
+  const currentWeekday = new Date(currentDateUtc).getUTCDay();
+  const daysUntilSunday = 7 - currentWeekday;
+  const targetDateUtc = currentDateUtc + daysUntilSunday * 24 * 60 * 60 * 1000;
+
+  const offsetAt = date => {
+    const parts = getParts(date);
+    const wallClockAsUtc = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour),
+      Number(parts.minute),
+      Number(parts.second)
+    );
+    return wallClockAsUtc - Math.floor(date.getTime() / 1000) * 1000;
+  };
+
+  let targetTimestamp = targetDateUtc - offsetAt(new Date(targetDateUtc));
+  targetTimestamp = targetDateUtc - offsetAt(new Date(targetTimestamp));
+  return new Date(targetTimestamp);
+}
+
 function requireWeeklyStockConfig() {
   const config = getSupabaseConfig();
   if (!config) {

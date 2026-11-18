@@ -1,3 +1,13 @@
+## 2.18.0 — 18/11/2026
+
+- O menu de #kits mostra o preço e a quantidade disponível em cada opção, antes da seleção do produto.
+- Kits sem unidades aparecem como esgotados, exibem 0/N disponíveis e informam a reposição de domingo; a confirmação continua bloqueada pelo estoque atual do Supabase.
+- O painel público é atualizado após aprovações e liberações de estoque, na inicialização do bot e automaticamente aos domingos às 00:00 (horário de Brasília).
+- Mantida a reposição semanal lógica por data de início da semana; nenhuma limpeza manual ou alteração no SQL é necessária.
+- Adicionados testes para o texto de disponibilidade e para o instante exato da reposição semanal.
+
+---
+
 ## 2.17.0 — 17/11/2026
 
 - Recuperação de entregas diferencia timeout de transporte (reenvio com o mesmo request_id) de TIMEOUT final confirmado pelo plugin (nova tentativa com identificador novo).
