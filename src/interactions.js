@@ -34,6 +34,7 @@ import {
   makeKitEditFieldMenu,
   makeKitPreviewEmbed,
   makeKitPreviewControls,
+  makeKitStoreDeleteControls,
   makeDeliveryMessage,
   makeDeliveryRetryControls,
   makeOrderControls,
@@ -87,6 +88,7 @@ function isStaff(interaction, config = getGuildConfig(interaction.guildId)) {
 function isKitPurchasable(kit) {
   return Boolean(kit)
     && kit.enabled !== false
+    && kit.storeVisible !== false
     && kit.manuallyUnavailable !== true
     && kit.missingFromPlugin !== true
     && kit.forSale === true
@@ -215,6 +217,27 @@ async function updatePanel(guild, config, kind, channel) {
     [messageKey]: message.id,
     [versionKey]: PANEL_LAYOUT_VERSION
   };
+}
+
+async function refreshPublishedShopPanel(guild, guildId) {
+  const config = getGuildConfig(guildId);
+  if (!config.shopPanelChannelId) return null;
+  try {
+    const channel = await fetchTextChannel(guild, config.shopPanelChannelId);
+    if (!channel) return false;
+    const changes = await updatePanel(guild, config, 'shop', channel);
+    updateGuildConfig(guildId, changes);
+    return true;
+  } catch (error) {
+    console.error('[Asthen] Kit atualizado, mas não foi possível atualizar o painel da loja:', error.message);
+    return false;
+  }
+}
+
+function shopPanelRefreshNotice(refreshed) {
+  return refreshed === false
+    ? '\nNão consegui atualizar automaticamente a mensagem do canal #kits. Confira as permissões do bot e use /configurar kits para republicar o painel.'
+    : '';
 }
 
 export async function secureLogsChannel(channel, guild) {
@@ -422,10 +445,63 @@ async function handleKitEditFieldSelection(interaction) {
   const field = interaction.values[0];
   const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId && item.pluginManaged === true);
   if (!kit) return replyPrivate(interaction, 'Este kit não está mais sincronizado com o Minecraft.');
+
+  if (field === 'removeFromStore') {
+    if (kit.storeVisible === false) return replyPrivate(interaction, 'Este kit já está fora da loja.');
+    return interaction.update({
+      content: 'Confirme a exclusão de **' + String(kit.displayName || makeKitDisplayName(kit.name)) + '** da loja do Discord.\n\nIsso não apaga o kit do Minecraft nem do Plugin-ASTHEN. Ele apenas deixa de aparecer no catálogo e não aceitará novos pedidos pela loja.',
+      embeds: [makeKitPreviewEmbed(kit)],
+      components: [makeKitStoreDeleteControls(kit)]
+    });
+  }
+
+  if (field === 'restoreFromStore') {
+    if (kit.storeVisible !== false) return replyPrivate(interaction, 'Este kit já aparece na loja.');
+    await interaction.deferUpdate();
+    const updated = updateKit(interaction.guildId, kitId, { storeVisible: true });
+    if (!updated) return interaction.editReply({ content: 'Não foi possível recolocar o kit na loja.', embeds: [], components: [] });
+    const refreshed = await refreshPublishedShopPanel(interaction.guild, interaction.guildId);
+    return interaction.editReply({
+      content: 'Kit recolocado no catálogo do Discord.' + shopPanelRefreshNotice(refreshed),
+      embeds: [makeKitPreviewEmbed(updated)],
+      components: [makeKitEditFieldMenu(updated)]
+    });
+  }
+
   if (!['displayName', 'description', 'imageUrl'].includes(field)) {
     return replyPrivate(interaction, 'Campo de edição inválido.');
   }
   return interaction.showModal(makeKitEditModal(kit, field));
+}
+
+async function handleKitStoreDeleteConfirm(interaction) {
+  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem excluir kits da loja.');
+  const kitId = interaction.customId.split(':').at(-1);
+  const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId && item.pluginManaged === true);
+  if (!kit) return replyPrivate(interaction, 'Este kit não está mais sincronizado com o Minecraft.');
+  if (kit.storeVisible === false) return replyPrivate(interaction, 'Este kit já foi retirado da loja.');
+
+  await interaction.deferUpdate();
+  const updated = updateKit(interaction.guildId, kitId, { storeVisible: false });
+  if (!updated) return interaction.editReply({ content: 'Não foi possível retirar o kit da loja.', embeds: [], components: [] });
+  const refreshed = await refreshPublishedShopPanel(interaction.guild, interaction.guildId);
+  return interaction.editReply({
+    content: 'Kit retirado da loja do Discord. Ele continua cadastrado no Minecraft/Plugin-ASTHEN e pode ser recolocado pelo menu de edição.' + shopPanelRefreshNotice(refreshed),
+    embeds: [makeKitPreviewEmbed(updated)],
+    components: [makeKitEditFieldMenu(updated)]
+  });
+}
+
+async function handleKitStoreDeleteCancel(interaction) {
+  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem editar kits.');
+  const kitId = interaction.customId.split(':').at(-1);
+  const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId && item.pluginManaged === true);
+  if (!kit) return replyPrivate(interaction, 'Este kit não está mais sincronizado com o Minecraft.');
+  return interaction.update({
+    content: 'Exclusão cancelada. O kit continua na loja.',
+    embeds: [makeKitPreviewEmbed(kit)],
+    components: [makeKitEditFieldMenu(kit)]
+  });
 }
 
 async function handleKitEditModal(interaction) {
@@ -1684,6 +1760,8 @@ export async function handleInteraction(interaction) {
     if (interaction.customId.startsWith('kit:admin-page:edit:')) {
       return handleKitAdminPage(interaction, Number(interaction.customId.split(':')[3]));
     }
+    if (interaction.customId.startsWith('kit:store-delete:confirm:')) return handleKitStoreDeleteConfirm(interaction);
+    if (interaction.customId.startsWith('kit:store-delete:cancel:')) return handleKitStoreDeleteCancel(interaction);
     if (interaction.customId.startsWith('shop:buy:')) {
       return beginPurchaseWithKit(interaction, interaction.customId.split(':')[2]);
     }
