@@ -62,6 +62,9 @@ function startBridge(opts) {
     maxLongPollMs = DEFAULT_MAX_LONG_POLL_MS,
     maxBody = 64 * 1024,
     maxLongPollConnections = 8,
+    rateLimitWindowMs = 60_000,
+    rateLimitMaxRequests = 180,
+    rateLimitMaxEntries = 10_000,
     dataDir = process.env.ASTHEN_DATA_DIR || path.resolve(process.cwd(), 'data'),
     onKits = () => {},
     onResult = () => {},
@@ -77,6 +80,8 @@ function startBridge(opts) {
   }
 
   const queueFile = path.join(dataDir, 'bridge-queue.json');
+  const rateBuckets = new Map();
+  let rateLimitChecks = 0;
   const jobs = new Map();
   const resultWaiters = new Map();
   const pendingPulls = new Set();
@@ -84,8 +89,17 @@ function startBridge(opts) {
   let closing = false;
   let lastUnauthorizedWarningAt = 0;
 
+  function ensureSecureDataDir() {
+    fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    if (process.platform !== 'win32') {
+      try { fs.chmodSync(dataDir, 0o700); } catch (error) {
+        log.warn && log.warn('[asthen-bridge] não foi possível restringir data/:', error.message);
+      }
+    }
+  }
+
   function persistJobs() {
-    fs.mkdirSync(dataDir, { recursive: true });
+    ensureSecureDataDir();
     const body = JSON.stringify({
       version: 1,
       updated_at: new Date().toISOString(),
@@ -100,6 +114,7 @@ function startBridge(opts) {
       fs.closeSync(fd);
     }
     fs.renameSync(temporary, queueFile);
+    if (process.platform !== 'win32') fs.chmodSync(queueFile, 0o600);
   }
 
   function loadJobs() {
@@ -183,6 +198,52 @@ function startBridge(opts) {
       }
     }
     if (changed) persistJobs();
+  }
+
+  function checkRateLimit(req, res, pathname) {
+    const now = Date.now();
+    const remote = String(req.socket?.remoteAddress || 'unknown').replace(/^::ffff:/, '');
+    // X-Forwarded-For is intentionally ignored because it may be client-controlled.
+    const route = pathname === '/plugin/v1/pull' ? 'pull'
+      : pathname === '/plugin/v1/result' ? 'result'
+        : pathname === '/plugin/v1/events' || pathname === '/plugin/v1/delivery-update' ? 'event'
+          : pathname === '/plugin/v1/kits' ? 'kits' : 'other';
+    const key = remote + ':' + route;
+    let bucket = rateBuckets.get(key);
+
+    if (!bucket) {
+      if (rateBuckets.size >= Math.max(100, rateLimitMaxEntries)) {
+        for (const [entryKey, entry] of rateBuckets) {
+          if (now - entry.startedAt >= rateLimitWindowMs) rateBuckets.delete(entryKey);
+        }
+      }
+      if (rateBuckets.size >= Math.max(100, rateLimitMaxEntries)) {
+        res.setHeader('Retry-After', '60');
+        sendJson(res, 429, { success: false, status: 'RATE_LIMITED', retry_after: 60 });
+        return false;
+      }
+      bucket = { startedAt: now, count: 0 };
+      rateBuckets.set(key, bucket);
+    } else if (now - bucket.startedAt >= rateLimitWindowMs) {
+      bucket.startedAt = now;
+      bucket.count = 0;
+    }
+
+    bucket.count += 1;
+    if (bucket.count > Math.max(1, rateLimitMaxRequests)) {
+      const retryAfter = Math.max(1, Math.ceil((rateLimitWindowMs - (now - bucket.startedAt)) / 1000));
+      res.setHeader('Retry-After', String(retryAfter));
+      sendJson(res, 429, { success: false, status: 'RATE_LIMITED', retry_after: retryAfter });
+      return false;
+    }
+
+    rateLimitChecks += 1;
+    if (rateLimitChecks % 256 === 0) {
+      for (const [entryKey, entry] of rateBuckets) {
+        if (now - entry.startedAt >= rateLimitWindowMs) rateBuckets.delete(entryKey);
+      }
+    }
+    return true;
   }
 
   function sendJson(res, status, body) {
@@ -475,6 +536,8 @@ function startBridge(opts) {
 
   const server = http.createServer(async (req, res) => {
     try {
+      const url = new URL(req.url, 'http://localhost');
+      if (!checkRateLimit(req, res, url.pathname)) return;
       const match = /^Bearer\s+(.+)$/i.exec(String(req.headers.authorization || '').trim());
       if (!match || !safeEqual(match[1].trim(), token)) {
         const now = Date.now();
@@ -486,8 +549,6 @@ function startBridge(opts) {
         }
         return sendJson(res, 401, { success: false, status: 'UNAUTHORIZED' });
       }
-
-      const url = new URL(req.url, 'http://localhost');
 
       if (req.method === 'GET' && url.pathname === '/plugin/v1/pull') {
         const rawLimit = url.searchParams.get('limit') || '5';
@@ -553,11 +614,7 @@ function startBridge(opts) {
           return sendJson(res, 400, { success: false, status: 'INVALID_KIT_LIST' });
         }
         lastKits = clone(body.kits);
-        try {
-          onKits(clone(lastKits));
-        } catch (error) {
-          log.error && log.error('[asthen-bridge] onKits falhou:', error);
-        }
+        notifyCallback(onKits, 'onKits', clone(lastKits));
         return sendJson(res, 200, { success: true });
       }
 
