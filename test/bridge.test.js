@@ -239,3 +239,19 @@ test('a API informa estado e rejeita nick ou nome de kit inválido', async () =>
     /Nome do kit inválido/
   );
 });
+
+
+test('a API aplica rate limit por IP e informa quando tentar novamente', async () => {
+  let limited = null;
+  for (let index = 0; index < 190; index += 1) {
+    const response = await fetch(baseUrl + '/plugin/v1/pull', { headers: authHeaders() });
+    if (response.status === 429) {
+      limited = response;
+      break;
+    }
+    assert.equal(response.status, 204);
+  }
+  assert.ok(limited, 'a Bridge deve limitar uma sequência abusiva de chamadas');
+  assert.equal((await limited.json()).status, 'RATE_LIMITED');
+  assert.ok(Number(limited.headers.get('retry-after')) >= 1);
+});
