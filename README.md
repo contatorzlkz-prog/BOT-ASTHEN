@@ -2,7 +2,7 @@
 
 Bot Discord do ASTHEN MC: atendimento privado, loja de kits Bedrock, pagamentos por Pix e entrega pelo Plugin-ASTHEN.
 
-[**Baixar a versão mais recente**](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/latest) · [Todas as versões](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases) · [Guia](docs/GUIA.md) · [Integração Minecraft](docs/PLUGIN-INTEGRATION.md)
+[**Baixar código-fonte atualizado (2.19.0)**](https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip) · [Versões publicadas](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases) · [Guia](docs/GUIA.md) · [Integração Minecraft](docs/PLUGIN-INTEGRATION.md)
 
 ![ASTHEN BOT 2.19.0](https://img.shields.io/badge/ASTHEN-2.19.0-555555)
 ![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)
