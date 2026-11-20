@@ -8,6 +8,20 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.resolve(process.env.ASTHEN_DATA_DIR?.trim() || path.resolve(currentDir, '../data'));
 const dataFile = path.join(dataDir, 'state.json');
 
+function secureLocalPath(target, mode) {
+  // POSIX permission bits are meaningful on Linux/macOS. Windows uses inherited
+  // NTFS ACLs; chmod there is not a reliable ACL-management mechanism.
+  if (process.platform === 'win32') return;
+  try { fs.chmodSync(target, mode); } catch (error) {
+    if (error.code !== 'ENOENT') console.warn('[Asthen] Não foi possível restringir permissões locais:', error.message);
+  }
+}
+
+function ensureSecureDataDir() {
+  fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  secureLocalPath(dataDir, 0o700);
+}
+
 const emptyState = () => ({ guilds: {}, tickets: {}, purchaseDrafts: {} });
 let state = emptyState();
 const pluginSyncedGuildsThisSession = new Set();
@@ -122,6 +136,7 @@ function preserveCorruptStore(reason) {
   const backupFile = dataFile + '.corrupt-' + timestamp + '.bak';
   try {
     fs.copyFileSync(dataFile, backupFile, fs.constants.COPYFILE_EXCL);
+    secureLocalPath(backupFile, 0o600);
   } catch (backupError) {
     console.error('[Asthen] Não foi possível criar cópia de recuperação de state.json:', backupError.message);
   }
@@ -141,7 +156,7 @@ export function getStoreDataDir() {
 }
 
 export function loadStore() {
-  fs.mkdirSync(dataDir, { recursive: true });
+  ensureSecureDataDir();
 
   let contents;
   try {
@@ -176,11 +191,11 @@ export function loadStore() {
 }
 
 export function saveStore({ syncRemote = true } = {}) {
-  fs.mkdirSync(dataDir, { recursive: true });
+  ensureSecureDataDir();
   const temporaryFile = dataFile + '.tmp';
   const contents = JSON.stringify(state, null, 2) + '\n';
   try {
-    const descriptor = fs.openSync(temporaryFile, 'w');
+    const descriptor = fs.openSync(temporaryFile, 'w', 0o600);
     try {
       fs.writeFileSync(descriptor, contents, 'utf8');
       fs.fsyncSync(descriptor);
@@ -188,6 +203,7 @@ export function saveStore({ syncRemote = true } = {}) {
       fs.closeSync(descriptor);
     }
     fs.renameSync(temporaryFile, dataFile);
+    secureLocalPath(dataFile, 0o600);
     if (syncRemote) {
       const snapshot = JSON.parse(contents);
       scheduleSupabaseSync(snapshot);
