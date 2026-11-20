@@ -1,71 +1,217 @@
+<div align="center">
+
 # ASTHEN BOT
 
-Bot Discord do ASTHEN MC: atendimento privado, loja de kits Bedrock, pagamentos por Pix e entrega pelo Plugin-ASTHEN.
+**Discord e Minecraft trabalhando juntos.**
 
-[**Baixar código-fonte atualizado (2.19.0)**](https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip) · [Versões publicadas](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases) · [Guia](docs/GUIA.md) · [Integração Minecraft](docs/PLUGIN-INTEGRATION.md)
+Atendimento privado, loja de kits Bedrock e entrega integrada ao Plugin-ASTHEN.
 
-![ASTHEN BOT 2.19.0](https://img.shields.io/badge/ASTHEN-2.19.0-555555)
-![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)
-![discord.js 14](https://img.shields.io/badge/discord.js-14-5865F2?logo=discord&logoColor=white)
-![Supabase](https://img.shields.io/badge/Supabase-persistência-3ECF8E?logo=supabase&logoColor=white)
-[![CI](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml)
+<p>
+  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/archive/refs/heads/main.zip">
+    <img src="https://img.shields.io/badge/BAIXAR-C%C3%93DIGO--FONTE-30343B?style=flat-square&labelColor=17191D" alt="Baixar código-fonte">
+  </a>
+  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases">
+    <img src="https://img.shields.io/badge/VERS%C3%95ES-RELEASES-30343B?style=flat-square&labelColor=17191D" alt="Versões">
+  </a>
+  <a href="docs/GUIA.md">
+    <img src="https://img.shields.io/badge/ABRIR-GUIA-30343B?style=flat-square&labelColor=17191D" alt="Guia">
+  </a>
+</p>
 
-## O que ele faz
+<p>
+  <img src="https://img.shields.io/badge/ASTHEN-2.19.0-555B63?style=flat-square" alt="Versão 2.19.0">
+  <img src="https://img.shields.io/badge/Node.js-22%2B-555B63?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 22 ou superior">
+  <img src="https://img.shields.io/badge/discord.js-14.27.0-555B63?style=flat-square&logo=discord&logoColor=white" alt="discord.js 14.27.0">
+  <img src="https://img.shields.io/badge/npm-lockfile-ativo-555B63?style=flat-square&logo=npm&logoColor=white" alt="Lockfile npm">
+  <a href="https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/contatorzlkz-prog/BOT-ASTHEN/ci.yml?branch=main&style=flat-square&label=CI" alt="Status da CI">
+  </a>
+</p>
 
-- Tickets privados de suporte e compra.
-- Catálogo de kits sincronizado com o Minecraft.
-- Aprovação manual de pagamentos pela equipe.
-- Reserva semanal de estoque no Supabase, com liberação idempotente após cancelamentos/estornos confirmados.
-- Entrega e recuperação de pedidos pelo Plugin-ASTHEN, com proteção contra tickets duplicados.
+</div>
 
-## Instalação
+---
 
-**Windows:** extraia o ZIP, execute `INSTALAR.bat` e depois `INICIAR.bat`.
+## Navegação
 
-**Linux:** execute `bash linux/setup-linux.sh` e depois `bash linux/start-linux.sh`.
+[Visão geral](#visao-geral) · [Início rápido](#inicio-rapido) · [Discord](#configuracao-do-discord) · [Minecraft e loja](#minecraft-e-loja) · [Desenvolvimento](#desenvolvimento) · [Segurança](#seguranca-e-atualizacao) · [Documentação](#documentacao)
 
-Requisito: Node.js 22 ou superior.
+## Visão geral
+
+O ASTHEN BOT conecta a operação da loja ao Discord. Os clientes abrem tickets e consultam o catálogo; a equipe revisa os pagamentos; o Plugin-ASTHEN continua responsável pelos kits reais e pela entrega dentro do Minecraft.
+
+| Área | Recursos |
+|---|---|
+| **Atendimento** | Tickets privados para suporte e compras. |
+| **Loja** | Catálogo sincronizado com os kits recebidos do Minecraft. |
+| **Pagamentos** | Dados Pix e aprovação manual pela equipe. |
+| **Estoque** | Reservas semanais no Supabase, com liberação idempotente em cancelamentos e estornos confirmados. |
+| **Entregas** | Integração com o Plugin-ASTHEN, fila persistente e recuperação de solicitações. |
+
+### Como as partes se conectam
+
+```text
+       CLIENTE
+          |
+          v
+   DISCORD / ASTHEN BOT
+    tickets e catálogo
+          |
+          v
+   REVISÃO DO PAGAMENTO
+        pela equipe
+          |
+          v
+       SUPABASE
+   reserva de estoque
+          |
+          v
+     BRIDGE HTTPS
+          |
+          v
+     PLUGIN-ASTHEN
+          |
+          v
+     SERVIDOR PAPER
+   entrega dentro do jogo
+```
+
+> **Importante:** o Plugin-ASTHEN é a fonte oficial dos kits, itens, preços e disponibilidade. O Discord controla apenas a apresentação comercial do catálogo.
+
+## Início rápido
+
+**Requisito:** Node.js 22 ou superior.
+
+### Windows
+
+1. Baixe e extraia o código-fonte.
+2. Execute `INSTALAR.bat`.
+3. Informe o token do bot e o Application ID quando solicitado.
+4. Inicie com `INICIAR.bat`.
+
+### Linux
+
+Na pasta do projeto, execute:
+
+```bash
+bash linux/setup-linux.sh
+bash linux/start-linux.sh
+```
+
+Para a operação completa da loja, configure também o Supabase e conecte o Plugin-ASTHEN. Os passos estão no [guia de operação](docs/GUIA.md).
 
 ## Configuração do Discord
 
-Crie os canais abaixo (o bot também consegue reconhecê-los pelos nomes) e configure:
+Crie os canais abaixo. O bot também consegue reconhecer os nomes padrão automaticamente.
 
 | Canal | Finalidade |
 |---|---|
-| `#atendimento` | Painel de suporte |
-| `#kits` | Loja de kits |
-| `#logs` | Registros administrativos; somente administradores e o bot |
-| `#compradores` | Avisos de compras |
+| `#atendimento` | Painel de suporte e abertura de tickets. |
+| `#kits` | Painel da loja e catálogo Minecraft. |
+| `#logs` | Registros administrativos; acesso restrito a administradores e ao bot. |
+| `#compradores` | Avisos de compras confirmadas. |
 
-Comando de configuração:
+Configure os canais e o cargo da equipe:
 
 ```text
 /configurar atendimento:#atendimento kits:#kits logs:#logs compradores:#compradores equipe:@Equipe
 ```
 
-O cargo `equipe` pode revisar pagamentos e fechar tickets. Ele não recebe acesso ao canal `#logs`.
+O cargo informado em `equipe` pode revisar pagamentos e fechar tickets. **Ele não recebe acesso ao canal `#logs`**.
 
-## Loja e Minecraft
+## Minecraft e loja
 
-O Plugin-ASTHEN é a origem dos kits, itens, preços e disponibilidade. No Discord, use `/kit listar` e `/kit editar` para consultar os kits e ajustar apenas sua apresentação comercial.
+### Catálogo e kits
 
-A loja aceita Bedrock. Para validar jogadores Bedrock no Paper, use Geyser e Floodgate. O controle de estoque semanal e a aprovação de compras dependem do Supabase; execute `supabase/SETUP.sql` no SQL Editor.
+O Plugin-ASTHEN é responsável por criar os kits reais, definir seus itens, preços e disponibilidade. Depois da sincronização, eles aparecem no catálogo do Discord.
 
-A integração usa a API local `127.0.0.1:8787`, publicada para o plugin por um túnel HTTPS. O segredo `DKB_SECRET` do bot precisa ser igual a `bridge.secret` no plugin. Veja [o guia de integração](docs/PLUGIN-INTEGRATION.md) e [o guia de túneis](docs/TUNNEL-SETUP.md).
+Comandos disponíveis no Discord:
+
+| Comando | Ação |
+|---|---|
+| `/kit listar` | Consulta os kits e o estado de venda recebido do Minecraft. |
+| `/kit editar` | Ajusta nome exibido, descrição e imagem HTTPS. |
+
+O Discord não cria kits nem altera seus itens, preços ou disponibilidade oficial.
+
+### Supabase
+
+O Supabase mantém o estado compartilhado da operação e controla as reservas semanais de estoque.
+
+1. Abra **Supabase → SQL Editor → New query**.
+2. Execute o arquivo completo [`supabase/SETUP.sql`](supabase/SETUP.sql).
+3. Configure as credenciais no arquivo local `.env`.
+
+As credenciais devem permanecer no ambiente privado da instalação. Não as coloque neste README nem em commits.
+
+### Conexão com o servidor Minecraft
+
+A API do bot escuta localmente em `127.0.0.1:8787`. O Plugin-ASTHEN consulta essa API por uma URL HTTPS publicada por um túnel.
+
+O segredo `DKB_SECRET` do bot deve ser igual ao valor de `bridge.secret` no plugin. Preserve o mesmo segredo ao atualizar o bot.
+
+Consulte:
+- [Integração BOT-ASTHEN ↔ Plugin-ASTHEN](docs/PLUGIN-INTEGRATION.md)
+- [Configuração dos túneis HTTPS](docs/TUNNEL-SETUP.md)
 
 ## Desenvolvimento
+
+O repositório inclui `package-lock.json`, que registra as versões diretas e transitivas das dependências.
 
 ```bash
 npm ci
 npm run verify
 ```
 
-O `package-lock.json` fixa as versões diretas e transitivas. Use `npm ci` para instalar exatamente a árvore registrada; esse comando também verifica se o `package.json` e o lockfile estão sincronizados.
+Para iniciar o bot manualmente:
 
-A CI executa essas verificações a cada atualização da branch principal.
+```bash
+npm start
+```
 
-## Dados e segurança
+O comando `npm run verify` executa as verificações de sintaxe, valida os comandos do Discord e roda os testes automatizados. A CI repete essas verificações nas atualizações da branch principal e em pull requests.
 
-Preserve `.env` e toda a pasta `data/` ao atualizar. Não publique tokens Discord, `DKB_SECRET`, credenciais Supabase ou backups com dados de clientes. Em Linux/macOS, o bot restringe `data/` a 700 e os arquivos de estado a 600. No Windows, mantenha a pasta em uma conta confiável e restrinja o acesso pelas permissões NTFS.
+### Estrutura do projeto
 
-**Atenção ao Pix:** esta distribuição ainda contém a chave Pix e o QR Code da instalação original no código/arquivo de imagem. Eles são públicos neste repositório. Antes de usar uma cópia para outra loja, confira e substitua os dois; não presuma que pertencem à sua instalação.
+| Caminho | Conteúdo |
+|---|---|
+| `src/` | Código principal do bot, comandos, tickets e armazenamento. |
+| `bot-integration/` | Bridge HTTP entre o bot e o Plugin-ASTHEN. |
+| `supabase/` | SQL de configuração do banco. |
+| `docs/` | Guias de operação, integração e túneis. |
+| `linux/` | Scripts de instalação e inicialização no Linux. |
+| `test/` | Testes automatizados. |
+
+## Segurança e atualização
+
+Antes de atualizar, faça uma cópia de segurança de:
+
+- `.env` — token Discord, `DKB_SECRET` e credenciais Supabase.
+- `data/` — estado local, configurações e fila persistente de entregas.
+
+Substitua os arquivos do programa, mas preserve esses dados. Nunca publique tokens, segredos, credenciais ou backups que contenham informações de clientes.
+
+No Linux/macOS, o bot restringe as permissões de `data/` e dos arquivos de estado. No Windows, limite o acesso à pasta pelas permissões NTFS da conta que executa o bot.
+
+> [!CAUTION]
+> **Dados Pix da instalação original:** esta distribuição pública ainda contém a chave Pix e o QR Code da loja original no código/arquivo de imagem. Antes de usar uma cópia em outra loja, confira e substitua **os dois**. Não presuma que esses dados pertencem à sua instalação.
+
+## Documentação
+
+| Documento | Conteúdo |
+|---|---|
+| [Guia de operação](docs/GUIA.md) | Instalação, configuração do Discord, loja, Supabase e backups. |
+| [Integração do plugin](docs/PLUGIN-INTEGRATION.md) | Contrato HTTP, autenticação, sincronização e entregas. |
+| [Túneis HTTPS](docs/TUNNEL-SETUP.md) | Publicação segura da API local para o servidor Minecraft. |
+| [Histórico de versões](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases) | Versões e arquivos publicados. |
+| [GitHub Actions](https://github.com/contatorzlkz-prog/BOT-ASTHEN/actions) | Execução das verificações automatizadas. |
+
+---
+
+<div align="center">
+
+**ASTHEN BOT · 2.19.0**
+
+<sub>Atendimento, loja e entregas em uma única integração.</sub>
+
+</div>
