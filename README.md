@@ -36,6 +36,8 @@ Atendimento privado, loja de kits Bedrock e entrega integrada ao Plugin-ASTHEN.
 
 [Visão geral](#visao-geral) · [Início rápido](#inicio-rapido) · [Discord](#configuracao-do-discord) · [Minecraft e loja](#minecraft-e-loja) · [Desenvolvimento](#desenvolvimento) · [Segurança](#seguranca-e-atualizacao) · [Documentação](#documentacao)
 
+<a id="visao-geral"></a>
+
 ## Visão geral
 
 O ASTHEN BOT conecta a operação da loja ao Discord. Os clientes abrem tickets e consultam o catálogo; a equipe revisa os pagamentos; o Plugin-ASTHEN continua responsável pelos kits reais e pela entrega dentro do Minecraft.
@@ -78,6 +80,8 @@ O ASTHEN BOT conecta a operação da loja ao Discord. Os clientes abrem tickets 
 
 > **Importante:** o Plugin-ASTHEN é a fonte oficial dos kits, itens, preços e disponibilidade. O Discord controla apenas a apresentação comercial do catálogo.
 
+<a id="inicio-rapido"></a>
+
 ## Início rápido
 
 **Requisito:** Node.js 22 ou superior.
@@ -100,6 +104,8 @@ bash linux/start-linux.sh
 
 Para a operação completa da loja, configure também o Supabase e conecte o Plugin-ASTHEN. Os passos estão no [guia de operação](docs/GUIA.md).
 
+<a id="configuracao-do-discord"></a>
+
 ## Configuração do Discord
 
 Crie os canais abaixo. O bot também consegue reconhecer os nomes padrão automaticamente.
@@ -118,6 +124,8 @@ Configure os canais e o cargo da equipe:
 ```
 
 O cargo informado em `equipe` pode revisar pagamentos e fechar tickets. **Ele não recebe acesso ao canal `#logs`**.
+
+<a id="minecraft-e-loja"></a>
 
 ## Minecraft e loja
 
@@ -154,6 +162,8 @@ Consulte:
 - [Integração BOT-ASTHEN ↔ Plugin-ASTHEN](docs/PLUGIN-INTEGRATION.md)
 - [Configuração dos túneis HTTPS](docs/TUNNEL-SETUP.md)
 
+<a id="desenvolvimento"></a>
+
 ## Desenvolvimento
 
 O repositório inclui `package-lock.json`, que registra as versões diretas e transitivas das dependências.
@@ -182,6 +192,8 @@ O comando `npm run verify` executa as verificações de sintaxe, valida os coman
 | `linux/` | Scripts de instalação e inicialização no Linux. |
 | `test/` | Testes automatizados. |
 
+<a id="seguranca-e-atualizacao"></a>
+
 ## Segurança e atualização
 
 Antes de atualizar, faça uma cópia de segurança de:
@@ -195,6 +207,8 @@ No Linux/macOS, o bot restringe as permissões de `data/` e dos arquivos de esta
 
 > [!CAUTION]
 > **Dados Pix da instalação original:** esta distribuição pública ainda contém a chave Pix e o QR Code da loja original no código/arquivo de imagem. Antes de usar uma cópia em outra loja, confira e substitua **os dois**. Não presuma que esses dados pertencem à sua instalação.
+
+<a id="documentacao"></a>
 
 ## Documentação
 
