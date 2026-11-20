@@ -67,6 +67,9 @@ export async function startBridge({
   host = process.env.DKB_HOST?.trim() || '127.0.0.1',
   port = Number(process.env.DKB_PORT || 8787),
   leaseMs = 90000,
+  rateLimitWindowMs = 60_000,
+  rateLimitMaxRequests = 180,
+  rateLimitMaxEntries = 10_000,
   dataDir = process.env.ASTHEN_DATA_DIR?.trim() || path.resolve(process.cwd(), 'data'),
   onKits = () => {},
   onResult = () => {},
@@ -86,6 +89,9 @@ export async function startBridge({
     host,
     port: Number(port),
     leaseMs,
+    rateLimitWindowMs,
+    rateLimitMaxRequests,
+    rateLimitMaxEntries,
     dataDir: path.resolve(dataDir),
     onResult: result => {
       lastQueueStatus = instance.queueCounts?.() || lastQueueStatus;
