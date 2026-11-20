@@ -2,8 +2,9 @@
 
 Bot Discord do ASTHEN MC: atendimento privado, loja de kits Bedrock, pagamentos por Pix e entrega pelo Plugin-ASTHEN.
 
-[**Baixar ASTHEN BOT 2.17.0**](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/download/v2.17.0/ASTHEN-BOT-v2.17.0.zip) · [Todas as versões](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases) · [Guia](docs/GUIA.md) · [Integração Minecraft](docs/PLUGIN-INTEGRATION.md)
+[**Baixar a versão mais recente**](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases/latest) · [Todas as versões](https://github.com/contatorzlkz-prog/BOT-ASTHEN/releases) · [Guia](docs/GUIA.md) · [Integração Minecraft](docs/PLUGIN-INTEGRATION.md)
 
+![ASTHEN BOT 2.19.0](https://img.shields.io/badge/ASTHEN-2.19.0-555555)
 ![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)
 ![discord.js 14](https://img.shields.io/badge/discord.js-14-5865F2?logo=discord&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-persistência-3ECF8E?logo=supabase&logoColor=white)
@@ -56,15 +57,15 @@ A integração usa a API local `127.0.0.1:8787`, publicada para o plugin por um 
 
 ```bash
 npm install
-npm run check
-npm run check:commands
-npm test
+npm run verify
 ```
+
+As dependências diretas estão fixadas em versões exatas. O repositório ainda não contém `package-lock.json`; portanto, as dependências transitivas ainda não são totalmente reproduzíveis. Gere e versione o lockfile em uma máquina com acesso ao registro npm antes de migrar os instaladores para `npm ci`.
 
 A CI executa essas verificações a cada atualização da branch principal.
 
 ## Dados e segurança
 
-Preserve `.env` e toda a pasta `data/` ao atualizar. Não publique tokens Discord, `DKB_SECRET`, credenciais Supabase ou backups com dados de clientes.
+Preserve `.env` e toda a pasta `data/` ao atualizar. Não publique tokens Discord, `DKB_SECRET`, credenciais Supabase ou backups com dados de clientes. Em Linux/macOS, o bot restringe `data/` a 700 e os arquivos de estado a 600. No Windows, mantenha a pasta em uma conta confiável e restrinja o acesso pelas permissões NTFS.
 
 **Atenção ao Pix:** esta distribuição ainda contém a chave Pix e o QR Code da instalação original no código/arquivo de imagem. Eles são públicos neste repositório. Antes de usar uma cópia para outra loja, confira e substitua os dois; não presuma que pertencem à sua instalação.

@@ -67,6 +67,9 @@ export async function startBridge({
   host = process.env.DKB_HOST?.trim() || '127.0.0.1',
   port = Number(process.env.DKB_PORT || 8787),
   leaseMs = 90000,
+  rateLimitWindowMs = 60_000,
+  rateLimitMaxRequests = 180,
+  rateLimitMaxEntries = 10_000,
   dataDir = process.env.ASTHEN_DATA_DIR?.trim() || path.resolve(process.cwd(), 'data'),
   onKits = () => {},
   onResult = () => {},
@@ -86,31 +89,28 @@ export async function startBridge({
     host,
     port: Number(port),
     leaseMs,
+    rateLimitWindowMs,
+    rateLimitMaxRequests,
+    rateLimitMaxEntries,
     dataDir: path.resolve(dataDir),
     onResult: result => {
       lastQueueStatus = instance.queueCounts?.() || lastQueueStatus;
-      try {
-        onResult(result);
-      } catch (error) {
+      Promise.resolve().then(() => onResult(result)).catch(error => {
         log.error('[Asthen Bridge] Não foi possível processar o resultado do plugin:', error);
-      }
+      });
     },
     onDeliveryUpdate: update => {
       lastQueueStatus = instance.queueCounts?.() || lastQueueStatus;
-      try {
-        onDeliveryUpdate(update);
-      } catch (error) {
+      Promise.resolve().then(() => onDeliveryUpdate(update)).catch(error => {
         log.error('[Asthen Bridge] Não foi possível processar a atualização posterior:', error);
-      }
+      });
     },
     onKits: kits => {
       lastKits = Array.isArray(kits) ? kits.map(kit => ({ ...kit })) : [];
       lastKitsSyncAt = new Date().toISOString();
-      try {
-        onKits(lastKits.map(kit => ({ ...kit })));
-      } catch (error) {
+      Promise.resolve().then(() => onKits(lastKits.map(kit => ({ ...kit })))).catch(error => {
         log.error('[Asthen Bridge] Não foi possível processar a lista de kits:', error);
-      }
+      });
     },
     log
   });
