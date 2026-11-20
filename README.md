@@ -56,11 +56,11 @@ A integração usa a API local `127.0.0.1:8787`, publicada para o plugin por um 
 ## Desenvolvimento
 
 ```bash
-npm install
+npm ci
 npm run verify
 ```
 
-As dependências diretas estão fixadas em versões exatas. O repositório ainda não contém `package-lock.json`; portanto, as dependências transitivas ainda não são totalmente reproduzíveis. Gere e versione o lockfile em uma máquina com acesso ao registro npm antes de migrar os instaladores para `npm ci`.
+O `package-lock.json` fixa as versões diretas e transitivas. Use `npm ci` para instalar exatamente a árvore registrada; esse comando também verifica se o `package.json` e o lockfile estão sincronizados.
 
 A CI executa essas verificações a cada atualização da branch principal.
 
