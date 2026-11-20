@@ -3,7 +3,7 @@ name: Generate npm lockfile
 on:
   push:
     branches:
-      - maintenance/generate-package-lock
+      - main
 
 permissions:
   contents: write
