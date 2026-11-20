@@ -89,28 +89,22 @@ export async function startBridge({
     dataDir: path.resolve(dataDir),
     onResult: result => {
       lastQueueStatus = instance.queueCounts?.() || lastQueueStatus;
-      try {
-        onResult(result);
-      } catch (error) {
+      Promise.resolve().then(() => onResult(result)).catch(error => {
         log.error('[Asthen Bridge] Não foi possível processar o resultado do plugin:', error);
-      }
+      });
     },
     onDeliveryUpdate: update => {
       lastQueueStatus = instance.queueCounts?.() || lastQueueStatus;
-      try {
-        onDeliveryUpdate(update);
-      } catch (error) {
+      Promise.resolve().then(() => onDeliveryUpdate(update)).catch(error => {
         log.error('[Asthen Bridge] Não foi possível processar a atualização posterior:', error);
-      }
+      });
     },
     onKits: kits => {
       lastKits = Array.isArray(kits) ? kits.map(kit => ({ ...kit })) : [];
       lastKitsSyncAt = new Date().toISOString();
-      try {
-        onKits(lastKits.map(kit => ({ ...kit })));
-      } catch (error) {
+      Promise.resolve().then(() => onKits(lastKits.map(kit => ({ ...kit })))).catch(error => {
         log.error('[Asthen Bridge] Não foi possível processar a lista de kits:', error);
-      }
+      });
     },
     log
   });
