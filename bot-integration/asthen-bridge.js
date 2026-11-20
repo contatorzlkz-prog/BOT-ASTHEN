@@ -114,7 +114,11 @@ function startBridge(opts) {
       fs.closeSync(fd);
     }
     fs.renameSync(temporary, queueFile);
-    if (process.platform !== 'win32') fs.chmodSync(queueFile, 0o600);
+    if (process.platform !== 'win32') {
+      try { fs.chmodSync(queueFile, 0o600); } catch (error) {
+        log.warn && log.warn('[asthen-bridge] não foi possível restringir bridge-queue.json:', error.message);
+      }
+    }
   }
 
   function loadJobs() {
@@ -535,9 +539,6 @@ function startBridge(opts) {
   }
 
   const server = http.createServer(async (req, res) => {
-  server.requestTimeout = 30_000;
-  server.headersTimeout = 15_000;
-  server.keepAliveTimeout = 5_000;
     try {
       const url = new URL(req.url, 'http://localhost');
       if (!checkRateLimit(req, res, url.pathname)) return;
@@ -634,6 +635,9 @@ function startBridge(opts) {
       if (!res.writableEnded) res.destroy();
     }
   });
+  server.requestTimeout = 30_000;
+  server.headersTimeout = 15_000;
+  server.keepAliveTimeout = 5_000;
 
   loadJobs();
   pruneTerminalJobs();
