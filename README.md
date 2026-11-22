@@ -19,7 +19,7 @@ Atendimento privado, loja de kits Bedrock e entrega integrada ao Plugin-ASTHEN.
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/ASTHEN-2.19.0-555B63?style=flat-square" alt="Versão 2.19.0">
+  <img src="https://img.shields.io/badge/ASTHEN-2.20.0-555B63?style=flat-square" alt="Versão 2.20.0">
   <img src="https://img.shields.io/badge/Node.js-22%2B-555B63?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 22 ou superior">
   <img src="https://img.shields.io/badge/discord.js-14.27.0-555B63?style=flat-square&logo=discord&logoColor=white" alt="discord.js 14.27.0">
   <img src="https://img.shields.io/badge/npm-lockfile-ativo-555B63?style=flat-square&logo=npm&logoColor=white" alt="Lockfile npm">
@@ -44,11 +44,12 @@ O ASTHEN BOT conecta a operação da loja ao Discord. Os clientes abrem tickets 
 
 | Área | Recursos |
 |---|---|
-| **Atendimento** | Tickets privados para suporte e compras. |
+| **Atendimento** | Tickets privados para suporte e compras, com transcrição exportada para #logs ao fechar. |
 | **Loja** | Catálogo sincronizado com os kits recebidos do Minecraft. |
 | **Pagamentos** | Dados Pix e aprovação manual pela equipe. |
 | **Estoque** | Reservas semanais no Supabase, com liberação idempotente em cancelamentos e estornos confirmados. |
-| **Entregas** | Integração com o Plugin-ASTHEN, fila persistente e recuperação de solicitações. |
+| **Manutenção** | Backups automáticos, restauração verificada, limpeza de dados antigos e inicialização automática. |
+| **Entregas** | Integração com o Plugin-ASTHEN, fila persistente, monitoramento de conexão e recuperação de solicitações. |
 
 ### Como as partes se conectam
 
@@ -139,6 +140,9 @@ Comandos disponíveis no Discord:
 |---|---|
 | `/kit listar` | Consulta os kits e o estado de venda recebido do Minecraft. |
 | `/kit editar` | Ajusta nome exibido, descrição e imagem HTTPS. |
+| `/backup status` | Consulta os backups disponíveis e o último backup. |
+| `/backup criar` | Cria um backup manual protegido. |
+| `/backup listar` | Lista os últimos backups disponíveis. |
 
 O Discord não cria kits nem altera seus itens, preços ou disponibilidade oficial.
 
@@ -151,6 +155,8 @@ O Supabase mantém o estado compartilhado da operação e controla as reservas s
 3. Configure as credenciais no arquivo local `.env`.
 
 As credenciais devem permanecer no ambiente privado da instalação. Não as coloque neste README nem em commits.
+
+O bot cria backups automáticos a cada 12 horas e ao iniciar. Para restaurar, feche o processo do bot, execute `RESTAURAR.bat` e escolha um identificador listado. A restauração verifica os hashes e cria um backup de segurança antes de substituir os dados.
 
 ### Conexão com o servidor Minecraft
 
@@ -180,6 +186,10 @@ npm start
 ```
 
 O comando `npm run verify` executa as verificações de sintaxe, valida os comandos do Discord e roda os testes automatizados. A CI repete essas verificações nas atualizações da branch principal e em pull requests.
+
+### Inicialização automática
+
+No Windows, execute `INSTALAR-AUTOSTART.bat` para criar uma tarefa no Agendador de Tarefas, iniciada no logon e configurada para reiniciar após falhas. No Linux, execute `bash linux/install-autostart.sh` para instalar o serviço systemd do usuário. Use os scripts de remoção correspondentes para desativar o início automático.
 
 ### Estrutura do projeto
 
@@ -224,7 +234,7 @@ No Linux/macOS, o bot restringe as permissões de `data/` e dos arquivos de esta
 
 <div align="center">
 
-**ASTHEN BOT · 2.19.0**
+**ASTHEN BOT · 2.20.0**
 
 <sub>Atendimento, loja e entregas em uma única integração.</sub>
 

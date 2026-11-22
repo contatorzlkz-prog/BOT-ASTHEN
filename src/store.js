@@ -434,6 +434,35 @@ export function appendTicketHistory(channelId, event) {
   return entry;
 }
 
+export function pruneOldStoreData(options = {}) {
+  const now = Number(options.now ?? Date.now());
+  const draftRetentionMs = Number(options.draftRetentionMs ?? 7 * 24 * 60 * 60 * 1000);
+  const ticketRetentionMs = Number(options.ticketRetentionMs ?? 90 * 24 * 60 * 60 * 1000);
+  let drafts = 0;
+  let tickets = 0;
+
+  for (const [key, draft] of Object.entries(state.purchaseDrafts)) {
+    if (!draft) continue;
+    const updatedAt = Date.parse(draft.updatedAt || draft.createdAt || '');
+    if (Number.isFinite(updatedAt) && now - updatedAt > draftRetentionMs) {
+      delete state.purchaseDrafts[key];
+      drafts += 1;
+    }
+  }
+
+  for (const [channelId, ticket] of Object.entries(state.tickets)) {
+    if (!ticket || ticket.status !== 'closed' || !ticket.transcriptExportedAt) continue;
+    const closedAt = Date.parse(ticket.closedAt || ticket.transcriptExportedAt || '');
+    if (Number.isFinite(closedAt) && now - closedAt > ticketRetentionMs) {
+      delete state.tickets[channelId];
+      tickets += 1;
+    }
+  }
+
+  if (drafts || tickets) saveStore();
+  return { drafts, tickets };
+}
+
 function purchaseDraftKey(guildId, userId) {
   return guildId + ':' + userId;
 }

@@ -99,7 +99,48 @@ Antes de atualizar, faça cópia de `.env` e de toda a pasta `data/`.
 
 Substitua os demais arquivos pelos da nova versão. Nunca compartilhe esses arquivos ou credenciais.
 
-## 7. Verificações
+## 7. Manutenção, backups e restauração
+
+### Transcrições de tickets
+
+Ao fechar um ticket, o bot exporta a conversa para o canal privado `#logs` antes de excluir o canal original. A exportação inclui autor, horário, conteúdo, mensagens do bot, embeds e referências a respostas. Anexos de até 8 MB são copiados para a pasta local `data/archives/` e enviados ao canal de logs, com limite de 40 anexos por ticket e 40 MB no total. Arquivos que excederem os limites ou falharem no download ficam identificados na transcrição com o motivo e o link original.
+
+O ticket não é excluído se a exportação da transcrição falhar. Mantenha `#logs` configurado e permita que o bot envie arquivos nesse canal. O acesso continua restrito a administradores e ao bot; o cargo de atendimento não recebe acesso aos logs.
+
+### Limpeza automática
+
+- Rascunhos de compra sem atividade expiram após 7 dias. Rascunhos em criação não são removidos.
+- Tickets fechados só entram na limpeza depois de possuir uma transcrição exportada; a retenção padrão é de 90 dias.
+- Cópias locais de anexos em `data/archives/` são removidas após 180 dias.
+- Backups são limitados a 30 cópias e 45 dias de retenção.
+
+Registros sem confirmação de exportação são preservados. A limpeza roda diariamente e não remove tickets abertos nem entregas pendentes.
+
+### Backups e restauração
+
+O ASTHEN cria um backup ao iniciar e a cada 12 horas. Cada cópia contém `.env`, `data/state.json` e `data/bridge-queue.json`, quando presentes. Os arquivos recebem hashes SHA-256 e a restauração verifica a integridade antes de substituir os dados. A pasta `backups/` é privada e está excluída do Git.
+
+Comandos de administrador no Discord:
+
+- `/backup status`: consulta os últimos backups e sua integridade.
+- `/backup criar`: cria uma cópia manual.
+- `/backup listar`: lista os backups disponíveis.
+
+Para restaurar no Windows, feche o bot e execute `RESTAURAR.bat`. No Linux, execute `bash linux/restore-backup.sh` depois de parar o serviço, ou use `node src/maintenance-cli.js restore ID_DO_BACKUP`. A ferramenta exige que o processo esteja parado, verifica os hashes e cria primeiro uma cópia de segurança do estado atual. Não edite manualmente os arquivos dentro de uma pasta de backup.
+
+### Inicialização e recuperação automáticas
+
+No Windows, execute `INSTALAR-AUTOSTART.bat` para criar a tarefa `ASTHEN BOT` no Agendador de Tarefas. Ela inicia no logon e tenta reiniciar o processo se houver uma falha. Use `REMOVER-AUTOSTART.bat` para desativar.
+
+No Linux com systemd, execute `bash linux/install-autostart.sh`. O serviço de usuário reinicia após falhas; acompanhe com `systemctl --user status asthen-bot` e `journalctl --user -u asthen-bot -f`. Use `bash linux/remove-autostart.sh` para remover.
+
+O bot também cria `data/asthen.pid` para impedir duas instâncias simultâneas. Após reiniciar, ele continua a recuperação das entregas aprovadas usando a fila persistente e o mesmo `request_id`.
+
+### Monitoramento Minecraft
+
+O comando `/bridge status` mostra o último contato autenticado do Plugin-ASTHEN, se ele está respondendo e a idade do pedido mais antigo na fila. Se a Bridge cair ou o plugin ficar mais de 90 segundos sem contato após já ter conectado, o bot envia um alerta de queda/recuperação para `#logs`. O monitoramento também avisa quando a saúde do Supabase muda entre normal e erro.
+
+## 8. Verificações
 
 ```bash
 npm run check

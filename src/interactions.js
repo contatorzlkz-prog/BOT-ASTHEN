@@ -53,6 +53,8 @@ import { CONFIG } from './config.js';
 import { deliverKit, getBridgeJob, getBridgeStatus } from './bridge.js';
 import { PIX_KEY_DEFAULT, PIX_QR_FILENAME, PIX_QR_IMAGE_PATH } from './pix.js';
 import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock, releaseWeeklyKitStock } from './supabase.js';
+import { exportTicketTranscript } from './transcripts.js';
+import { createBackup, listBackups } from './maintenance.js';
 
 const closingTickets = new Set();
 const orderDecisionsInFlight = new Set();
@@ -260,7 +262,8 @@ export async function secureLogsChannel(channel, guild) {
         PermissionsBitField.Flags.ViewChannel,
         PermissionsBitField.Flags.SendMessages,
         PermissionsBitField.Flags.ReadMessageHistory,
-        PermissionsBitField.Flags.EmbedLinks
+        PermissionsBitField.Flags.EmbedLinks,
+        PermissionsBitField.Flags.AttachFiles
       ]
     });
   }
@@ -272,6 +275,7 @@ export async function secureLogsChannel(channel, guild) {
         PermissionsBitField.Flags.SendMessages,
         PermissionsBitField.Flags.ReadMessageHistory,
         PermissionsBitField.Flags.EmbedLinks,
+        PermissionsBitField.Flags.AttachFiles,
         PermissionsBitField.Flags.ManageMessages
       ]
     });
@@ -933,47 +937,30 @@ async function closeTicket(interaction) {
   if (!ticket) return replyPrivate(interaction, 'Este canal não está registrado como ticket.');
 
   const config = getGuildConfig(interaction.guildId);
-  if (!isStaff(interaction, config)) {
-    return replyPrivate(interaction, 'Somente a equipe autorizada pode fechar este canal.');
-  }
-  if (ticket.status !== 'open' || closingTickets.has(interaction.channelId)) {
-    return replyPrivate(interaction, 'Este ticket já está sendo fechado.');
-  }
-  if (deliveryAttemptsInFlight.has(interaction.channelId)) {
-    return replyPrivate(interaction, 'A entrega ainda está sendo processada. Aguarde a confirmação antes de fechar este pedido.');
-  }
+  if (!isStaff(interaction, config)) return replyPrivate(interaction, 'Somente a equipe autorizada pode fechar este canal.');
+  if (ticket.status !== 'open' || closingTickets.has(interaction.channelId)) return replyPrivate(interaction, 'Este ticket já está sendo fechado.');
+  if (deliveryAttemptsInFlight.has(interaction.channelId)) return replyPrivate(interaction, 'A entrega ainda está sendo processada. Aguarde a confirmação antes de fechar este pedido.');
   if (ticket.type === 'shop' && ticket.orderStatus === 'approved'
       && (!ticket.deliveryStatus || ['PLATFORM_REQUIRED', 'QUEUED', 'TIMEOUT', 'WAITING', 'KIT_PENDING'].includes(ticket.deliveryStatus))) {
-    return replyPrivate(interaction,
-      'Não é possível fechar este pedido enquanto a entrega estiver pendente ou sem confirmação. ' +
-      'Estado atual: ' + ticket.deliveryStatus + '. Aguarde a atualização do Minecraft ou faça a reconciliação com a equipe.');
+    return replyPrivate(interaction, 'Não é possível fechar este pedido enquanto a entrega estiver pendente ou sem confirmação. Estado atual: ' + ticket.deliveryStatus + '. Aguarde a atualização do Minecraft ou faça a reconciliação com a equipe.');
   }
   if (ticket.type === 'shop' && ticket.orderStatus === 'approved'
       && ticket.deliveryStatus !== 'KIT_DELIVERED' && !ticket.stockReleasedAt) {
-    return replyPrivate(interaction,
-      'A entrega não foi confirmada. Antes de fechar o pedido, tente novamente ou use "Registrar cancelamento/estorno" depois de concluir o cancelamento/reembolso. A reserva semanal só é liberada após essa confirmação.');
+    return replyPrivate(interaction, 'A entrega não foi confirmada. Antes de fechar este pedido, tente novamente ou use "Registrar cancelamento/estorno" depois de concluir o cancelamento/reembolso. A reserva semanal só é liberada após essa confirmação.');
   }
+
+  const logsChannel = await fetchTextChannel(interaction.guild, config.logsChannelId);
+  if (!logsChannel) return replyPrivate(interaction, 'Não posso fechar este ticket sem arquivar a conversa. Configure um canal privado de logs com /configurar logs:#canal e tente novamente.');
 
   closingTickets.add(interaction.channelId);
   try {
-    if (ticket.type === 'shop' && ticket.orderStatus === 'pending') {
-      const logsChannel = await fetchTextChannel(interaction.guild, config.logsChannelId);
-      if (!logsChannel) {
-        return replyPrivate(
-          interaction,
-          'Não posso fechar este pedido pendente sem registrar o resultado. Configure o canal de logs com /configurar logs:#canal e tente novamente.'
-        );
-      }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+    if (ticket.type === 'shop' && ticket.orderStatus === 'pending') {
       await logsChannel.send({
-        embeds: [makeOrderLogEmbed({
-          ticket,
-          decision: 'closed_without_result',
-          staffUser: interaction.user
-        })],
+        embeds: [makeOrderLogEmbed({ ticket, decision: 'closed_without_result', staffUser: interaction.user })],
         allowedMentions: { users: [], roles: [] }
       });
-
       updateTicket(interaction.channelId, {
         orderStatus: 'closed_without_result',
         closedWithoutResultBy: interaction.user.id,
@@ -981,13 +968,45 @@ async function closeTicket(interaction) {
       });
     }
 
-    // Atualiza a interação sem mandar uma segunda confirmação privada.
-    await interaction.deferUpdate();
-    await interaction.channel.send(
-      'Este atendimento será encerrado por ' + interaction.user.toString() +
-      ' e o canal será excluído em 3 segundos.'
-    );
+    let transcript = null;
+    if (!ticket.transcriptExportedAt) {
+      transcript = await exportTicketTranscript({
+        channel: interaction.channel,
+        ticket,
+        logsChannel,
+        closedBy: interaction.user
+      });
+      updateTicket(interaction.channelId, {
+        transcriptExportedAt: transcript.exportedAt,
+        transcriptMessageId: transcript.logMessageId,
+        transcriptExportedBy: interaction.user.id,
+        transcriptMessageCount: transcript.messageCount,
+        transcriptAttachmentCount: transcript.attachmentCount
+      });
+      appendTicketHistory(interaction.channelId, {
+        type: 'transcript_exported',
+        eventId: 'transcript-exported:' + interaction.channelId,
+        logMessageId: transcript.logMessageId,
+        messageCount: transcript.messageCount,
+        attachmentCount: transcript.attachmentCount
+      });
+    }
+
+    await interaction.channel.send({
+      content: 'Este atendimento foi arquivado em #logs por ' + interaction.user.toString() + '. O canal será excluído em 3 segundos.',
+      allowedMentions: { users: [interaction.user.id], roles: [] }
+    });
     await archiveAndDeleteTicket({ channel: interaction.channel, closedById: interaction.user.id });
+    await interaction.editReply({
+      content: transcript
+        ? 'Ticket arquivado em #logs. Transcrição: ' + transcript.messageCount + ' mensagens · ' + transcript.attachmentCount + ' anexo(s).'
+        : 'Ticket já possuía uma transcrição arquivada em #logs e foi fechado.'
+    });
+  } catch (error) {
+    console.error('[Asthen Transcript] Não foi possível arquivar/fechar o ticket:', error);
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply('Não consegui concluir o arquivamento. O canal foi mantido para não perder a conversa. Verifique as permissões e o tamanho dos anexos e tente novamente.').catch(() => {});
+    }
   } finally {
     closingTickets.delete(interaction.channelId);
   }
@@ -1147,6 +1166,31 @@ async function decideOrder(interaction, decision) {
   }
 }
 
+async function handleBackupCommand(interaction) {
+  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem consultar ou criar backups.');
+  const action = interaction.options.getSubcommand();
+  if (action === 'listar' || action === 'status') {
+    const backups = listBackups();
+    if (!backups.length) return replyPrivate(interaction, 'Nenhum backup foi criado ainda. O backup automático será executado após a inicialização.');
+    const lines = backups.slice(0, 10).map(item =>
+      (item.valid ? 'OK' : 'ERRO') + ' · ' + item.id + ' · ' +
+      (item.createdAt || 'data desconhecida') + ' · ' + (item.bytes / 1024).toFixed(1) + ' KB'
+    );
+    return replyPrivate(interaction, '**Backups ASTHEN · ' + backups.length + ' disponível(is)**\n' +
+      lines.join('\n') + '\n\nRestauração: feche o bot e execute RESTAURAR.bat na pasta do projeto.');
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  try {
+    const result = createBackup({ reason: 'manual pelo Discord · administrador ' + interaction.user.id });
+    return interaction.editReply('Backup criado e verificado: ' + result.id +
+      '\nArquivos protegidos: ' + result.files + ' · ' + (result.bytes / 1024).toFixed(1) + ' KB.');
+  } catch (error) {
+    console.error('[Asthen Backup] Falha ao criar backup manual:', error);
+    return interaction.editReply('Não consegui criar o backup. Verifique o espaço em disco e o console do bot.');
+  }
+}
+
 async function handleBridgeCommand(interaction) {
   if (!canManage(interaction)) {
     return replyPrivate(interaction, 'Somente administradores ou quem tem Gerenciar servidor pode usar este comando.');
@@ -1173,6 +1217,17 @@ async function handleBridgeCommand(interaction) {
     'API: ' + (status.running ? 'online' : 'offline'),
     'Endereço local: ' + (status.running ? 'http://' + status.host + ':' + status.port : 'não iniciada'),
     'Pedidos aguardando: ' + status.pending,
+    'Plugin Minecraft: ' + (!status.lastPluginContactAt
+      ? 'aguardando primeiro contato autenticado'
+      : status.pluginOnline
+        ? 'conectado'
+        : 'sem comunicação há ' + Math.floor((Date.now() - status.lastPluginContactAt) / 1000) + 's'),
+    'Último contato do plugin: ' + (status.lastPluginContactAt
+      ? new Date(status.lastPluginContactAt).toLocaleString('pt-BR')
+      : 'nenhum contato nesta execução'),
+    'Pedido mais antigo na fila: ' + (status.oldestPendingAgeMs === null || status.oldestPendingAgeMs === undefined
+      ? 'nenhum'
+      : Math.floor(status.oldestPendingAgeMs / 1000) + 's'),
     'Kits recebidos do plugin: ' + status.kits.length,
     status.lastKitsSyncAt ? 'Última lista recebida: ' + status.lastKitsSyncAt : 'Aguardando primeira sincronização do plugin.',
     'Supabase: ' + (database.enabled ? 'configurado' : 'desativado'),
@@ -1754,6 +1809,7 @@ async function handleCommand(interaction) {
 
   if (interaction.commandName === 'configurar') return configureChannels(interaction);
   if (interaction.commandName === 'kit') return handleKitCommand(interaction);
+  if (interaction.commandName === 'backup') return handleBackupCommand(interaction);
   if (interaction.commandName === 'bridge') return handleBridgeCommand(interaction);
 }
 

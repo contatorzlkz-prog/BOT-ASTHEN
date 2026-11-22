@@ -10,3 +10,10 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 /cloudflared.exe
+
+# Dados operacionais privados (transcrições, anexos, backups e logs)
+/backups/
+/data/archives/
+/data/logs/
+/data/asthen.pid
+/data/asthen.pid.tmp

@@ -1,3 +1,15 @@
+## 2.20.0 — 22/11/2026
+
+- Ao fechar tickets, a conversa completa é exportada para o canal privado `#logs`; anexos pequenos são copiados para os logs e mantidos localmente.
+- Rascunhos abandonados expiram após 7 dias; tickets fechados só são removidos do estado depois de exportados e após 90 dias.
+- Backups automáticos a cada 12 horas, verificação SHA-256, retenção limitada e restauração offline com cópia de segurança prévia.
+- `/backup status`, `/backup criar` e `/backup listar` para administração dos backups.
+- Monitoramento da API Bridge, último contato autenticado do Plugin-ASTHEN, idade da fila e alertas de queda/recuperação em `#logs`.
+- Inicialização automática no logon do Windows e serviço systemd no Linux, com reinício após falhas.
+- Bloqueio de instâncias duplicadas do bot e sincronização da versão `VERSION.txt` com o pacote.
+
+---
+
 ## 2.18.0 — 18/11/2026
 
 - O menu de #kits mostra o preço e a quantidade disponível em cada opção, antes da seleção do produto.

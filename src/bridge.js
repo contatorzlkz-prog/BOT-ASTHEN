@@ -56,6 +56,12 @@ export function getBridgeStatus() {
     port: boundPort,
     pending: bridgeInstance?.pendingCount?.() || 0,
     queue: bridgeInstance?.queueCounts?.() || lastQueueStatus,
+    oldestPendingAgeMs: bridgeInstance?.oldestPendingAgeMs?.() ?? null,
+    lastPluginContactAt: bridgeInstance?.lastPluginContactAt?.() ?? null,
+    pluginOnline: Boolean(
+      bridgeInstance?.lastPluginContactAt?.()
+      && Date.now() - bridgeInstance.lastPluginContactAt() <= 90_000
+    ),
     longPolls: bridgeInstance?.longPollCount?.() || 0,
     kits: (bridgeInstance?.kits?.() || lastKits).map(kit => ({ ...kit })),
     lastKitsSyncAt
@@ -127,6 +133,8 @@ export async function startBridge({
       port: listeningPort,
       getJob: requestId => instance.getJob(requestId),
       queueCounts: () => instance.queueCounts(),
+      oldestPendingAgeMs: () => instance.oldestPendingAgeMs(),
+      lastPluginContactAt: () => instance.lastPluginContactAt(),
       longPollCount: () => instance.longPollCount(),
       pendingCount: () => instance.pendingCount(),
       close: async () => {
