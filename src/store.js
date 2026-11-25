@@ -257,9 +257,10 @@ export function findPlayerRegistrationByNick(minecraftNick) {
 
 export function savePlayerRegistration(discordId, minecraftNick, guildId = null) {
   const id = String(discordId || '').trim();
-  const nick = String(minecraftNick || '').trim();
+  const rawNick = String(minecraftNick ?? '');
+  const nick = rawNick.trim();
   if (!/^\d{17,20}$/.test(id)) throw new Error('ID do Discord inválido para o registro.');
-  if (!/^[A-Za-z0-9_. ]{1,32}$/.test(nick) || nick.startsWith(' ') || nick.endsWith(' ')) {
+  if (rawNick !== nick || !/^[A-Za-z0-9_. ]{1,32}$/.test(nick)) {
     throw new Error('Nick Minecraft inválido. Use de 1 a 32 caracteres válidos.');
   }
   const normalized = nick.toLocaleLowerCase('en-US');
