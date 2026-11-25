@@ -8,6 +8,9 @@ import { handleInteraction, getShopKitsWithCurrentStock, recoverApprovedDeliveri
 import { discoverStandardChannels, messageHasPanel } from './channel-discovery.js';
 import { ensureBridgeSecret, getBridgeJob, startBridge } from './bridge.js';
 import { refreshRegistrationPanel, reconcileGuildMembers, reconcileGuildMember, handleRegisteredNicknameUpdate } from './registration.js';
+import { acquireRuntimeLock, startMaintenance } from './maintenance.js';
+
+let releaseRuntimeLock = null;
 
 function assertRuntime() {
   const major = Number(process.versions.node.split('.')[0]);
@@ -429,6 +432,8 @@ function scheduleWeeklyShopRefresh(client) {
 
 async function main() {
   assertRuntime();
+  releaseRuntimeLock = acquireRuntimeLock();
+  process.once('exit', () => releaseRuntimeLock?.());
   const token = process.env.DISCORD_TOKEN?.trim();
   const clientId = process.env.CLIENT_ID?.trim();
   const guildId = process.env.GUILD_ID?.trim();
@@ -468,6 +473,7 @@ async function main() {
   let bridgeServer = null;
   let shutdownPromise = null;
   let stopWeeklyShopRefresh = null;
+  let stopMaintenance = null;
   client.once(Events.ClientReady, async readyClient => {
     console.log(`Bot online como ${readyClient.user.tag}.`);
     console.log(`Servidores conectados: ${readyClient.guilds.cache.size}`);
@@ -480,6 +486,7 @@ async function main() {
       }
     }
     stopWeeklyShopRefresh = scheduleWeeklyShopRefresh(readyClient);
+    stopMaintenance = startMaintenance(readyClient);
     await retryPendingTicketNotifications(readyClient);
     if (bridgeServer) await recoverApprovedDeliveries(readyClient);
   });
@@ -527,6 +534,7 @@ async function main() {
     shutdownPromise = (async () => {
       console.log('[Asthen] Encerrando com segurança (' + signal + ')...');
       stopWeeklyShopRefresh?.();
+      stopMaintenance?.();
       try {
         await bridgeServer?.close();
       } catch (error) {
@@ -543,6 +551,8 @@ async function main() {
         console.error('[Asthen Supabase] Não foi possível concluir a última sincronização:', error.message);
       }
       client.destroy();
+      releaseRuntimeLock?.();
+      releaseRuntimeLock = null;
       process.exit(0);
     })();
     return shutdownPromise;
@@ -598,5 +608,7 @@ process.on('unhandledRejection', error => {
 
 main().catch(error => {
   console.error(`\n[Asthen] Inicialização interrompida: ${error.message}\n`);
+  releaseRuntimeLock?.();
+  releaseRuntimeLock = null;
   process.exitCode = 1;
 });
