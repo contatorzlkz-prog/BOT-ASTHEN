@@ -1,12 +1,26 @@
 # Changelog
 
-## 2.20.0 — Registro Minecraft e identidade
+## 2.21.0 — 25/11/2026 · Registro e identidade Minecraft
 
-- Adiciona índice de jogadores ao snapshot existente do Supabase, vinculado ao ID do Discord.
-- Adiciona registro/atualização de nick, detecção de duplicidade e reconciliação de cargo/apelido.
-- Integra a identificação cadastrada à loja e aos tickets sem pedir o nick em cada compra.
-- Adiciona gerenciamento secundário em `/conta` e autorização de cargos para `#registro`.
-- Mantém o fluxo comercial, os pagamentos, o estoque e a entrega existentes.
+- Adiciona registro de jogadores vinculado ao ID do Discord no snapshot Supabase existente.
+- Sincroniza nick, apelido e cargo Membro; restringe #registro a quem precisa cadastrar, mantendo exceções para equipe e cargos autorizados.
+- A loja consulta o nick automaticamente e deixa a atualização cadastral como ação secundária; preserva compras, kits, preços, estoque, pagamentos e entregas.
+- Adiciona /conta e atualização administrativa de nick, logs de registro e reconciliação na entrada/inicialização.
+- Mantém backup, transcrições de tickets, limpeza, monitoramento e inicialização automática da versão 2.20.0.
+
+---
+
+## 2.20.0 — 22/11/2026
+
+- Ao fechar tickets, a conversa completa é exportada para o canal privado `#logs`; anexos pequenos são copiados para os logs e mantidos localmente.
+- Rascunhos abandonados expiram após 7 dias; tickets fechados só são removidos do estado depois de exportados e após 90 dias.
+- Backups automáticos a cada 12 horas, verificação SHA-256, retenção limitada e restauração offline com cópia de segurança prévia.
+- `/backup status`, `/backup criar` e `/backup listar` para administração dos backups.
+- Monitoramento da API Bridge, último contato autenticado do Plugin-ASTHEN, idade da fila e alertas de queda/recuperação em `#logs`.
+- Inicialização automática no logon do Windows e serviço systemd no Linux, com reinício após falhas.
+- Bloqueio de instâncias duplicadas do bot e sincronização da versão `VERSION.txt` com o pacote.
+
+---
 
 ## 2.18.0 — 18/11/2026
 
