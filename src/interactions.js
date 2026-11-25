@@ -1798,13 +1798,36 @@ async function handleRegistrationSubmit(interaction) {
 
 async function handleRegistrationCommand(interaction) {
   if (!canManage(interaction)) {
-    return replyPrivate(interaction, 'Você precisa de Gerenciar servidor para administrar os cargos autorizados.');
+    return replyPrivate(interaction, 'Você precisa de Gerenciar servidor para administrar os cadastros Minecraft.');
   }
   const config = getGuildConfig(interaction.guildId);
   const subcommand = interaction.options.getSubcommand();
+
+  if (subcommand === 'atualizar') {
+    const targetUser = interaction.options.getUser('jogador', true);
+    const nick = interaction.options.getString('nick', true).trim();
+    if (!validateMinecraftNick(nick)) {
+      return replyPrivate(interaction, 'Informe um nick Minecraft válido, sem espaços no começo/fim e com até 32 caracteres.');
+    }
+    const targetMember = await interaction.guild.members.fetch(targetUser.id);
+    try {
+      const result = await registerPlayerForMember(
+        targetMember,
+        nick,
+        'administração por <@' + interaction.user.id + '>'
+      );
+      const warning = result.sync.errors.length
+        ? '\\nPendência de sincronização: ' + result.sync.errors.join('; ') + '. Confira a hierarquia e as permissões do bot.'
+        : '\\nCargo e apelido sincronizados.';
+      return replyPrivate(interaction,
+        'Cadastro de <@' + targetUser.id + '> atualizado para **' + result.record.minecraft_nick + '**.' + warning);
+    } catch (error) {
+      return replyPrivate(interaction, error.message || 'Não foi possível atualizar o cadastro do jogador.');
+    }
+  }
+
   const role = interaction.options.getRole('cargo', true);
   const roles = new Set(config.registrationBypassRoleIds || []);
-
   if (subcommand === 'autorizar') {
     roles.add(role.id);
   } else if (subcommand === 'revogar') {
