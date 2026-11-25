@@ -77,19 +77,21 @@ async function updateMemberRole(member, shouldHaveRole, config) {
 }
 
 async function updateRegistrationChannelVisibility(member, registered, config) {
-  if (!config.registrationChannelId) return;
+  if (!config.registrationChannelId) return true;
   const channel = member.guild.channels.cache.get(config.registrationChannelId)
     || await member.guild.channels.fetch(config.registrationChannelId).catch(() => null);
-  if (!channel?.permissionOverwrites?.edit) return;
+  if (!channel?.permissionOverwrites?.edit) return false;
 
-  // Individual overwrite keeps registered players out even if another non-staff
-  // role happens to allow channel visibility. Explicitly authorized staff remain visible.
   const access = memberCanBypassRegistration(member, config) ? true : registered ? false : null;
   try {
     await channel.permissionOverwrites.edit(member.id, { ViewChannel: access },
       'ASTHEN: visibilidade individual do canal de registro');
+    return true;
   } catch (error) {
     console.warn('[Asthen Registro] Não foi possível sincronizar a visibilidade de #' + channel.name + ' para ' + member.user.tag + ':', error.message);
+    await sendRegistrationLog(member.guild,
+      'Falha ao atualizar a visibilidade de #registro para <@' + member.id + '>: ' + error.message);
+    return false;
   }
 }
 
@@ -185,6 +187,7 @@ export async function refreshRegistrationPanel(guild) {
 
 export async function applyRegisteredIdentity(member, record = getPlayerRegistration(member.id)) {
   const config = getGuildConfig(member.guild.id);
+  const errors = [];
   if (!record?.minecraft_nick) {
     if (!memberCanBypassRegistration(member, config)) {
       try {
@@ -192,15 +195,17 @@ export async function applyRegisteredIdentity(member, record = getPlayerRegistra
         if (changedRole) await sendRegistrationLog(member.guild,
           'Cargo **' + changedRole.name + '** removido de <@' + member.id + '> porque o jogador ainda não possui registro Minecraft.');
       } catch (error) {
+        errors.push('cargo: ' + error.message);
         await sendRegistrationLog(member.guild,
           'Não foi possível remover o cargo de membro de <@' + member.id + '>: ' + error.message);
       }
     }
-    await updateRegistrationChannelVisibility(member, false, config);
-    return { registered: false, errors: [] };
+    if (!await updateRegistrationChannelVisibility(member, false, config)) {
+      errors.push('visibilidade: falha ao atualizar o acesso a #registro');
+    }
+    return { registered: false, errors };
   }
 
-  const errors = [];
   try {
     const changedRole = await updateMemberRole(member, true, config);
     if (changedRole) await sendRegistrationLog(member.guild,
@@ -218,7 +223,9 @@ export async function applyRegisteredIdentity(member, record = getPlayerRegistra
       'Falha ao atualizar o apelido de <@' + member.id + '> para ' + record.minecraft_nick + ': ' + error.message);
   }
 
-  await updateRegistrationChannelVisibility(member, true, config);
+  if (!await updateRegistrationChannelVisibility(member, true, config)) {
+    errors.push('visibilidade: falha ao ocultar #registro');
+  }
   return { registered: true, errors };
 }
 
