@@ -31,8 +31,8 @@ export const CONFIG = {
     closeDelaySeconds: 3,
     panelDescription: 'Escolha um kit diretamente no menu abaixo. Ao selecionar, você verá os detalhes e poderá confirmar para abrir seu ticket privado de pagamento.',
     catalogPrompt: 'Escolha um kit para consultar os detalhes. A compra só começa depois que você confirmar a prévia.',
-    previewPrompt: 'Confira o kit e o preço. Confirme para informar sua gamertag Bedrock.',
-    reviewDescription: 'Confira o kit, o valor e sua gamertag Bedrock. Confirme para abrir o ticket privado de pagamento.'
+    previewPrompt: 'Confira o kit selecionado. Sua identificação Minecraft cadastrada será usada automaticamente.',
+    reviewDescription: 'Confira o kit, o preço e o jogador identificado. Confirme para abrir o ticket privado de pagamento.'
   },
   order: {
     title: 'Pedido de compra',
