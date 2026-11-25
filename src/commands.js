@@ -71,6 +71,19 @@ export const commandDefinitions = [
       .setName('editar')
       .setDescription('Altera nome exibido, descrição ou imagem de um kit.'))),
 
+  administratorOnly(new SlashCommandBuilder()
+    .setName('backup')
+    .setDescription('Cria e consulta backups protegidos do ASTHEN.')
+    .addSubcommand(subcommand => subcommand
+      .setName('status')
+      .setDescription('Mostra os backups disponíveis e o último backup.'))
+    .addSubcommand(subcommand => subcommand
+      .setName('criar')
+      .setDescription('Cria um backup manual agora.'))
+    .addSubcommand(subcommand => subcommand
+      .setName('listar')
+      .setDescription('Lista os últimos backups disponíveis.'))),
+
   adminOnly(new SlashCommandBuilder()
     .setName('bridge')
     .setDescription('Verifica a API de integração Minecraft.')
