@@ -11,8 +11,8 @@ import { makeRegistrationPanel, PANEL_LAYOUT_VERSION } from './ui.js';
 const FLAGS = PermissionsBitField.Flags;
 
 export function validateMinecraftNick(value) {
-  const nick = String(value || '').trim();
-  return /^[A-Za-z0-9_. ]{1,32}$/.test(nick) && !nick.startsWith(' ') && !nick.endsWith(' ');
+  const nick = String(value ?? '');
+  return nick === nick.trim() && /^[A-Za-z0-9_. ]{1,32}$/.test(nick);
 }
 
 export function memberCanBypassRegistration(member, config = getGuildConfig(member.guild.id)) {
@@ -230,7 +230,7 @@ export async function applyRegisteredIdentity(member, record = getPlayerRegistra
 }
 
 export async function registerPlayerForMember(member, minecraftNick, source = 'self-service') {
-  const nick = String(minecraftNick || '').trim();
+  const nick = String(minecraftNick ?? '');
   if (!validateMinecraftNick(nick)) {
     throw new Error('Informe um nick Minecraft válido, sem espaços no começo/fim e com até 32 caracteres.');
   }
