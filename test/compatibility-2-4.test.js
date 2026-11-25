@@ -5,6 +5,7 @@ import {
   makeBuyerAnnouncement,
   makeCatalogMenu,
   makeOrderControls,
+  makeRegistrationPanel,
   makeOrderEmbed,
   makeShopPanel,
   makeSupportPanel
@@ -13,6 +14,17 @@ import {
 function command(name) {
   return commandDefinitions.map(item => item.toJSON()).find(item => item.name === name);
 }
+
+test('registration panel has one clear action and renders real line breaks', () => {
+  const panel = makeRegistrationPanel();
+  const description = panel.embeds[0].toJSON().description;
+  const button = panel.components[0].components[0].toJSON();
+
+  assert.ok(description.includes('\n\n'));
+  assert.equal(description.includes('\\n'), false);
+  assert.equal(button.custom_id, 'registration:open');
+  assert.equal(button.label, 'Registrar Minecraft');
+});
 
 test('support selector uses Minecraft server departments', () => {
   const panel = makeSupportPanel();
