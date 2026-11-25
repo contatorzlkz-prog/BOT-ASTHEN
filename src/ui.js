@@ -8,7 +8,7 @@ import {
 import { CONFIG, hexToInt } from './config.js';
 import { PIX_KEY_DEFAULT } from './pix.js';
 
-export const PANEL_LAYOUT_VERSION = '2.20.0';
+export const PANEL_LAYOUT_VERSION = '2.21.0';
 
 const brandColor = () => hexToInt(CONFIG.brand.color);
 
