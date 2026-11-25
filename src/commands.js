@@ -36,7 +36,7 @@ export const commandDefinitions = [
 
   adminOnly(new SlashCommandBuilder()
     .setName('registro')
-    .setDescription('Gerencia cargos autorizados a usar o registro.')
+    .setDescription('Gerencia cargos autorizados e cadastros Minecraft.')
     .addSubcommand(subcommand => subcommand
       .setName('autorizar')
       .setDescription('Permite que um cargo veja #registro mesmo após registrar.')
@@ -44,7 +44,12 @@ export const commandDefinitions = [
     .addSubcommand(subcommand => subcommand
       .setName('revogar')
       .setDescription('Remove a autorização de um cargo.')
-      .addRoleOption(option => option.setName('cargo').setDescription('Cargo que perderá a autorização.').setRequired(true)))),
+      .addRoleOption(option => option.setName('cargo').setDescription('Cargo que perderá a autorização.').setRequired(true)))
+    .addSubcommand(subcommand => subcommand
+      .setName('atualizar')
+      .setDescription('Atualiza o nick Minecraft de um jogador.')
+      .addUserOption(option => option.setName('jogador').setDescription('Jogador que será atualizado.').setRequired(true))
+      .addStringOption(option => option.setName('nick').setDescription('Novo nick Minecraft.').setMinLength(1).setMaxLength(32).setRequired(true)))),
 
   new SlashCommandBuilder()
     .setName('conta')
