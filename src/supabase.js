@@ -74,6 +74,7 @@ function snapshotHasData(snapshot) {
       Object.keys(snapshot.guilds || {}).length
       || Object.keys(snapshot.tickets || {}).length
       || Object.keys(snapshot.purchaseDrafts || {}).length
+      || Object.keys(snapshot.players || {}).length
     )
   );
 }
@@ -84,6 +85,9 @@ function normalizeSnapshot(value) {
     tickets: value?.tickets && typeof value.tickets === 'object' ? value.tickets : {},
     purchaseDrafts: value?.purchaseDrafts && typeof value.purchaseDrafts === 'object'
       ? value.purchaseDrafts
+      : {},
+    players: value?.players && typeof value.players === 'object' && !Array.isArray(value.players)
+      ? value.players
       : {}
   };
 }
