@@ -273,16 +273,29 @@ export async function reconcileGuildMembers(guild) {
 }
 
 export async function handleRegisteredNicknameUpdate(oldMember, newMember) {
-  if (!oldMember || !newMember || oldMember.nickname === newMember.nickname) return;
-  const record = getPlayerRegistration(newMember.id);
-  if (!record?.minecraft_nick || newMember.nickname === record.minecraft_nick) return;
+  if (!oldMember || !newMember) return;
+  const nicknameChanged = oldMember.nickname !== newMember.nickname;
+  const oldRoleIds = [...(oldMember.roles?.cache?.keys?.() || [])].sort();
+  const newRoleIds = [...(newMember.roles?.cache?.keys?.() || [])].sort();
+  const rolesChanged = oldRoleIds.length !== newRoleIds.length
+    || oldRoleIds.some((roleId, index) => roleId !== newRoleIds[index]);
+  if (!nicknameChanged && !rolesChanged) return;
 
-  try {
-    await updateRegisteredNickname(newMember, record.minecraft_nick);
-    await sendRegistrationLog(newMember.guild,
-      'Alteração manual de apelido revertida para <@' + newMember.id + '>. O nick oficial continua **' + record.minecraft_nick + '**. Para alteração administrativa, use /registro atualizar.');
-  } catch (error) {
-    await sendRegistrationLog(newMember.guild,
-      'Não foi possível restaurar o apelido oficial de <@' + newMember.id + '>: ' + error.message);
+  const record = getPlayerRegistration(newMember.id);
+  if (nicknameChanged && record?.minecraft_nick && newMember.nickname !== record.minecraft_nick) {
+    try {
+      await updateRegisteredNickname(newMember, record.minecraft_nick);
+      await sendRegistrationLog(newMember.guild,
+        'Alteração manual de apelido revertida para <@' + newMember.id + '>. O nick oficial continua **' + record.minecraft_nick + '**. Para alteração administrativa, use /registro atualizar.');
+    } catch (error) {
+      await sendRegistrationLog(newMember.guild,
+        'Não foi possível restaurar o apelido oficial de <@' + newMember.id + '>: ' + error.message);
+    }
+  }
+
+  // Refresh only the registration-channel visibility on role changes. Avoid
+  // replaying role/nickname mutations while Discord is dispatching role events.
+  if (rolesChanged) {
+    await updateRegistrationChannelVisibility(newMember, Boolean(record?.minecraft_nick), getGuildConfig(newMember.guild.id));
   }
 }
