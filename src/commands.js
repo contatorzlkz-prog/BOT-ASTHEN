@@ -9,7 +9,7 @@ const textChannel = option => option
 export const commandDefinitions = [
   adminOnly(new SlashCommandBuilder()
     .setName('configurar')
-    .setDescription('Configura os canais e o cargo da equipe.')
+    .setDescription('Configura os canais e os cargos do ASTHEN.')
     .addChannelOption(option => textChannel(option
       .setName('atendimento')
       .setDescription('Canal com o painel de atendimento.')))
@@ -22,10 +22,39 @@ export const commandDefinitions = [
     .addChannelOption(option => textChannel(option
       .setName('compradores')
       .setDescription('Canal de avisos de compras confirmadas.')))
+    .addChannelOption(option => textChannel(option
+      .setName('registro')
+      .setDescription('Canal público para o registro Minecraft.')))
+    .addRoleOption(option => option
+      .setName('membro')
+      .setDescription('Cargo concedido após o registro Minecraft.')
+      .setRequired(false))
     .addRoleOption(option => option
       .setName('equipe')
       .setDescription('Cargo autorizado a revisar pagamentos e fechar tickets.')
       .setRequired(false))),
+
+  adminOnly(new SlashCommandBuilder()
+    .setName('registro')
+    .setDescription('Gerencia cargos autorizados a usar o registro.')
+    .addSubcommand(subcommand => subcommand
+      .setName('autorizar')
+      .setDescription('Permite que um cargo veja #registro mesmo após registrar.')
+      .addRoleOption(option => option.setName('cargo').setDescription('Cargo autorizado.').setRequired(true)))
+    .addSubcommand(subcommand => subcommand
+      .setName('revogar')
+      .setDescription('Remove a autorização de um cargo.')
+      .addRoleOption(option => option.setName('cargo').setDescription('Cargo que perderá a autorização.').setRequired(true)))),
+
+  new SlashCommandBuilder()
+    .setName('conta')
+    .setDescription('Gerencia sua identificação Minecraft.')
+    .addSubcommand(subcommand => subcommand
+      .setName('perfil')
+      .setDescription('Consulta o nick Minecraft vinculado à sua conta.'))
+    .addSubcommand(subcommand => subcommand
+      .setName('atualizar-nick')
+      .setDescription('Atualiza seu nick Minecraft cadastrado.')),
 
   administratorOnly(new SlashCommandBuilder()
     .setName('kit')
