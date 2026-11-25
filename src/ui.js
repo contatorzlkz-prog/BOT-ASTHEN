@@ -93,7 +93,7 @@ export function makeRegistrationPanel() {
     .setColor(brandColor())
     .setTitle('Registro Minecraft')
     .setDescription(
-      'Vincule seu Discord ao seu jogador Minecraft para liberar o acesso de membro.\\n\\n' +
+      'Vincule seu Discord ao seu jogador Minecraft para liberar o acesso de membro.\n\n' +
       'Informe seu nick atual. O cadastro também será usado automaticamente na loja e nos atendimentos.'
     );
   const button = new ButtonBuilder()
