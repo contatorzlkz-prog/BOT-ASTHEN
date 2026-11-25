@@ -200,7 +200,9 @@ export async function applyRegisteredIdentity(member, record = getPlayerRegistra
 
   const errors = [];
   try {
-    await updateMemberRole(member, true, config);
+    const changedRole = await updateMemberRole(member, true, config);
+    if (changedRole) await sendRegistrationLog(member.guild,
+      'Cargo **' + changedRole.name + '** atribuído a <@' + member.id + '> após o registro Minecraft.');
   } catch (error) {
     errors.push('cargo: ' + error.message);
     await sendRegistrationLog(member.guild,
@@ -264,27 +266,12 @@ export async function reconcileGuildMembers(guild) {
 export async function handleRegisteredNicknameUpdate(oldMember, newMember) {
   if (!oldMember || !newMember || oldMember.nickname === newMember.nickname) return;
   const record = getPlayerRegistration(newMember.id);
-  if (!record?.minecraft_nick) return;
+  if (!record?.minecraft_nick || newMember.nickname === record.minecraft_nick) return;
 
-  const canManageNicknames = newMember.permissions?.has?.(FLAGS.Administrator)
-    || newMember.permissions?.has?.(FLAGS.ManageNicknames);
-  if (canManageNicknames && newMember.nickname && validateMinecraftNick(newMember.nickname)) {
-    try {
-      savePlayerRegistration(newMember.id, newMember.nickname, newMember.guild.id);
-      await sendRegistrationLog(newMember.guild,
-        'Apelido alterado pela administração: <@' + newMember.id + '> → **' + newMember.nickname + '**.');
-      return;
-    } catch (error) {
-      await sendRegistrationLog(newMember.guild,
-        'Alteração administrativa de apelido não foi aceita para <@' + newMember.id + '>: ' + error.message);
-    }
-  }
-
-  if (newMember.nickname === record.minecraft_nick) return;
   try {
     await updateRegisteredNickname(newMember, record.minecraft_nick);
     await sendRegistrationLog(newMember.guild,
-      'Alteração manual de apelido revertida para <@' + newMember.id + '>. O nick oficial continua **' + record.minecraft_nick + '**.');
+      'Alteração manual de apelido revertida para <@' + newMember.id + '>. O nick oficial continua **' + record.minecraft_nick + '**. Para alteração administrativa, use /registro atualizar.');
   } catch (error) {
     await sendRegistrationLog(newMember.guild,
       'Não foi possível restaurar o apelido oficial de <@' + newMember.id + '>: ' + error.message);
