@@ -9,7 +9,7 @@
 5. Execute `/configurar registro:#registro membro:@Membro`.
 6. Nos canais exclusivos de membros, permita **View Channel** para o cargo Membro e negue essa permissão para @everyone. Não bloqueie canais públicos, administrativos ou de atendimento.
 7. Autorize cargos extras com `/registro autorizar cargo:@Equipe`; revogue com `/registro revogar cargo:@Equipe`. Administradores e membros com Manage Nicknames/Manage Guild continuam autorizados.
-8. Remova **Change Nickname** de @everyone e do cargo Membro (e de outros cargos comuns, se aplicável). A equipe pode manter sua permissão.
+9. Remova **Change Nickname** de @everyone e do cargo Membro (e de outros cargos comuns, se aplicável). A equipe pode manter sua permissão.
 
 ## Supabase
 
