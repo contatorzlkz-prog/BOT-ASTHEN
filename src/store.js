@@ -22,7 +22,7 @@ function ensureSecureDataDir() {
   secureLocalPath(dataDir, 0o700);
 }
 
-const emptyState = () => ({ guilds: {}, tickets: {}, purchaseDrafts: {} });
+const emptyState = () => ({ guilds: {}, tickets: {}, purchaseDrafts: {}, players: {} });
 let state = emptyState();
 const pluginSyncedGuildsThisSession = new Set();
 
@@ -81,6 +81,11 @@ function defaultGuildConfig() {
     logsChannelId: null,
     buyersChannelId: null,
     staffRoleId: null,
+    registrationChannelId: null,
+    registrationPanelMessageId: null,
+    registrationPanelVersion: null,
+    memberRoleId: null,
+    registrationBypassRoleIds: [],
     kits: []
   };
 }
@@ -95,6 +100,8 @@ function ensureGuildConfig(guildId) {
   }
 
   if (!Array.isArray(config.kits)) config.kits = [];
+  if (!Array.isArray(config.registrationBypassRoleIds)) config.registrationBypassRoleIds = [];
+  config.registrationBypassRoleIds = [...new Set(config.registrationBypassRoleIds.map(String).filter(Boolean))];
   delete config.hiddenPluginKits;
   delete config.pluginSyncReceived;
 
@@ -178,14 +185,16 @@ export function loadStore() {
   if (!isPlainRecord(parsed)
       || (parsed.guilds !== undefined && !isPlainRecord(parsed.guilds))
       || (parsed.tickets !== undefined && !isPlainRecord(parsed.tickets))
-      || (parsed.purchaseDrafts !== undefined && !isPlainRecord(parsed.purchaseDrafts))) {
+      || (parsed.purchaseDrafts !== undefined && !isPlainRecord(parsed.purchaseDrafts))
+      || (parsed.players !== undefined && !isPlainRecord(parsed.players))) {
     preserveCorruptStore('estrutura de dados incompatível');
   }
 
   state = {
     guilds: parsed.guilds || {},
     tickets: parsed.tickets || {},
-    purchaseDrafts: parsed.purchaseDrafts || {}
+    purchaseDrafts: parsed.purchaseDrafts || {},
+    players: parsed.players || {}
   };
   for (const guildId of Object.keys(state.guilds)) ensureGuildConfig(guildId);
 }
@@ -221,13 +230,56 @@ export async function initializeStoreSync() {
       state = {
         guilds: remote.guilds || {},
         tickets: remote.tickets || {},
-        purchaseDrafts: remote.purchaseDrafts || {}
+        purchaseDrafts: remote.purchaseDrafts || {},
+        players: remote.players || {}
       };
       for (const guildId of Object.keys(state.guilds)) ensureGuildConfig(guildId);
     },
     saveLocal: () => saveStore({ syncRemote: false })
   });
   return result;
+}
+
+export function getPlayerRegistration(discordId) {
+  const id = String(discordId || '').trim();
+  const record = id ? state.players[id] : null;
+  return record ? { ...record } : null;
+}
+
+export function findPlayerRegistrationByNick(minecraftNick) {
+  const normalized = String(minecraftNick || '').trim().toLocaleLowerCase('en-US');
+  if (!normalized) return null;
+  const record = Object.values(state.players).find(item =>
+    String(item?.minecraft_nick || '').trim().toLocaleLowerCase('en-US') === normalized
+  );
+  return record ? { ...record } : null;
+}
+
+export function savePlayerRegistration(discordId, minecraftNick, guildId = null) {
+  const id = String(discordId || '').trim();
+  const nick = String(minecraftNick || '').trim();
+  if (!/^\d{17,20}$/.test(id)) throw new Error('ID do Discord inválido para o registro.');
+  if (!/^[A-Za-z0-9_. ]{1,32}$/.test(nick) || nick.startsWith(' ') || nick.endsWith(' ')) {
+    throw new Error('Nick Minecraft inválido. Use de 1 a 32 caracteres válidos.');
+  }
+  const normalized = nick.toLocaleLowerCase('en-US');
+  const conflict = Object.values(state.players).find(item =>
+    item?.discord_id !== id
+    && String(item?.minecraft_nick || '').trim().toLocaleLowerCase('en-US') === normalized
+  );
+  if (conflict) throw new Error('Este nick Minecraft já está vinculado a outra conta Discord.');
+  const previous = state.players[id];
+  const now = new Date().toISOString();
+  const record = {
+    discord_id: id,
+    minecraft_nick: nick,
+    created_at: previous?.created_at || now,
+    updated_at: now,
+    ...(guildId ? { guild_id: String(guildId) } : previous?.guild_id ? { guild_id: previous.guild_id } : {})
+  };
+  state.players[id] = record;
+  saveStore();
+  return { ...record };
 }
 
 export function getGuildConfig(guildId) {
