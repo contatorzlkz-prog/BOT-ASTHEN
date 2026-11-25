@@ -54,6 +54,8 @@ import { CONFIG } from './config.js';
 import { deliverKit, getBridgeJob, getBridgeStatus } from './bridge.js';
 import { PIX_KEY_DEFAULT, PIX_QR_FILENAME, PIX_QR_IMAGE_PATH } from './pix.js';
 import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock, releaseWeeklyKitStock } from './supabase.js';
+import { exportTicketTranscript } from './transcripts.js';
+import { createBackup, listBackups } from './maintenance.js';
 import { registerPlayerForMember, validateMinecraftNick, refreshRegistrationPanel, reconcileGuildMembers } from './registration.js';
 
 const closingTickets = new Set();
@@ -262,7 +264,8 @@ export async function secureLogsChannel(channel, guild) {
         PermissionsBitField.Flags.ViewChannel,
         PermissionsBitField.Flags.SendMessages,
         PermissionsBitField.Flags.ReadMessageHistory,
-        PermissionsBitField.Flags.EmbedLinks
+        PermissionsBitField.Flags.EmbedLinks,
+        PermissionsBitField.Flags.AttachFiles
       ]
     });
   }
@@ -274,6 +277,7 @@ export async function secureLogsChannel(channel, guild) {
         PermissionsBitField.Flags.SendMessages,
         PermissionsBitField.Flags.ReadMessageHistory,
         PermissionsBitField.Flags.EmbedLinks,
+        PermissionsBitField.Flags.AttachFiles,
         PermissionsBitField.Flags.ManageMessages
       ]
     });
@@ -292,15 +296,12 @@ async function configureChannels(interaction) {
   const shopChannel = interaction.options.getChannel('kits');
   const logsChannel = interaction.options.getChannel('logs');
   const buyersChannel = interaction.options.getChannel('compradores');
-  const registrationChannel = interaction.options.getChannel('registro');
-  const memberRole = interaction.options.getRole('membro');
   const staffRole = interaction.options.getRole('equipe');
 
-  if (!supportChannel && !shopChannel && !logsChannel && !buyersChannel
-      && !registrationChannel && !memberRole && !staffRole) {
+  if (!supportChannel && !shopChannel && !logsChannel && !buyersChannel && !staffRole) {
     return replyPrivate(
       interaction,
-      'Informe pelo menos um campo. Exemplo: /configurar atendimento:#atendimento kits:#kits logs:#logs compradores:#compradores registro:#registro membro:@Membro equipe:@Equipe'
+      'Informe pelo menos um campo. Exemplo: /configurar atendimento:#atendimento kits:#kits logs:#logs compradores:#compradores equipe:@Equipe'
     );
   }
 
@@ -321,16 +322,6 @@ async function configureChannels(interaction) {
   if (staffRole) {
     changes.staffRoleId = staffRole.id;
     updated.push('equipe: ' + staffRole.toString());
-  }
-
-  if (memberRole) {
-    changes.memberRoleId = memberRole.id;
-    updated.push('membro: ' + memberRole.toString());
-  }
-
-  if (registrationChannel) {
-    changes.registrationChannelId = registrationChannel.id;
-    updated.push('registro: ' + registrationChannel.toString());
   }
 
   const effectiveStaffRoleId = changes.staffRoleId ?? config.staffRoleId;
@@ -355,16 +346,6 @@ async function configureChannels(interaction) {
   }
 
   updateGuildConfig(interaction.guildId, changes);
-
-  if (registrationChannel || memberRole || staffRole) {
-    try {
-      await refreshRegistrationPanel(interaction.guild);
-      await reconcileGuildMembers(interaction.guild);
-    } catch (error) {
-      console.error('[Asthen Registro] Configuração salva, mas não foi possível concluir a sincronização:', error.message);
-      updated.push('registro: configuração salva, mas a sincronização de membros ficou pendente (verifique permissões e logs)');
-    }
-  }
 
   return replyPrivate(
     interaction,
@@ -569,28 +550,23 @@ async function handleKitEditModal(interaction) {
 function makeMinecraftNickModal(customId, currentNick = '') {
   const input = new TextInputBuilder()
     .setCustomId('minecraft-nick')
-    .setLabel('Nick do Minecraft')
-    .setPlaceholder('Digite seu nick exatamente como aparece no servidor')
+    .setLabel('Gamertag Bedrock')
+    .setPlaceholder('Digite sua gamertag exatamente como aparece no servidor')
     .setStyle(TextInputStyle.Short)
     .setMinLength(1)
     .setMaxLength(32)
     .setRequired(true);
 
-  if (currentNick) input.setValue(currentNick.slice(0, 32));
+  if (currentNick) input.setValue(currentNick);
 
   return new ModalBuilder()
     .setCustomId(customId)
-    .setTitle('Identificação Minecraft')
+    .setTitle('Nick do Minecraft')
     .addComponents(new ActionRowBuilder().addComponents(input));
 }
 
 
 async function openCatalog(interaction) {
-  const player = getPlayerRegistration(interaction.user.id);
-  if (!player?.minecraft_nick) {
-    return replyPrivate(interaction, 'Antes de usar a loja, conclua seu registro Minecraft em #registro.');
-  }
-
   const catalogKits = getShopKits(interaction.guildId);
   if (!catalogKits.length) return replyPrivate(interaction, 'A loja ainda não recebeu kits do servidor.');
   const existing = findOpenTicket(interaction.guildId, interaction.user.id, 'shop');
@@ -613,15 +589,27 @@ async function openCatalog(interaction) {
     const currentKit = stockedKits.find(kit => kit.id === existingDraft.kit?.id);
     if (currentKit) {
       existingDraft.kit = { ...existingDraft.kit, ...currentKit };
-      existingDraft.minecraftNick = player.minecraft_nick;
       existingDraft.platform = 'bedrock';
-      existingDraft.stage = 'review';
-      existingDraft.revision = randomUUID().slice(0, 8);
+      savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
+    }
+    if (existingDraft.kit && currentKit) {
+      if (existingDraft.minecraftNick) {
+        existingDraft.platform = 'bedrock';
+        existingDraft.stage = 'review';
+        savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
+        return interaction.reply({
+          content: 'Confira os dados antes de continuar.',
+          embeds: [makePurchaseReviewEmbed(existingDraft)],
+          components: [makePurchaseReviewControls(existingDraft)],
+          flags: MessageFlags.Ephemeral
+        });
+      }
+      existingDraft.stage = 'selected';
       savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
       return interaction.reply({
-        content: 'Identificação Minecraft: **' + player.minecraft_nick + '**\nConfira os dados do pedido.',
-        embeds: [makePurchaseReviewEmbed(existingDraft)],
-        components: [makePurchaseReviewControls(existingDraft)],
+        content: CONFIG.shop.previewPrompt,
+        embeds: [makeKitPreviewEmbed(existingDraft.kit)],
+        components: [makeKitPreviewControls(existingDraft)],
         flags: MessageFlags.Ephemeral
       });
     }
@@ -638,18 +626,13 @@ async function continuePurchase(interaction) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
   if (!draft) return replyPrivate(interaction, 'Não encontrei uma compra em preparação. Abra a loja novamente.');
   if (draft.stage === 'creating') return replyPrivate(interaction, 'Seu pedido já está sendo criado. Aguarde alguns instantes.');
-
-  const player = getPlayerRegistration(interaction.user.id);
-  if (!player?.minecraft_nick) {
-    return replyPrivate(interaction, 'Seu registro Minecraft não foi encontrado. Conclua o cadastro em #registro para continuar.');
+  if (draft.minecraftNick) {
+    draft.platform = 'bedrock';
+    draft.stage = 'review';
+    savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
+    return replyPrivate(interaction, 'Confira os dados antes de continuar.', [makePurchaseReviewControls(draft)], [makePurchaseReviewEmbed(draft)]);
   }
-  draft.minecraftNick = player.minecraft_nick;
-  draft.platform = 'bedrock';
-  draft.stage = 'review';
-  draft.revision = randomUUID().slice(0, 8);
-  savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
-  return replyPrivate(interaction, 'Identificação Minecraft: **' + player.minecraft_nick + '**. Confira os dados antes de continuar.',
-    [makePurchaseReviewControls(draft)], [makePurchaseReviewEmbed(draft)]);
+  return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
 }
 
 async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = false) {
@@ -666,11 +649,6 @@ async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = 
     return updateExistingMessage
       ? interaction.update(preview)
       : interaction.reply({ ...preview, flags: MessageFlags.Ephemeral });
-  }
-
-  const player = getPlayerRegistration(interaction.user.id);
-  if (!player?.minecraft_nick) {
-    return replyPrivate(interaction, 'Antes de comprar, conclua seu registro Minecraft em #registro.');
   }
   if (!isKitPurchasable(kit)) return replyPrivate(interaction, 'Este kit está indisponível para compra. Ele continua no catálogo para consulta.');
 
@@ -703,7 +681,7 @@ async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = 
       weeklyLimit: stockedKit.weeklyLimit,
       weeklyWeekStart: stockedKit.weeklyWeekStart
     },
-    minecraftNick: player.minecraft_nick,
+    minecraftNick: '',
     platform: 'bedrock',
     stage: 'selected',
     revision: randomUUID().slice(0, 8)
@@ -711,7 +689,7 @@ async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = 
   savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
 
   const payload = {
-    content: 'Identificação Minecraft: **' + player.minecraft_nick + '**\n' + CONFIG.shop.previewPrompt,
+    content: CONFIG.shop.previewPrompt,
     embeds: [makeKitPreviewEmbed(draft.kit)],
     components: [makeKitPreviewControls(draft)]
   };
@@ -757,21 +735,9 @@ async function confirmSelectedKit(interaction, requestedRevision) {
   if (!draft || draft.revision !== requestedRevision || draft.stage !== 'selected') {
     return replyPrivate(interaction, 'Esta prévia ficou desatualizada. Abra o catálogo novamente.');
   }
-  const player = getPlayerRegistration(interaction.user.id);
-  if (!player?.minecraft_nick) {
-    return replyPrivate(interaction, 'Seu registro Minecraft não foi encontrado. Conclua o cadastro em #registro.');
-  }
-  draft.minecraftNick = player.minecraft_nick;
-  draft.platform = 'bedrock';
-  draft.stage = 'review';
-  draft.revision = randomUUID().slice(0, 8);
-  savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
-  return interaction.update({
-    content: 'Identificação Minecraft: **' + player.minecraft_nick + '**\nConfira o kit e confirme o pedido.',
-    embeds: [makePurchaseReviewEmbed(draft)],
-    components: [makePurchaseReviewControls(draft)]
-  });
+  return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
 }
+
 
 async function switchPurchaseKit(interaction, requestedRevision) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
@@ -811,8 +777,22 @@ async function sendOrderTicketMessage(channel, user, kit, minecraftNick, platfor
 }
 
 async function handleNickSubmit(interaction) {
-  // Legacy shop modal IDs from old ephemeral messages are redirected to account management.
-  return replyPrivate(interaction, 'O nick agora é gerenciado pelo cadastro da conta. Use /conta atualizar-nick; a loja utiliza o nick registrado automaticamente.');
+  const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
+  if (!draft) return replyPrivate(interaction, 'Sua compra não está mais em preparação. Abra a loja novamente.');
+  const minecraftNick = interaction.fields.getTextInputValue('minecraft-nick').trim();
+  if (!/^[A-Za-z0-9_. ]{1,32}$/.test(minecraftNick) || minecraftNick.startsWith(' ') || minecraftNick.endsWith(' ')) {
+    return replyPrivate(interaction, 'Informe uma gamertag válida, sem espaços no começo ou no fim e com até 32 caracteres.');
+  }
+  if (interaction.customId.startsWith('shop:nick:edit:')) {
+    const requestedRevision = interaction.customId.split(':')[3];
+    if (draft.revision !== requestedRevision) return replyPrivate(interaction, 'Esta etapa da compra já foi atualizada. Use a revisão mais recente.');
+  }
+  draft.minecraftNick = minecraftNick;
+  draft.platform = 'bedrock';
+  draft.stage = 'review';
+  draft.revision = randomUUID().slice(0, 8);
+  savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
+  return replyPrivate(interaction, 'Confira os dados antes de continuar.', [makePurchaseReviewControls(draft)], [makePurchaseReviewEmbed(draft)]);
 }
 
 async function forcePurchaseBedrock(interaction, requestedRevision) {
@@ -831,8 +811,13 @@ async function forcePurchaseBedrock(interaction, requestedRevision) {
   });
 }
 
-async function editMinecraftNick(interaction) {
-  return replyPrivate(interaction, 'A atualização do nick fica em gerenciamento de conta. Use /conta atualizar-nick; sua compra não precisa ser reiniciada.');
+async function editMinecraftNick(interaction, requestedRevision) {
+  const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
+  if (!draft) return replyPrivate(interaction, 'Sua compra não está mais em preparação. Abra o catálogo novamente.');
+  if (draft.revision !== requestedRevision) {
+    return replyPrivate(interaction, 'Esta revisão do pedido ficou desatualizada. Use os botões da mensagem mais recente.');
+  }
+  return interaction.showModal(makeMinecraftNickModal('shop:nick:edit:' + draft.revision, draft.minecraftNick));
 }
 
 async function cancelPurchase(interaction, requestedRevision) {
@@ -853,16 +838,13 @@ async function confirmPurchase(interaction, requestedRevision) {
   if (draft && draft.revision !== requestedRevision) {
     return replyPrivate(interaction, 'Esta revisão do pedido ficou desatualizada. Confira a mensagem mais recente.');
   }
-
-  const player = getPlayerRegistration(interaction.user.id);
-  if (!player?.minecraft_nick) {
-    return replyPrivate(interaction, 'Seu registro Minecraft não foi encontrado. Conclua o cadastro em #registro antes de confirmar.');
+  if (draft && draft.minecraftNick) {
+    draft.platform = 'bedrock';
+    savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
   }
-  if (!draft || !draft.kit || !draft.platform) {
+  if (!draft || !draft.kit || !draft.minecraftNick || !draft.platform) {
     return replyPrivate(interaction, 'Não encontrei uma compra pronta para confirmar. Abra a loja e tente novamente.');
   }
-  draft.minecraftNick = player.minecraft_nick;
-  draft.platform = 'bedrock';
   if (draft.stage === 'creating') {
     return replyPrivate(interaction, 'Seu pedido já está sendo criado. Aguarde alguns instantes.');
   }
@@ -911,7 +893,7 @@ async function confirmPurchase(interaction, requestedRevision) {
       user: interaction.user,
       type: 'shop',
       kit: currentKitWithStock,
-      minecraftNick: player.minecraft_nick,
+      minecraftNick: draft.minecraftNick,
       platform: draft.platform
     });
 
@@ -920,7 +902,7 @@ async function confirmPurchase(interaction, requestedRevision) {
         result.channel,
         interaction.user,
         currentKitWithStock,
-        player.minecraft_nick,
+        draft.minecraftNick,
         draft.platform,
         getGuildConfig(interaction.guildId)
       );
@@ -957,47 +939,30 @@ async function closeTicket(interaction) {
   if (!ticket) return replyPrivate(interaction, 'Este canal não está registrado como ticket.');
 
   const config = getGuildConfig(interaction.guildId);
-  if (!isStaff(interaction, config)) {
-    return replyPrivate(interaction, 'Somente a equipe autorizada pode fechar este canal.');
-  }
-  if (ticket.status !== 'open' || closingTickets.has(interaction.channelId)) {
-    return replyPrivate(interaction, 'Este ticket já está sendo fechado.');
-  }
-  if (deliveryAttemptsInFlight.has(interaction.channelId)) {
-    return replyPrivate(interaction, 'A entrega ainda está sendo processada. Aguarde a confirmação antes de fechar este pedido.');
-  }
+  if (!isStaff(interaction, config)) return replyPrivate(interaction, 'Somente a equipe autorizada pode fechar este canal.');
+  if (ticket.status !== 'open' || closingTickets.has(interaction.channelId)) return replyPrivate(interaction, 'Este ticket já está sendo fechado.');
+  if (deliveryAttemptsInFlight.has(interaction.channelId)) return replyPrivate(interaction, 'A entrega ainda está sendo processada. Aguarde a confirmação antes de fechar este pedido.');
   if (ticket.type === 'shop' && ticket.orderStatus === 'approved'
       && (!ticket.deliveryStatus || ['PLATFORM_REQUIRED', 'QUEUED', 'TIMEOUT', 'WAITING', 'KIT_PENDING'].includes(ticket.deliveryStatus))) {
-    return replyPrivate(interaction,
-      'Não é possível fechar este pedido enquanto a entrega estiver pendente ou sem confirmação. ' +
-      'Estado atual: ' + ticket.deliveryStatus + '. Aguarde a atualização do Minecraft ou faça a reconciliação com a equipe.');
+    return replyPrivate(interaction, 'Não é possível fechar este pedido enquanto a entrega estiver pendente ou sem confirmação. Estado atual: ' + ticket.deliveryStatus + '. Aguarde a atualização do Minecraft ou faça a reconciliação com a equipe.');
   }
   if (ticket.type === 'shop' && ticket.orderStatus === 'approved'
       && ticket.deliveryStatus !== 'KIT_DELIVERED' && !ticket.stockReleasedAt) {
-    return replyPrivate(interaction,
-      'A entrega não foi confirmada. Antes de fechar o pedido, tente novamente ou use "Registrar cancelamento/estorno" depois de concluir o cancelamento/reembolso. A reserva semanal só é liberada após essa confirmação.');
+    return replyPrivate(interaction, 'A entrega não foi confirmada. Antes de fechar este pedido, tente novamente ou use "Registrar cancelamento/estorno" depois de concluir o cancelamento/reembolso. A reserva semanal só é liberada após essa confirmação.');
   }
+
+  const logsChannel = await fetchTextChannel(interaction.guild, config.logsChannelId);
+  if (!logsChannel) return replyPrivate(interaction, 'Não posso fechar este ticket sem arquivar a conversa. Configure um canal privado de logs com /configurar logs:#canal e tente novamente.');
 
   closingTickets.add(interaction.channelId);
   try {
-    if (ticket.type === 'shop' && ticket.orderStatus === 'pending') {
-      const logsChannel = await fetchTextChannel(interaction.guild, config.logsChannelId);
-      if (!logsChannel) {
-        return replyPrivate(
-          interaction,
-          'Não posso fechar este pedido pendente sem registrar o resultado. Configure o canal de logs com /configurar logs:#canal e tente novamente.'
-        );
-      }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+    if (ticket.type === 'shop' && ticket.orderStatus === 'pending') {
       await logsChannel.send({
-        embeds: [makeOrderLogEmbed({
-          ticket,
-          decision: 'closed_without_result',
-          staffUser: interaction.user
-        })],
+        embeds: [makeOrderLogEmbed({ ticket, decision: 'closed_without_result', staffUser: interaction.user })],
         allowedMentions: { users: [], roles: [] }
       });
-
       updateTicket(interaction.channelId, {
         orderStatus: 'closed_without_result',
         closedWithoutResultBy: interaction.user.id,
@@ -1005,13 +970,45 @@ async function closeTicket(interaction) {
       });
     }
 
-    // Atualiza a interação sem mandar uma segunda confirmação privada.
-    await interaction.deferUpdate();
-    await interaction.channel.send(
-      'Este atendimento será encerrado por ' + interaction.user.toString() +
-      ' e o canal será excluído em 3 segundos.'
-    );
+    let transcript = null;
+    if (!ticket.transcriptExportedAt) {
+      transcript = await exportTicketTranscript({
+        channel: interaction.channel,
+        ticket,
+        logsChannel,
+        closedBy: interaction.user
+      });
+      updateTicket(interaction.channelId, {
+        transcriptExportedAt: transcript.exportedAt,
+        transcriptMessageId: transcript.logMessageId,
+        transcriptExportedBy: interaction.user.id,
+        transcriptMessageCount: transcript.messageCount,
+        transcriptAttachmentCount: transcript.attachmentCount
+      });
+      appendTicketHistory(interaction.channelId, {
+        type: 'transcript_exported',
+        eventId: 'transcript-exported:' + interaction.channelId,
+        logMessageId: transcript.logMessageId,
+        messageCount: transcript.messageCount,
+        attachmentCount: transcript.attachmentCount
+      });
+    }
+
+    await interaction.channel.send({
+      content: 'Este atendimento foi arquivado em #logs por ' + interaction.user.toString() + '. O canal será excluído em 3 segundos.',
+      allowedMentions: { users: [interaction.user.id], roles: [] }
+    });
     await archiveAndDeleteTicket({ channel: interaction.channel, closedById: interaction.user.id });
+    await interaction.editReply({
+      content: transcript
+        ? 'Ticket arquivado em #logs. Transcrição: ' + transcript.messageCount + ' mensagens · ' + transcript.attachmentCount + ' anexo(s).'
+        : 'Ticket já possuía uma transcrição arquivada em #logs e foi fechado.'
+    });
+  } catch (error) {
+    console.error('[Asthen Transcript] Não foi possível arquivar/fechar o ticket:', error);
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply('Não consegui concluir o arquivamento. O canal foi mantido para não perder a conversa. Verifique as permissões e o tamanho dos anexos e tente novamente.').catch(() => {});
+    }
   } finally {
     closingTickets.delete(interaction.channelId);
   }
@@ -1171,6 +1168,31 @@ async function decideOrder(interaction, decision) {
   }
 }
 
+async function handleBackupCommand(interaction) {
+  if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem consultar ou criar backups.');
+  const action = interaction.options.getSubcommand();
+  if (action === 'listar' || action === 'status') {
+    const backups = listBackups();
+    if (!backups.length) return replyPrivate(interaction, 'Nenhum backup foi criado ainda. O backup automático será executado após a inicialização.');
+    const lines = backups.slice(0, 10).map(item =>
+      (item.valid ? 'OK' : 'ERRO') + ' · ' + item.id + ' · ' +
+      (item.createdAt || 'data desconhecida') + ' · ' + (item.bytes / 1024).toFixed(1) + ' KB'
+    );
+    return replyPrivate(interaction, '**Backups ASTHEN · ' + backups.length + ' disponível(is)**\n' +
+      lines.join('\n') + '\n\nRestauração: feche o bot e execute RESTAURAR.bat na pasta do projeto.');
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  try {
+    const result = createBackup({ reason: 'manual pelo Discord · administrador ' + interaction.user.id });
+    return interaction.editReply('Backup criado e verificado: ' + result.id +
+      '\nArquivos protegidos: ' + result.files + ' · ' + (result.bytes / 1024).toFixed(1) + ' KB.');
+  } catch (error) {
+    console.error('[Asthen Backup] Falha ao criar backup manual:', error);
+    return interaction.editReply('Não consegui criar o backup. Verifique o espaço em disco e o console do bot.');
+  }
+}
+
 async function handleBridgeCommand(interaction) {
   if (!canManage(interaction)) {
     return replyPrivate(interaction, 'Somente administradores ou quem tem Gerenciar servidor pode usar este comando.');
@@ -1197,6 +1219,17 @@ async function handleBridgeCommand(interaction) {
     'API: ' + (status.running ? 'online' : 'offline'),
     'Endereço local: ' + (status.running ? 'http://' + status.host + ':' + status.port : 'não iniciada'),
     'Pedidos aguardando: ' + status.pending,
+    'Plugin Minecraft: ' + (!status.lastPluginContactAt
+      ? 'aguardando primeiro contato autenticado'
+      : status.pluginOnline
+        ? 'conectado'
+        : 'sem comunicação há ' + Math.floor((Date.now() - status.lastPluginContactAt) / 1000) + 's'),
+    'Último contato do plugin: ' + (status.lastPluginContactAt
+      ? new Date(status.lastPluginContactAt).toLocaleString('pt-BR')
+      : 'nenhum contato nesta execução'),
+    'Pedido mais antigo na fila: ' + (status.oldestPendingAgeMs === null || status.oldestPendingAgeMs === undefined
+      ? 'nenhum'
+      : Math.floor(status.oldestPendingAgeMs / 1000) + 's'),
     'Kits recebidos do plugin: ' + status.kits.length,
     status.lastKitsSyncAt ? 'Última lista recebida: ' + status.lastKitsSyncAt : 'Aguardando primeira sincronização do plugin.',
     'Supabase: ' + (database.enabled ? 'configurado' : 'desativado'),
@@ -1747,12 +1780,10 @@ async function retryApprovedDelivery(interaction, mode) {
 
 async function openSupportTicket(interaction, kind) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const player = getPlayerRegistration(interaction.user.id);
   const result = await createPrivateTicket({
     guild: interaction.guild,
     user: interaction.user,
-    type: kind,
-    minecraftNick: player?.minecraft_nick || null
+    type: kind
   });
 
   if (!result.alreadyOpen) {
@@ -1760,7 +1791,7 @@ async function openSupportTicket(interaction, kind) {
     const staffMention = config.staffRoleId ? '<@&' + config.staffRoleId + '>' : '';
     await result.channel.send({
       content: staffMention || undefined,
-      embeds: [makeSupportTicketEmbed(kind, interaction.user, player?.minecraft_nick || '')],
+      embeds: [makeSupportTicketEmbed(kind, interaction.user)],
       components: [makeCloseRow()],
       allowedMentions: {
         users: [interaction.user.id],
@@ -1775,101 +1806,570 @@ async function openSupportTicket(interaction, kind) {
   });
 }
 
-async function handleRegistrationSubmit(interaction) {
-  if (!interaction.guild) return replyPrivate(interaction, 'Use o registro dentro do servidor ASTHEN.');
-  const minecraftNick = interaction.fields.getTextInputValue('minecraft-nick');
-  if (!validateMinecraftNick(minecraftNick)) {
-    return replyPrivate(interaction, 'Informe um nick Minecraft válido, sem espaços no começo ou no fim e com até 32 caracteres.');
+async function requestStockRelease(interaction) {
+  const ticket = getTicket(interaction.channelId);
+  if (!ticket || ticket.type !== 'shop') {
+    return replyPrivate(interaction, 'Este canal não contém um pedido válido.');
+  }
+  if (!isStaff(interaction, getGuildConfig(interaction.guildId))) {
+    return replyPrivate(interaction, 'Somente a equipe autorizada pode registrar o cancelamento/estorno.');
+  }
+  if (ticket.orderStatus !== 'approved') {
+    return replyPrivate(interaction, 'Somente pedidos aprovados podem liberar uma reserva semanal.');
+  }
+  if (ticket.stockReleasedAt) {
+    return replyPrivate(interaction, 'A reserva semanal deste pedido já foi liberada.');
+  }
+  if (!ticket.stockReservationId) {
+    return replyPrivate(interaction, 'Este pedido não possui um identificador de reserva. A equipe precisa conferir o estoque manualmente.');
+  }
+  if (deliveryAttemptsInFlight.has(ticket.channelId)) {
+    return replyPrivate(interaction, 'A entrega ainda está em processamento. Aguarde um resultado definitivo antes de cancelar.');
   }
 
-  const member = await interaction.guild.members.fetch(interaction.user.id);
-  try {
-    const result = await registerPlayerForMember(member, minecraftNick, 'autoatendimento');
-    const status = result.sync.errors.length
-      ? '\nO cadastro foi salvo, mas houve uma pendência ao sincronizar ' + result.sync.errors.join('; ') + '. Avise a equipe.'
-      : '\nSeu cargo de membro e seu apelido do Discord foram sincronizados.';
+  const status = String(ticket.deliveryStatus || 'UNKNOWN');
+  if (status === 'KIT_PENDING') {
     return replyPrivate(interaction,
-      (result.previous ? 'Nick Minecraft atualizado para **' : 'Registro concluído para **') +
-      result.record.minecraft_nick + '**.' + status);
-  } catch (error) {
-    return replyPrivate(interaction, error.message || 'Não foi possível salvar seu registro Minecraft.');
+      'Este kit ainda está guardado como pendência no Minecraft e pode ser recebido depois. Resolva/remova a pendência no servidor antes de registrar um estorno.');
+  }
+  const safeFinalFailures = new Set([
+    'PLAYER_OFFLINE', 'PLATFORM_MISMATCH', 'PLATFORM_UNVERIFIABLE',
+    'KIT_NOT_FOUND', 'KIT_DISABLED', 'INVENTORY_FULL', 'DELIVERY_DISABLED',
+    'KIT_CORRUPT', 'INVALID_REQUEST'
+  ]);
+  const pluginFinalTimeout = status === 'TIMEOUT'
+    && (ticket.deliveryPluginFinal === true || getBridgeJob(ticket.deliveryRequestId || '')?.result?.status === 'TIMEOUT');
+  if (status !== 'KIT_DELIVERED' && !safeFinalFailures.has(status) && !pluginFinalTimeout) {
+    return replyPrivate(interaction,
+      'Ainda não existe um resultado final seguro para liberar o estoque. Estado atual: ' + status +
+      '. Não cancele enquanto a Bridge ou o Minecraft ainda puderem concluir a entrega.');
+  }
+
+  const modal = new ModalBuilder()
+    .setCustomId('order:release-stock:submit')
+    .setTitle('Registrar cancelamento / estorno');
+  const reason = new TextInputBuilder()
+    .setCustomId('reason')
+    .setLabel('Motivo do cancelamento ou estorno')
+    .setStyle(TextInputStyle.Paragraph)
+    .setMinLength(5)
+    .setMaxLength(300)
+    .setRequired(true);
+  const confirmation = new TextInputBuilder()
+    .setCustomId('confirmation')
+    .setLabel('Digite ESTORNO CONFIRMADO')
+    .setStyle(TextInputStyle.Short)
+    .setMinLength(18)
+    .setMaxLength(18)
+    .setRequired(true);
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(reason),
+    new ActionRowBuilder().addComponents(confirmation)
+  );
+
+  const gameConfirmation = new TextInputBuilder()
+    .setCustomId('game-confirmation')
+    .setLabel('Confirmação do estado do kit no Minecraft')
+    .setPlaceholder(status === 'KIT_DELIVERED' ? 'KIT REMOVIDO' : 'NAO ENTREGUE')
+    .setStyle(TextInputStyle.Short)
+    .setMinLength(12)
+    .setMaxLength(12)
+    .setRequired(true);
+  modal.addComponents(new ActionRowBuilder().addComponents(gameConfirmation));
+  return interaction.showModal(modal);
+}
+
+async function submitStockRelease(interaction) {
+  const channelId = interaction.channelId;
+  if (stockReleaseAttemptsInFlight.has(channelId)) {
+    return replyPrivate(interaction, 'A liberação desta reserva já está sendo processada.');
+  }
+  stockReleaseAttemptsInFlight.add(channelId);
+  try {
+    return await submitStockReleaseInternal(interaction);
+  } finally {
+    stockReleaseAttemptsInFlight.delete(channelId);
   }
 }
 
-async function handleRegistrationCommand(interaction) {
-  if (!canManage(interaction)) {
-    return replyPrivate(interaction, 'Você precisa de Gerenciar servidor para administrar os cadastros Minecraft.');
+async function submitStockReleaseInternal(interaction) {
+  const ticket = getTicket(interaction.channelId);
+  if (!ticket || ticket.type !== 'shop' || ticket.orderStatus !== 'approved') {
+    return replyPrivate(interaction, 'Este pedido não está aprovado ou já foi encerrado.');
   }
-  const config = getGuildConfig(interaction.guildId);
-  const subcommand = interaction.options.getSubcommand();
-
-  if (subcommand === 'atualizar') {
-    const targetUser = interaction.options.getUser('jogador', true);
-    const nick = interaction.options.getString('nick', true);
-    if (!validateMinecraftNick(nick)) {
-      return replyPrivate(interaction, 'Informe um nick Minecraft válido, sem espaços no começo/fim e com até 32 caracteres.');
-    }
-    const targetMember = await interaction.guild.members.fetch(targetUser.id);
-    try {
-      const result = await registerPlayerForMember(
-        targetMember,
-        nick,
-        'administração por <@' + interaction.user.id + '>'
-      );
-      const warning = result.sync.errors.length
-        ? '\\nPendência de sincronização: ' + result.sync.errors.join('; ') + '. Confira a hierarquia e as permissões do bot.'
-        : '\\nCargo e apelido sincronizados.';
-      return replyPrivate(interaction,
-        'Cadastro de <@' + targetUser.id + '> atualizado para **' + result.record.minecraft_nick + '**.' + warning);
-    } catch (error) {
-      return replyPrivate(interaction, error.message || 'Não foi possível atualizar o cadastro do jogador.');
-    }
+  if (!isStaff(interaction, getGuildConfig(interaction.guildId))) {
+    return replyPrivate(interaction, 'Somente a equipe autorizada pode registrar o cancelamento/estorno.');
+  }
+  if (ticket.stockReleasedAt) {
+    return replyPrivate(interaction, 'A reserva semanal deste pedido já foi liberada.');
+  }
+  if (deliveryAttemptsInFlight.has(ticket.channelId)) {
+    return replyPrivate(interaction, 'A entrega ainda está em processamento. Aguarde um resultado definitivo.');
   }
 
-  const role = interaction.options.getRole('cargo', true);
-  const roles = new Set(config.registrationBypassRoleIds || []);
-  if (subcommand === 'autorizar') {
-    roles.add(role.id);
-  } else if (subcommand === 'revogar') {
-    roles.delete(role.id);
+  const reason = interaction.fields.getTextInputValue('reason').trim();
+  const confirmation = interaction.fields.getTextInputValue('confirmation').trim().toUpperCase();
+  if (reason.length < 5 || confirmation !== 'ESTORNO CONFIRMADO') {
+    return replyPrivate(interaction, 'Confirmação inválida. Registre somente depois de concluir o cancelamento/estorno fora do bot.');
+  }
+
+  const status = String(ticket.deliveryStatus || 'UNKNOWN');
+  const safeFinalFailures = new Set([
+    'PLAYER_OFFLINE', 'PLATFORM_MISMATCH', 'PLATFORM_UNVERIFIABLE',
+    'KIT_NOT_FOUND', 'KIT_DISABLED', 'INVENTORY_FULL', 'DELIVERY_DISABLED',
+    'KIT_CORRUPT', 'INVALID_REQUEST'
+  ]);
+  const pluginFinalTimeout = status === 'TIMEOUT'
+    && (ticket.deliveryPluginFinal === true || getBridgeJob(ticket.deliveryRequestId || '')?.result?.status === 'TIMEOUT');
+  if (status === 'KIT_PENDING') {
+    return replyPrivate(interaction, 'A pendência ainda pode ser recebida no Minecraft. Resolva-a no servidor antes de liberar o estoque.');
+  }
+  const gameConfirmation = interaction.fields.getTextInputValue('game-confirmation').trim().toUpperCase();
+  if (status === 'KIT_DELIVERED') {
+    if (gameConfirmation !== 'KIT REMOVIDO') {
+      return replyPrivate(interaction, 'Não liberei o estoque. Primeiro remova o kit do jogador no Minecraft e confirme com KIT REMOVIDO.');
+    }
   } else {
-    return replyPrivate(interaction, 'Ação de registro desconhecida.');
+    if (gameConfirmation !== 'NAO ENTREGUE') {
+      return replyPrivate(interaction, 'Confirme NAO ENTREGUE somente depois de verificar que nenhuma Shulker Box está entregue ou pendente.');
+    }
+    if (!safeFinalFailures.has(status) && !pluginFinalTimeout) {
+      return replyPrivate(interaction, 'O estado ' + status + ' não permite liberar a reserva com segurança. Aguarde a reconciliação da entrega.');
+    }
   }
 
-  updateGuildConfig(interaction.guildId, { registrationBypassRoleIds: [...roles] });
-  await refreshRegistrationPanel(interaction.guild).catch(error => {
-    console.warn('[Asthen Registro] Não foi possível atualizar permissões de #registro:', error.message);
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  let release;
+  try {
+    release = await releaseWeeklyKitStock({
+      guildId: ticket.guildId || interaction.guildId,
+      requestId: ticket.stockReservationId
+    });
+  } catch (error) {
+    console.error('[Asthen Stock] Não foi possível liberar a reserva semanal:', error);
+    return interaction.editReply(
+      'Não consegui confirmar a liberação no Supabase. O pedido continua aprovado e a reserva não foi marcada como liberada no bot. Você pode repetir esta ação com segurança; a operação do banco é idempotente.'
+    );
+  }
+
+  if (!release.ok) {
+    const detail = release.reason === 'reservation_not_found'
+      ? 'A reserva não foi encontrada no Supabase.'
+      : 'O Supabase não confirmou a liberação (' + String(release.reason || 'motivo desconhecido') + ').';
+    return interaction.editReply(detail + ' Nenhum status local foi alterado.');
+  }
+
+  const releasedAt = new Date().toISOString();
+  const updated = updateTicket(interaction.channelId, {
+    orderStatus: 'cancelled',
+    stockReleasedAt: releasedAt,
+    stockReleaseReason: reason,
+    stockReleasedBy: interaction.user.id,
+    stockReleaseAlreadyApplied: release.already_released === true
+  }) || ticket;
+  appendTicketHistory(interaction.channelId, {
+    type: 'stock_released',
+    eventId: 'stock-release:' + ticket.stockReservationId,
+    reservationId: ticket.stockReservationId,
+    staffId: interaction.user.id,
+    reason,
+    alreadyReleased: release.already_released === true,
+    remaining: release.remaining,
+    at: releasedAt
   });
-  await reconcileGuildMembers(interaction.guild).catch(error => {
-    console.warn('[Asthen Registro] A autorização foi salva, mas a reconciliação dos membros falhou:', error.message);
-  });
-  return replyPrivate(interaction,
-    subcommand === 'autorizar'
-      ? 'O cargo ' + role.toString() + ' agora pode visualizar #registro mesmo após o cadastro.'
-      : 'O cargo ' + role.toString() + ' não tem mais autorização especial para #registro.');
+
+  await refreshPublishedShopPanel(interaction.guild, interaction.guildId);
+
+  try {
+    if (interaction.channel?.send) {
+      await interaction.channel.send({
+        content: '<@' + ticket.userId + '> O cancelamento/estorno foi registrado pela equipe e a reserva semanal do kit foi liberada.',
+        allowedMentions: { users: [ticket.userId], roles: [] }
+      });
+    }
+  } catch (error) {
+    console.error('[Asthen Stock] Reserva liberada, mas a notificação no ticket não foi publicada:', error);
+  }
+
+  try {
+    const config = getGuildConfig(interaction.guildId);
+    const logsChannel = await fetchTextChannel(interaction.guild, config.logsChannelId);
+    if (logsChannel) {
+      await logsChannel.send({
+        embeds: [makeOrderLogEmbed({ ticket: { ...updated, stockReleaseReason: reason }, decision: 'refunded', staffUser: interaction.user })],
+        allowedMentions: { users: [], roles: [] }
+      });
+    }
+  } catch (error) {
+    console.error('[Asthen Stock] Reserva liberada, mas o log do estorno não foi publicado:', error);
+  }
+
+  await interaction.editReply(
+    'Cancelamento registrado. A reserva semanal foi liberada no Supabase' +
+    (release.already_released ? ' (a operação já havia sido aplicada)' : '') +
+    '. Restante nesta semana: ' + String(release.remaining ?? '—') + '.'
+  );
 }
 
-async function handleAccountCommand(interaction) {
-  const player = getPlayerRegistration(interaction.user.id);
-  const subcommand = interaction.options.getSubcommand();
-  if (subcommand === 'perfil') {
-    return replyPrivate(interaction, player?.minecraft_nick
-      ? 'Sua conta está vinculada ao Minecraft **' + player.minecraft_nick + '**.\nÚltima atualização: <t:' + Math.floor(Date.parse(player.updated_at) / 1000) + ':R>.'
-      : 'Você ainda não possui um nick Minecraft cadastrado. Conclua o registro em #registro.');
+async function notifyStaffPrivately(interaction, content) {
+  if (!interaction) return;
+  try {
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
+    } else {
+      await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+    }
+  } catch (error) {
+    console.warn('[Asthen] Não foi possível enviar o aviso privado à equipe:', error.message);
   }
-  if (subcommand === 'atualizar-nick') {
-    return interaction.showModal(makeMinecraftNickModal('registration:submit', player?.minecraft_nick || ''));
+}
+
+async function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+
+function friendlyDeliveryMessage(status, originalMessage = '') {
+  const original = String(originalMessage || '').toLowerCase();
+  if (status === 'KIT_PENDING' && original.includes('offline')) {
+    return 'O jogador estava offline. O plugin guardou o kit na fila e tentará entregá-lo automaticamente quando ele entrar no servidor. Isso exige kits.require-online: false no config.yml do plugin.';
   }
-  return replyPrivate(interaction, 'Opção de conta desconhecida.');
+  if (status === 'KIT_PENDING') {
+    return 'O inventário estava cheio. O plugin guardou o kit completo como pendente e avisou o jogador para liberar pelo menos um espaço. Depois de liberar espaço, ele deve usar /dk claim.';
+  }
+  const messages = {
+    KIT_DELIVERED: 'O plugin confirmou a entrega do kit.',
+    PLAYER_OFFLINE: 'O jogador está offline, mas o plugin recusou colocar o kit na fila. Ative kits.require-online: false no config.yml do plugin e repita a entrega.',
+    KIT_NOT_FOUND: 'O kit não foi encontrado no servidor. A equipe precisa conferir se ele ainda existe no plugin.',
+    PLATFORM_MISMATCH: 'O Floodgate não identificou essa conexão como Bedrock. Confira a gamertag e a conexão pelo Geyser.',
+    PLATFORM_UNVERIFIABLE: 'O servidor não conseguiu verificar a conta Bedrock. Confira se o Floodgate está instalado e ativo.',
+    KIT_DISABLED: 'Este kit está desativado no servidor e não pode ser entregue no momento.',
+    KIT_CORRUPT: 'O plugin encontrou um problema nos dados deste kit. A equipe foi avisada.',
+    INVENTORY_FULL: 'O inventário está cheio e o plugin não conseguiu guardar o kit como pendente. A equipe foi avisada.',
+    DELIVERY_DISABLED: 'A entrega pelo Discord está desativada na configuração do plugin. A equipe foi avisada.'
+  };
+  return messages[status] || originalMessage || 'O plugin não confirmou a entrega. A equipe foi avisada e vai verificar o pedido.';
+}
+
+async function deliverWithTimeoutRetry(payload) {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      return await deliverKit(payload);
+    } catch (error) {
+      if (error.code !== 'BRIDGE_TIMEOUT' || attempt === 2) throw error;
+      await wait(1500);
+    }
+  }
+  throw new Error('Não foi possível concluir a entrega.');
+}
+
+async function processApprovedDelivery(channel, ticket, options = {}) {
+  if (!ticket?.channelId) throw new Error('Ticket inválido para iniciar entrega.');
+  const alreadyHeld = deliveryAttemptsInFlight.has(ticket.channelId);
+  if (alreadyHeld && options.lockAlreadyHeld !== true) {
+    return { skipped: true, reason: 'delivery_in_flight' };
+  }
+  if (!alreadyHeld) deliveryAttemptsInFlight.add(ticket.channelId);
+  try {
+    return await processApprovedDeliveryInternal(channel, ticket, options);
+  } finally {
+    deliveryAttemptsInFlight.delete(ticket.channelId);
+  }
+}
+
+async function processApprovedDeliveryInternal(channel, ticket, { newRequest = false, interaction = null, recovery = false } = {}) {
+  const retryableFinalFailures = new Set([
+    'PLAYER_OFFLINE',
+    'PLATFORM_MISMATCH',
+    'PLATFORM_UNVERIFIABLE',
+    'KIT_NOT_FOUND',
+    'KIT_DISABLED',
+    'INVENTORY_FULL',
+    'DELIVERY_DISABLED',
+    'KIT_CORRUPT',
+    'INVALID_REQUEST'
+  ]);
+  if (ticket.deliveryStatus === 'KIT_PENDING' || ticket.deliveryStatus === 'KIT_DELIVERED') {
+    throw new Error('Este pedido já está pendente/entregue e não pode gerar outra entrega.');
+  }
+  const previousPluginTimedOut = ticket.deliveryStatus === 'TIMEOUT'
+    && (ticket.deliveryPluginFinal === true || getBridgeJob(ticket.deliveryRequestId || '')?.result?.status === 'TIMEOUT');
+  if (newRequest && !retryableFinalFailures.has(ticket.deliveryStatus) && !previousPluginTimedOut) {
+    throw new Error('Não é seguro criar outro request_id para o estado ' + String(ticket.deliveryStatus || 'desconhecido') + '.');
+  }
+  const requestId = newRequest
+    ? 'ticket-' + ticket.channelId + '-' + randomUUID().slice(0, 8)
+    : (ticket.deliveryRequestId || 'ticket-' + ticket.channelId);
+  const persistedJob = getBridgeJob(ticket.deliveryRequestId || requestId);
+  const requestPlatform = newRequest ? 'bedrock' : (persistedJob?.payload?.platform || ticket.platform || 'bedrock');
+  const current = updateTicket(ticket.channelId, {
+    deliveryRequestId: requestId,
+    platform: requestPlatform,
+    deliveryStatus: 'QUEUED',
+    deliveryUpdatedAt: new Date().toISOString(),
+    deliveryError: null,
+    deliveryPluginFinal: false,
+    deliveryResultNotificationPending: true,
+    deliveryResultNotificationSent: false
+  }) || ticket;
+  appendTicketHistory(ticket.channelId, {
+    type: 'delivery_queued',
+    eventId: 'delivery-queued:' + requestId,
+    requestId,
+    player: current.minecraftNick,
+    platform: current.platform,
+    kit: current.kitName,
+    newAttempt: newRequest === true
+  });
+
+  // A primeira mensagem de resultado será enviada apenas depois da resposta do plugin.
+
+  let result;
+  try {
+    result = await deliverWithTimeoutRetry({
+      requestId,
+      player: current.minecraftNick,
+      platform: current.platform,
+      kit: current.kitName,
+      guildId: current.guildId,
+      ticketId: current.channelId,
+      timeoutMs: 60000
+    });
+  } catch (error) {
+    const timedOut = error.code === 'BRIDGE_TIMEOUT';
+    const nextStatus = timedOut ? 'TIMEOUT' : 'WAITING';
+    updateTicket(ticket.channelId, {
+      deliveryStatus: nextStatus,
+      deliveryError: String(error.message || 'Falha ao solicitar a entrega.'),
+      deliveryPluginFinal: false,
+      deliveryUpdatedAt: new Date().toISOString()
+    });
+    appendTicketHistory(ticket.channelId, {
+      type: 'delivery_transport_error',
+      requestId,
+      status: nextStatus,
+      message: String(error.message || '').slice(0, 500)
+    });
+    try {
+      await channel.send({
+        content: timedOut
+          ? 'O Minecraft não respondeu nas duas tentativas automáticas. O mesmo identificador foi mantido e o pedido continua salvo. A equipe pode consultar ou tentar novamente com o mesmo ID.'
+          : 'A conexão com o Minecraft está indisponível. O pedido permanece salvo para recuperação; não crie outra compra.',
+        components: [makeDeliveryRetryControls('same')]
+      });
+    } catch (notificationError) {
+      console.error('[Asthen] Não foi possível publicar o aviso de falha de conexão:', notificationError.message);
+    }
+    try {
+      await notifyStaffPrivately(
+        interaction,
+        (timedOut ? 'A entrega excedeu o tempo limite nas duas tentativas automáticas.' : 'Não foi possível alcançar a Bridge do Minecraft.') +
+        ' O pedido foi preservado com o mesmo identificador. Detalhe técnico: ' +
+        String(error.message || 'Sem resposta.')
+      );
+    } catch (staffError) {
+      console.error('[Asthen] Não foi possível notificar a equipe sobre a falha de conexão:', staffError.message);
+    }
+    return;
+  }
+
+  const status = String(result.status || 'UNKNOWN');
+  const resultAt = new Date().toISOString();
+  updateTicket(ticket.channelId, {
+    deliveryStatus: status,
+    deliveryResponse: String(result.message || ''),
+    deliveryUpdatedAt: resultAt,
+    deliveryError: null,
+    deliveryPluginFinal: true,
+    deliveryResultNotificationSent: false
+  });
+  appendTicketHistory(ticket.channelId, {
+    type: 'delivery_result',
+    eventId: 'delivery-result:' + requestId,
+    requestId,
+    status,
+    message: String(result.message || '').slice(0, 500),
+    at: resultAt
+  });
+
+  const success = status === 'KIT_DELIVERED' || status === 'KIT_PENDING';
+  const pluginFinalTimeout = status === 'TIMEOUT'
+    && getBridgeJob(requestId)?.result?.status === 'TIMEOUT';
+  const canRetryWithNewRequest = retryableFinalFailures.has(status) || pluginFinalTimeout;
+  try {
+    await channel.send({
+      content: makeDeliveryMessage({
+        ...result,
+        status,
+        userId: ticket.userId,
+        player: result.player || current.minecraftNick,
+        kitDisplayName: current.kitDisplayName,
+        kit: current.kitName,
+        message: friendlyDeliveryMessage(status, result.message),
+        pendingReason: status === 'KIT_PENDING' && /offline/i.test(String(result.message || '')) ? 'offline' : 'inventory'
+      }),
+      ...(success ? {} : canRetryWithNewRequest ? { components: [makeDeliveryRetryControls('new')] } : {}),
+      allowedMentions: { users: [ticket.userId], roles: [] }
+    });
+    updateTicket(ticket.channelId, {
+      deliveryResultNotificationPending: false,
+      deliveryResultNotificationSent: true,
+      deliveryNotificationError: null
+    });
+
+
+  } catch (notificationError) {
+    // The Minecraft result is already final. Never relabel a delivered kit as WAITING
+    // merely because Discord failed to publish the embed.
+    updateTicket(ticket.channelId, {
+      deliveryResultNotificationPending: true,
+      deliveryResultNotificationSent: false,
+      deliveryNotificationError: String(notificationError.message || 'Falha ao notificar o ticket.')
+    });
+    console.error('[Asthen] A entrega foi processada, mas o embed do resultado não pôde ser publicado:', notificationError.message);
+    try {
+      await notifyStaffPrivately(interaction, 'A entrega respondeu com status ' + status +
+        ', mas a mensagem de resultado não foi publicada no ticket. Request ID: ' + requestId);
+    } catch (staffError) {
+      console.error('[Asthen] Não foi possível notificar a equipe sobre a falha de mensagem:', staffError.message);
+    }
+  }
+
+  if (!success) {
+    try {
+      await notifyStaffPrivately(
+        interaction,
+        'A entrega não foi concluída. Status: ' + status + '. ' +
+        String(result.message || 'Confira a configuração do plugin.') +
+        '\nO pedido foi preservado.'
+      );
+    } catch (staffError) {
+      console.error('[Asthen] Não foi possível notificar a equipe sobre o resultado da entrega:', staffError.message);
+    }
+  }
+}
+
+async function setLegacyTicketPlatform(interaction) {
+  const ticket = getTicket(interaction.channelId);
+  if (!ticket || ticket.type !== 'shop' || ticket.orderStatus !== 'approved') {
+    return replyPrivate(interaction, 'Este canal não contém um pedido aprovado que precise da migração.');
+  }
+  if (!isStaff(interaction, getGuildConfig(interaction.guildId))) {
+    return replyPrivate(interaction, 'Somente a equipe autorizada pode atualizar este pedido.');
+  }
+  const existingJob = getBridgeJob(ticket.deliveryRequestId || '');
+  const platform = existingJob?.payload?.platform || 'bedrock';
+  updateTicket(interaction.channelId, { platform });
+  await interaction.reply({
+    content: 'Este pedido foi migrado para Bedrock. Uma entrega já enfileirada mantém o payload original.',
+    flags: MessageFlags.Ephemeral
+  });
+  void processApprovedDelivery(interaction.channel, getTicket(interaction.channelId), { interaction })
+    .catch(error => console.error('[Asthen] Falha na entrega de pedido antigo:', error));
+}
+
+
+
+async function retryApprovedDelivery(interaction, mode) {
+  const ticket = getTicket(interaction.channelId);
+  if (!ticket || ticket.type !== 'shop' || ticket.orderStatus !== 'approved') {
+    return replyPrivate(interaction, 'Este canal não possui um pedido pago aguardando entrega.');
+  }
+  if (!isStaff(interaction, getGuildConfig(interaction.guildId))) {
+    return replyPrivate(interaction, 'Somente a equipe pode solicitar outra tentativa de entrega.');
+  }
+  if (deliveryAttemptsInFlight.has(ticket.channelId)) {
+    return replyPrivate(interaction, 'Já existe uma tentativa de entrega em andamento para este pedido.');
+  }
+  if (ticket.deliveryStatus === 'KIT_PENDING') {
+    return replyPrivate(interaction, 'O kit já está guardado no Minecraft. Não crie outra entrega; o plugin atualizará este pedido quando o jogador retirar a pendência.');
+  }
+  if (ticket.deliveryStatus === 'KIT_DELIVERED') {
+    return replyPrivate(interaction, 'O plugin já confirmou a entrega deste kit. Uma nova tentativa não será criada.');
+  }
+  if (mode !== 'same' && mode !== 'new') {
+    return replyPrivate(interaction, 'Modo de tentativa inválido.');
+  }
+  if (mode === 'same' && !ticket.deliveryRequestId) {
+    return replyPrivate(interaction, 'Não encontrei o identificador da entrega anterior. A equipe precisa revisar o histórico antes de criar outra tentativa.');
+  }
+
+  const retryableFinalFailures = new Set([
+    'PLAYER_OFFLINE',
+    'PLATFORM_MISMATCH',
+    'PLATFORM_UNVERIFIABLE',
+    'KIT_NOT_FOUND',
+    'KIT_DISABLED',
+    'INVENTORY_FULL',
+    'DELIVERY_DISABLED',
+    'KIT_CORRUPT',
+    'INVALID_REQUEST'
+  ]);
+  const previousJob = getBridgeJob(ticket.deliveryRequestId || '');
+  const previousPluginTimedOut = ticket.deliveryStatus === 'TIMEOUT'
+    && (ticket.deliveryPluginFinal === true || previousJob?.result?.status === 'TIMEOUT');
+  if (mode === 'new' && !retryableFinalFailures.has(ticket.deliveryStatus) && !previousPluginTimedOut) {
+    return replyPrivate(interaction,
+      'Não é seguro criar outro request_id para este estado (' + String(ticket.deliveryStatus || 'desconhecido') +
+      '). Se o timeout foi apenas de comunicação, reutilize o mesmo identificador; uma nova tentativa só é segura após TIMEOUT final confirmado pelo plugin.');
+  }
+
+  deliveryAttemptsInFlight.add(ticket.channelId);
+  try {
+    await interaction.reply({
+      content: mode === 'new'
+        ? 'Uma nova tentativa foi autorizada após falha final confirmada.'
+        : 'A tentativa será reenviada com o mesmo identificador, sem criar outra compra.',
+      flags: MessageFlags.Ephemeral
+    });
+  } catch (error) {
+    deliveryAttemptsInFlight.delete(ticket.channelId);
+    throw error;
+  }
+  void processApprovedDelivery(interaction.channel, ticket, {
+    newRequest: mode === 'new',
+    interaction,
+    lockAlreadyHeld: true
+  }).catch(error => {
+    console.error('[Asthen] Falha ao tentar entregar o kit:', error);
+  });
+}
+
+async function openSupportTicket(interaction, kind) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const result = await createPrivateTicket({
+    guild: interaction.guild,
+    user: interaction.user,
+    type: kind
+  });
+
+  if (!result.alreadyOpen) {
+    const config = getGuildConfig(interaction.guildId);
+    const staffMention = config.staffRoleId ? '<@&' + config.staffRoleId + '>' : '';
+    await result.channel.send({
+      content: staffMention || undefined,
+      embeds: [makeSupportTicketEmbed(kind, interaction.user)],
+      components: [makeCloseRow()],
+      allowedMentions: {
+        users: [interaction.user.id],
+        roles: config.staffRoleId ? [config.staffRoleId] : []
+      }
+    });
+  }
+
+  return interaction.editReply({
+    content: result.alreadyOpen ? 'Você já tem um atendimento aberto.' : 'Atendimento aberto.',
+    components: [makeChannelLinkRow(result.channel)]
+  });
 }
 
 async function handleCommand(interaction) {
   if (!interaction.guild) return replyPrivate(interaction, 'Use este comando dentro de um servidor.');
 
   if (interaction.commandName === 'configurar') return configureChannels(interaction);
-  if (interaction.commandName === 'registro') return handleRegistrationCommand(interaction);
-  if (interaction.commandName === 'conta') return handleAccountCommand(interaction);
   if (interaction.commandName === 'kit') return handleKitCommand(interaction);
+  if (interaction.commandName === 'backup') return handleBackupCommand(interaction);
+  if (interaction.commandName === 'backup') return handleBackupCommand(interaction);
   if (interaction.commandName === 'bridge') return handleBridgeCommand(interaction);
 }
 
