@@ -188,7 +188,9 @@ export async function applyRegisteredIdentity(member, record = getPlayerRegistra
   if (!record?.minecraft_nick) {
     if (!memberCanBypassRegistration(member, config)) {
       try {
-        await updateMemberRole(member, false, config);
+        const changedRole = await updateMemberRole(member, false, config);
+        if (changedRole) await sendRegistrationLog(member.guild,
+          'Cargo **' + changedRole.name + '** removido de <@' + member.id + '> porque o jogador ainda não possui registro Minecraft.');
       } catch (error) {
         await sendRegistrationLog(member.guild,
           'Não foi possível remover o cargo de membro de <@' + member.id + '>: ' + error.message);
