@@ -292,12 +292,15 @@ async function configureChannels(interaction) {
   const shopChannel = interaction.options.getChannel('kits');
   const logsChannel = interaction.options.getChannel('logs');
   const buyersChannel = interaction.options.getChannel('compradores');
+  const registrationChannel = interaction.options.getChannel('registro');
+  const memberRole = interaction.options.getRole('membro');
   const staffRole = interaction.options.getRole('equipe');
 
-  if (!supportChannel && !shopChannel && !logsChannel && !buyersChannel && !staffRole) {
+  if (!supportChannel && !shopChannel && !logsChannel && !buyersChannel
+      && !registrationChannel && !memberRole && !staffRole) {
     return replyPrivate(
       interaction,
-      'Informe pelo menos um campo. Exemplo: /configurar atendimento:#atendimento kits:#kits logs:#logs compradores:#compradores equipe:@Equipe'
+      'Informe pelo menos um campo. Exemplo: /configurar atendimento:#atendimento kits:#kits logs:#logs compradores:#compradores registro:#registro membro:@Membro equipe:@Equipe'
     );
   }
 
@@ -318,6 +321,16 @@ async function configureChannels(interaction) {
   if (staffRole) {
     changes.staffRoleId = staffRole.id;
     updated.push('equipe: ' + staffRole.toString());
+  }
+
+  if (memberRole) {
+    changes.memberRoleId = memberRole.id;
+    updated.push('membro: ' + memberRole.toString());
+  }
+
+  if (registrationChannel) {
+    changes.registrationChannelId = registrationChannel.id;
+    updated.push('registro: ' + registrationChannel.toString());
   }
 
   const effectiveStaffRoleId = changes.staffRoleId ?? config.staffRoleId;
@@ -342,6 +355,16 @@ async function configureChannels(interaction) {
   }
 
   updateGuildConfig(interaction.guildId, changes);
+
+  if (registrationChannel || memberRole || staffRole) {
+    try {
+      await refreshRegistrationPanel(interaction.guild);
+      await reconcileGuildMembers(interaction.guild);
+    } catch (error) {
+      console.error('[Asthen Registro] Configuração salva, mas não foi possível concluir a sincronização:', error.message);
+      updated.push('registro: configuração salva, mas a sincronização de membros ficou pendente (verifique permissões e logs)');
+    }
+  }
 
   return replyPrivate(
     interaction,
