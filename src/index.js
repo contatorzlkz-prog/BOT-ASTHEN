@@ -141,7 +141,7 @@ async function discoverGuildChannels(guild) {
   const changes = {};
   if (!config.memberRoleId) {
     const memberRole = guild.roles.cache.find(role =>
-      ['membro', 'membros'].includes(String(role.name || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase())
+      ['membro', 'membros'].includes(String(role.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())
     );
     if (memberRole) changes.memberRoleId = memberRole.id;
   }
