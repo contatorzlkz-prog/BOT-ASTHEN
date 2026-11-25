@@ -33,10 +33,12 @@ test('support selector uses Minecraft server departments', () => {
 
 test('admin commands are compact and Pix is no longer a slash command', () => {
   const names = commandDefinitions.map(item => item.toJSON().name);
-  assert.deepEqual(names, ['configurar', 'kit', 'bridge']);
+  assert.deepEqual(names, ['configurar', 'registro', 'conta', 'kit', 'bridge']);
   assert.equal(command('pix'), undefined);
   assert.deepEqual(command('kit').options.map(option => option.name), ['listar', 'editar']);
-  assert.deepEqual(command('configurar').options.map(option => option.name), ['atendimento', 'kits', 'logs', 'compradores', 'equipe']);
+  assert.deepEqual(command('configurar').options.map(option => option.name), ['atendimento', 'kits', 'logs', 'compradores', 'registro', 'membro', 'equipe']);
+  assert.deepEqual(command('registro').options.map(option => option.name), ['autorizar', 'revogar', 'atualizar']);
+  assert.deepEqual(command('conta').options.map(option => option.name), ['perfil', 'atualizar-nick']);
   assert.deepEqual(command('bridge').options.map(option => option.name), ['status']);
   assert.equal(command('kit').default_member_permissions, '8');
 });
