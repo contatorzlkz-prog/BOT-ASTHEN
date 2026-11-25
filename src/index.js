@@ -7,6 +7,7 @@ import { makeDeliveryMessage, makeDeliveryRetryControls, makeShopPanel, makeSupp
 import { handleInteraction, getShopKitsWithCurrentStock, recoverApprovedDeliveries, secureLogsChannel } from './interactions.js';
 import { discoverStandardChannels, messageHasPanel } from './channel-discovery.js';
 import { ensureBridgeSecret, getBridgeJob, startBridge } from './bridge.js';
+import { refreshRegistrationPanel, reconcileGuildMembers, reconcileGuildMember, handleRegisteredNicknameUpdate } from './registration.js';
 
 function assertRuntime() {
   const major = Number(process.versions.node.split('.')[0]);
@@ -138,13 +139,20 @@ async function discoverGuildChannels(guild) {
   const config = getGuildConfig(guild.id);
   const found = discoverStandardChannels(guild.channels.cache);
   const changes = {};
+  if (!config.memberRoleId) {
+    const memberRole = guild.roles.cache.find(role =>
+      ['membro', 'membros'].includes(String(role.name || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase())
+    );
+    if (memberRole) changes.memberRoleId = memberRole.id;
+  }
   const messageKeys = {
     supportPanelChannelId: { message: 'supportPanelMessageId', version: 'supportPanelVersion' },
-    shopPanelChannelId: { message: 'shopPanelMessageId', version: 'shopPanelVersion' }
+    shopPanelChannelId: { message: 'shopPanelMessageId', version: 'shopPanelVersion' },
+    registrationChannelId: { message: 'registrationPanelMessageId', version: 'registrationPanelVersion' }
   };
 
   const channelKeys = [
-    'supportPanelChannelId', 'shopPanelChannelId', 'logsChannelId', 'buyersChannelId'
+    'supportPanelChannelId', 'shopPanelChannelId', 'logsChannelId', 'buyersChannelId', 'registrationChannelId'
   ];
   for (const key of channelKeys) {
     const current = config[key] ? guild.channels.cache.get(config[key]) : null;
@@ -171,7 +179,8 @@ async function discoverGuildChannels(guild) {
         supportPanelChannelId: 'atendimento',
         shopPanelChannelId: 'kits',
         logsChannelId: 'logs',
-        buyersChannelId: 'compradores'
+        buyersChannelId: 'compradores',
+        registrationChannelId: 'registro'
       }[key]));
     if (names.length) console.log('[Asthen] Canais reconhecidos em ' + guild.name + ': ' + names.join(', ') + '.');
   }
@@ -376,6 +385,11 @@ async function refreshConfiguredPanels(client) {
     } catch (error) {
       console.error('[Asthen] Não foi possível atualizar o estoque do painel #kits em ' + guild.name + ':', error.message);
     }
+    try {
+      await refreshRegistrationPanel(guild);
+    } catch (error) {
+      console.error('[Asthen Registro] Não foi possível atualizar o painel de registro em ' + guild.name + ':', error.message);
+    }
   }
 }
 
@@ -450,7 +464,7 @@ async function main() {
 
   console.log('Comandos do Discord atualizados: ' + body.length);
 
-  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
   let bridgeServer = null;
   let shutdownPromise = null;
   let stopWeeklyShopRefresh = null;
@@ -458,9 +472,32 @@ async function main() {
     console.log(`Bot online como ${readyClient.user.tag}.`);
     console.log(`Servidores conectados: ${readyClient.guilds.cache.size}`);
     await refreshConfiguredPanels(readyClient);
+    for (const guild of readyClient.guilds.cache.values()) {
+      try {
+        await reconcileGuildMembers(guild);
+      } catch (error) {
+        console.error('[Asthen Registro] Não foi possível reconciliar os jogadores de ' + guild.name + ':', error.message);
+      }
+    }
     stopWeeklyShopRefresh = scheduleWeeklyShopRefresh(readyClient);
     await retryPendingTicketNotifications(readyClient);
     if (bridgeServer) await recoverApprovedDeliveries(readyClient);
+  });
+
+  client.on(Events.GuildMemberAdd, async member => {
+    try {
+      await reconcileGuildMember(member);
+    } catch (error) {
+      console.error('[Asthen Registro] Falha ao sincronizar membro recém-chegado ' + member.id + ':', error.message);
+    }
+  });
+
+  client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+    try {
+      await handleRegisteredNicknameUpdate(oldMember, newMember);
+    } catch (error) {
+      console.error('[Asthen Registro] Falha ao validar apelido atualizado de ' + newMember.id + ':', error.message);
+    }
   });
 
   client.on(Events.InteractionCreate, async interaction => {
