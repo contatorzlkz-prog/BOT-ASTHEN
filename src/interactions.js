@@ -13,6 +13,7 @@ import {
   deletePurchaseDraft,
   findOpenTicket,
   getGuildConfig,
+  getPlayerRegistration,
   getPurchaseDraft,
   getTicket,
   listTickets,
@@ -53,6 +54,7 @@ import { CONFIG } from './config.js';
 import { deliverKit, getBridgeJob, getBridgeStatus } from './bridge.js';
 import { PIX_KEY_DEFAULT, PIX_QR_FILENAME, PIX_QR_IMAGE_PATH } from './pix.js';
 import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock, releaseWeeklyKitStock } from './supabase.js';
+import { registerPlayerForMember, validateMinecraftNick, refreshRegistrationPanel, reconcileGuildMembers } from './registration.js';
 
 const closingTickets = new Set();
 const orderDecisionsInFlight = new Set();
@@ -544,23 +546,28 @@ async function handleKitEditModal(interaction) {
 function makeMinecraftNickModal(customId, currentNick = '') {
   const input = new TextInputBuilder()
     .setCustomId('minecraft-nick')
-    .setLabel('Gamertag Bedrock')
-    .setPlaceholder('Digite sua gamertag exatamente como aparece no servidor')
+    .setLabel('Nick do Minecraft')
+    .setPlaceholder('Digite seu nick exatamente como aparece no servidor')
     .setStyle(TextInputStyle.Short)
     .setMinLength(1)
     .setMaxLength(32)
     .setRequired(true);
 
-  if (currentNick) input.setValue(currentNick);
+  if (currentNick) input.setValue(currentNick.slice(0, 32));
 
   return new ModalBuilder()
     .setCustomId(customId)
-    .setTitle('Nick do Minecraft')
+    .setTitle('Identificação Minecraft')
     .addComponents(new ActionRowBuilder().addComponents(input));
 }
 
 
 async function openCatalog(interaction) {
+  const player = getPlayerRegistration(interaction.user.id);
+  if (!player?.minecraft_nick) {
+    return replyPrivate(interaction, 'Antes de usar a loja, conclua seu registro Minecraft em #registro.');
+  }
+
   const catalogKits = getShopKits(interaction.guildId);
   if (!catalogKits.length) return replyPrivate(interaction, 'A loja ainda não recebeu kits do servidor.');
   const existing = findOpenTicket(interaction.guildId, interaction.user.id, 'shop');
@@ -583,27 +590,15 @@ async function openCatalog(interaction) {
     const currentKit = stockedKits.find(kit => kit.id === existingDraft.kit?.id);
     if (currentKit) {
       existingDraft.kit = { ...existingDraft.kit, ...currentKit };
+      existingDraft.minecraftNick = player.minecraft_nick;
       existingDraft.platform = 'bedrock';
-      savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
-    }
-    if (existingDraft.kit && currentKit) {
-      if (existingDraft.minecraftNick) {
-        existingDraft.platform = 'bedrock';
-        existingDraft.stage = 'review';
-        savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
-        return interaction.reply({
-          content: 'Confira os dados antes de continuar.',
-          embeds: [makePurchaseReviewEmbed(existingDraft)],
-          components: [makePurchaseReviewControls(existingDraft)],
-          flags: MessageFlags.Ephemeral
-        });
-      }
-      existingDraft.stage = 'selected';
+      existingDraft.stage = 'review';
+      existingDraft.revision = randomUUID().slice(0, 8);
       savePurchaseDraft(interaction.guildId, interaction.user.id, existingDraft);
       return interaction.reply({
-        content: CONFIG.shop.previewPrompt,
-        embeds: [makeKitPreviewEmbed(existingDraft.kit)],
-        components: [makeKitPreviewControls(existingDraft)],
+        content: 'Identificação Minecraft: **' + player.minecraft_nick + '**\nConfira os dados do pedido.',
+        embeds: [makePurchaseReviewEmbed(existingDraft)],
+        components: [makePurchaseReviewControls(existingDraft)],
         flags: MessageFlags.Ephemeral
       });
     }
@@ -620,13 +615,18 @@ async function continuePurchase(interaction) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
   if (!draft) return replyPrivate(interaction, 'Não encontrei uma compra em preparação. Abra a loja novamente.');
   if (draft.stage === 'creating') return replyPrivate(interaction, 'Seu pedido já está sendo criado. Aguarde alguns instantes.');
-  if (draft.minecraftNick) {
-    draft.platform = 'bedrock';
-    draft.stage = 'review';
-    savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
-    return replyPrivate(interaction, 'Confira os dados antes de continuar.', [makePurchaseReviewControls(draft)], [makePurchaseReviewEmbed(draft)]);
+
+  const player = getPlayerRegistration(interaction.user.id);
+  if (!player?.minecraft_nick) {
+    return replyPrivate(interaction, 'Seu registro Minecraft não foi encontrado. Conclua o cadastro em #registro para continuar.');
   }
-  return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
+  draft.minecraftNick = player.minecraft_nick;
+  draft.platform = 'bedrock';
+  draft.stage = 'review';
+  draft.revision = randomUUID().slice(0, 8);
+  savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
+  return replyPrivate(interaction, 'Identificação Minecraft: **' + player.minecraft_nick + '**. Confira os dados antes de continuar.',
+    [makePurchaseReviewControls(draft)], [makePurchaseReviewEmbed(draft)]);
 }
 
 async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = false) {
@@ -643,6 +643,11 @@ async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = 
     return updateExistingMessage
       ? interaction.update(preview)
       : interaction.reply({ ...preview, flags: MessageFlags.Ephemeral });
+  }
+
+  const player = getPlayerRegistration(interaction.user.id);
+  if (!player?.minecraft_nick) {
+    return replyPrivate(interaction, 'Antes de comprar, conclua seu registro Minecraft em #registro.');
   }
   if (!isKitPurchasable(kit)) return replyPrivate(interaction, 'Este kit está indisponível para compra. Ele continua no catálogo para consulta.');
 
@@ -675,7 +680,7 @@ async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = 
       weeklyLimit: stockedKit.weeklyLimit,
       weeklyWeekStart: stockedKit.weeklyWeekStart
     },
-    minecraftNick: '',
+    minecraftNick: player.minecraft_nick,
     platform: 'bedrock',
     stage: 'selected',
     revision: randomUUID().slice(0, 8)
@@ -683,7 +688,7 @@ async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = 
   savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
 
   const payload = {
-    content: CONFIG.shop.previewPrompt,
+    content: 'Identificação Minecraft: **' + player.minecraft_nick + '**\n' + CONFIG.shop.previewPrompt,
     embeds: [makeKitPreviewEmbed(draft.kit)],
     components: [makeKitPreviewControls(draft)]
   };
@@ -729,9 +734,21 @@ async function confirmSelectedKit(interaction, requestedRevision) {
   if (!draft || draft.revision !== requestedRevision || draft.stage !== 'selected') {
     return replyPrivate(interaction, 'Esta prévia ficou desatualizada. Abra o catálogo novamente.');
   }
-  return interaction.showModal(makeMinecraftNickModal('shop:nick:submit'));
+  const player = getPlayerRegistration(interaction.user.id);
+  if (!player?.minecraft_nick) {
+    return replyPrivate(interaction, 'Seu registro Minecraft não foi encontrado. Conclua o cadastro em #registro.');
+  }
+  draft.minecraftNick = player.minecraft_nick;
+  draft.platform = 'bedrock';
+  draft.stage = 'review';
+  draft.revision = randomUUID().slice(0, 8);
+  savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
+  return interaction.update({
+    content: 'Identificação Minecraft: **' + player.minecraft_nick + '**\nConfira o kit e confirme o pedido.',
+    embeds: [makePurchaseReviewEmbed(draft)],
+    components: [makePurchaseReviewControls(draft)]
+  });
 }
-
 
 async function switchPurchaseKit(interaction, requestedRevision) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
@@ -771,22 +788,8 @@ async function sendOrderTicketMessage(channel, user, kit, minecraftNick, platfor
 }
 
 async function handleNickSubmit(interaction) {
-  const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
-  if (!draft) return replyPrivate(interaction, 'Sua compra não está mais em preparação. Abra a loja novamente.');
-  const minecraftNick = interaction.fields.getTextInputValue('minecraft-nick').trim();
-  if (!/^[A-Za-z0-9_. ]{1,32}$/.test(minecraftNick) || minecraftNick.startsWith(' ') || minecraftNick.endsWith(' ')) {
-    return replyPrivate(interaction, 'Informe uma gamertag válida, sem espaços no começo ou no fim e com até 32 caracteres.');
-  }
-  if (interaction.customId.startsWith('shop:nick:edit:')) {
-    const requestedRevision = interaction.customId.split(':')[3];
-    if (draft.revision !== requestedRevision) return replyPrivate(interaction, 'Esta etapa da compra já foi atualizada. Use a revisão mais recente.');
-  }
-  draft.minecraftNick = minecraftNick;
-  draft.platform = 'bedrock';
-  draft.stage = 'review';
-  draft.revision = randomUUID().slice(0, 8);
-  savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
-  return replyPrivate(interaction, 'Confira os dados antes de continuar.', [makePurchaseReviewControls(draft)], [makePurchaseReviewEmbed(draft)]);
+  // Legacy shop modal IDs from old ephemeral messages are redirected to account management.
+  return replyPrivate(interaction, 'O nick agora é gerenciado pelo cadastro da conta. Use /conta atualizar-nick; a loja utiliza o nick registrado automaticamente.');
 }
 
 async function forcePurchaseBedrock(interaction, requestedRevision) {
@@ -805,13 +808,8 @@ async function forcePurchaseBedrock(interaction, requestedRevision) {
   });
 }
 
-async function editMinecraftNick(interaction, requestedRevision) {
-  const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
-  if (!draft) return replyPrivate(interaction, 'Sua compra não está mais em preparação. Abra o catálogo novamente.');
-  if (draft.revision !== requestedRevision) {
-    return replyPrivate(interaction, 'Esta revisão do pedido ficou desatualizada. Use os botões da mensagem mais recente.');
-  }
-  return interaction.showModal(makeMinecraftNickModal('shop:nick:edit:' + draft.revision, draft.minecraftNick));
+async function editMinecraftNick(interaction) {
+  return replyPrivate(interaction, 'A atualização do nick fica em gerenciamento de conta. Use /conta atualizar-nick; sua compra não precisa ser reiniciada.');
 }
 
 async function cancelPurchase(interaction, requestedRevision) {
@@ -832,13 +830,16 @@ async function confirmPurchase(interaction, requestedRevision) {
   if (draft && draft.revision !== requestedRevision) {
     return replyPrivate(interaction, 'Esta revisão do pedido ficou desatualizada. Confira a mensagem mais recente.');
   }
-  if (draft && draft.minecraftNick) {
-    draft.platform = 'bedrock';
-    savePurchaseDraft(interaction.guildId, interaction.user.id, draft);
+
+  const player = getPlayerRegistration(interaction.user.id);
+  if (!player?.minecraft_nick) {
+    return replyPrivate(interaction, 'Seu registro Minecraft não foi encontrado. Conclua o cadastro em #registro antes de confirmar.');
   }
-  if (!draft || !draft.kit || !draft.minecraftNick || !draft.platform) {
+  if (!draft || !draft.kit || !draft.platform) {
     return replyPrivate(interaction, 'Não encontrei uma compra pronta para confirmar. Abra a loja e tente novamente.');
   }
+  draft.minecraftNick = player.minecraft_nick;
+  draft.platform = 'bedrock';
   if (draft.stage === 'creating') {
     return replyPrivate(interaction, 'Seu pedido já está sendo criado. Aguarde alguns instantes.');
   }
@@ -887,7 +888,7 @@ async function confirmPurchase(interaction, requestedRevision) {
       user: interaction.user,
       type: 'shop',
       kit: currentKitWithStock,
-      minecraftNick: draft.minecraftNick,
+      minecraftNick: player.minecraft_nick,
       platform: draft.platform
     });
 
@@ -896,7 +897,7 @@ async function confirmPurchase(interaction, requestedRevision) {
         result.channel,
         interaction.user,
         currentKitWithStock,
-        draft.minecraftNick,
+        player.minecraft_nick,
         draft.platform,
         getGuildConfig(interaction.guildId)
       );
@@ -1723,10 +1724,12 @@ async function retryApprovedDelivery(interaction, mode) {
 
 async function openSupportTicket(interaction, kind) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const player = getPlayerRegistration(interaction.user.id);
   const result = await createPrivateTicket({
     guild: interaction.guild,
     user: interaction.user,
-    type: kind
+    type: kind,
+    minecraftNick: player?.minecraft_nick || null
   });
 
   if (!result.alreadyOpen) {
@@ -1734,7 +1737,7 @@ async function openSupportTicket(interaction, kind) {
     const staffMention = config.staffRoleId ? '<@&' + config.staffRoleId + '>' : '';
     await result.channel.send({
       content: staffMention || undefined,
-      embeds: [makeSupportTicketEmbed(kind, interaction.user)],
+      embeds: [makeSupportTicketEmbed(kind, interaction.user, player?.minecraft_nick || '')],
       components: [makeCloseRow()],
       allowedMentions: {
         users: [interaction.user.id],
@@ -1749,10 +1752,77 @@ async function openSupportTicket(interaction, kind) {
   });
 }
 
+async function handleRegistrationSubmit(interaction) {
+  if (!interaction.guild) return replyPrivate(interaction, 'Use o registro dentro do servidor ASTHEN.');
+  const minecraftNick = interaction.fields.getTextInputValue('minecraft-nick').trim();
+  if (!validateMinecraftNick(minecraftNick)) {
+    return replyPrivate(interaction, 'Informe um nick Minecraft válido, sem espaços no começo ou no fim e com até 32 caracteres.');
+  }
+
+  const member = await interaction.guild.members.fetch(interaction.user.id);
+  try {
+    const result = await registerPlayerForMember(member, minecraftNick, 'autoatendimento');
+    const status = result.sync.errors.length
+      ? '\nO cadastro foi salvo, mas houve uma pendência ao sincronizar ' + result.sync.errors.join('; ') + '. Avise a equipe.'
+      : '\nSeu cargo de membro e seu apelido do Discord foram sincronizados.';
+    return replyPrivate(interaction,
+      (result.previous ? 'Nick Minecraft atualizado para **' : 'Registro concluído para **') +
+      result.record.minecraft_nick + '**.' + status);
+  } catch (error) {
+    return replyPrivate(interaction, error.message || 'Não foi possível salvar seu registro Minecraft.');
+  }
+}
+
+async function handleRegistrationCommand(interaction) {
+  if (!canManage(interaction)) {
+    return replyPrivate(interaction, 'Você precisa de Gerenciar servidor para administrar os cargos autorizados.');
+  }
+  const config = getGuildConfig(interaction.guildId);
+  const subcommand = interaction.options.getSubcommand();
+  const role = interaction.options.getRole('cargo', true);
+  const roles = new Set(config.registrationBypassRoleIds || []);
+
+  if (subcommand === 'autorizar') {
+    roles.add(role.id);
+  } else if (subcommand === 'revogar') {
+    roles.delete(role.id);
+  } else {
+    return replyPrivate(interaction, 'Ação de registro desconhecida.');
+  }
+
+  updateGuildConfig(interaction.guildId, { registrationBypassRoleIds: [...roles] });
+  await refreshRegistrationPanel(interaction.guild).catch(error => {
+    console.warn('[Asthen Registro] Não foi possível atualizar permissões de #registro:', error.message);
+  });
+  await reconcileGuildMembers(interaction.guild).catch(error => {
+    console.warn('[Asthen Registro] A autorização foi salva, mas a reconciliação dos membros falhou:', error.message);
+  });
+  return replyPrivate(interaction,
+    subcommand === 'autorizar'
+      ? 'O cargo ' + role.toString() + ' agora pode visualizar #registro mesmo após o cadastro.'
+      : 'O cargo ' + role.toString() + ' não tem mais autorização especial para #registro.');
+}
+
+async function handleAccountCommand(interaction) {
+  const player = getPlayerRegistration(interaction.user.id);
+  const subcommand = interaction.options.getSubcommand();
+  if (subcommand === 'perfil') {
+    return replyPrivate(interaction, player?.minecraft_nick
+      ? 'Sua conta está vinculada ao Minecraft **' + player.minecraft_nick + '**.\nÚltima atualização: <t:' + Math.floor(Date.parse(player.updated_at) / 1000) + ':R>.'
+      : 'Você ainda não possui um nick Minecraft cadastrado. Conclua o registro em #registro.');
+  }
+  if (subcommand === 'atualizar-nick') {
+    return interaction.showModal(makeMinecraftNickModal('registration:submit', player?.minecraft_nick || ''));
+  }
+  return replyPrivate(interaction, 'Opção de conta desconhecida.');
+}
+
 async function handleCommand(interaction) {
   if (!interaction.guild) return replyPrivate(interaction, 'Use este comando dentro de um servidor.');
 
   if (interaction.commandName === 'configurar') return configureChannels(interaction);
+  if (interaction.commandName === 'registro') return handleRegistrationCommand(interaction);
+  if (interaction.commandName === 'conta') return handleAccountCommand(interaction);
   if (interaction.commandName === 'kit') return handleKitCommand(interaction);
   if (interaction.commandName === 'bridge') return handleBridgeCommand(interaction);
 }
@@ -1761,6 +1831,10 @@ export async function handleInteraction(interaction) {
   if (interaction.isChatInputCommand()) return handleCommand(interaction);
 
   if (interaction.isButton()) {
+    if (interaction.customId === 'registration:open') {
+      const player = getPlayerRegistration(interaction.user.id);
+      return interaction.showModal(makeMinecraftNickModal('registration:submit', player?.minecraft_nick || ''));
+    }
     if (interaction.customId.startsWith('support:open:')) {
       return openSupportTicket(interaction, interaction.customId.split(':')[2]);
     }
@@ -1785,7 +1859,7 @@ export async function handleInteraction(interaction) {
       return confirmSelectedKit(interaction, interaction.customId.split(':')[2]);
     }
     if (interaction.customId.startsWith('shop:edit-nick:')) {
-      return editMinecraftNick(interaction, interaction.customId.split(':')[2]);
+      return editMinecraftNick(interaction);
     }
     if (interaction.customId.startsWith('shop:edit-platform:')) {
       return forcePurchaseBedrock(interaction, interaction.customId.split(':').at(-1));
@@ -1827,6 +1901,8 @@ export async function handleInteraction(interaction) {
   }
 
   if (interaction.isModalSubmit()) {
+    if (interaction.customId === 'registration:submit') return handleRegistrationSubmit(interaction);
+    if (interaction.customId === 'shop:nick:submit' || interaction.customId.startsWith('shop:nick:edit:')) return handleNickSubmit(interaction);
     if (interaction.customId === 'order:release-stock:submit') return submitStockRelease(interaction);
     if (interaction.customId.startsWith('kit:edit-modal:')) return handleKitEditModal(interaction);
     if (interaction.customId === 'shop:nick:submit' || interaction.customId.startsWith('shop:nick:edit:')) {
