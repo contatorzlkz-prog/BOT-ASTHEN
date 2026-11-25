@@ -1777,7 +1777,7 @@ async function openSupportTicket(interaction, kind) {
 
 async function handleRegistrationSubmit(interaction) {
   if (!interaction.guild) return replyPrivate(interaction, 'Use o registro dentro do servidor ASTHEN.');
-  const minecraftNick = interaction.fields.getTextInputValue('minecraft-nick').trim();
+  const minecraftNick = interaction.fields.getTextInputValue('minecraft-nick');
   if (!validateMinecraftNick(minecraftNick)) {
     return replyPrivate(interaction, 'Informe um nick Minecraft válido, sem espaços no começo ou no fim e com até 32 caracteres.');
   }
@@ -1805,7 +1805,7 @@ async function handleRegistrationCommand(interaction) {
 
   if (subcommand === 'atualizar') {
     const targetUser = interaction.options.getUser('jogador', true);
-    const nick = interaction.options.getString('nick', true).trim();
+    const nick = interaction.options.getString('nick', true);
     if (!validateMinecraftNick(nick)) {
       return replyPrivate(interaction, 'Informe um nick Minecraft válido, sem espaços no começo/fim e com até 32 caracteres.');
     }
