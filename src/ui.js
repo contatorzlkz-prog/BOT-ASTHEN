@@ -361,7 +361,7 @@ export function makeSupportTicketEmbed(kind, user, minecraftNick = '') {
     .setTitle(supportTitles[kind] || 'Atendimento')
     .setDescription(
       '**Solicitante:** <@' + user.id + '>' +
-      (minecraftNick ? '\\n**Minecraft:** ' + normalizeVisibleText(minecraftNick) : '') + '\\n\\n' +
+      (minecraftNick ? '\n**Minecraft:** ' + normalizeVisibleText(minecraftNick) : '') + '\n\n' +
       normalizeVisibleText(descriptions[kind] || descriptions.outros || 'Descreva o assunto para a equipe.') +
       '\n\nEnvie aqui os detalhes e imagens que ajudem a equipe.'
     )
