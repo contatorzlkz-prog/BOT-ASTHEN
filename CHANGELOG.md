@@ -1,3 +1,13 @@
+# Changelog
+
+## 2.20.0 — Registro Minecraft e identidade
+
+- Adiciona índice de jogadores ao snapshot existente do Supabase, vinculado ao ID do Discord.
+- Adiciona registro/atualização de nick, detecção de duplicidade e reconciliação de cargo/apelido.
+- Integra a identificação cadastrada à loja e aos tickets sem pedir o nick em cada compra.
+- Adiciona gerenciamento secundário em `/conta` e autorização de cargos para `#registro`.
+- Mantém o fluxo comercial, os pagamentos, o estoque e a entrega existentes.
+
 ## 2.18.0 — 18/11/2026
 
 - O menu de #kits mostra o preço e a quantidade disponível em cada opção, antes da seleção do produto.
