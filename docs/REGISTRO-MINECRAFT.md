@@ -45,7 +45,7 @@ Use `/registro reiniciar confirmar:true` como administrador.
 
 O reset:
 - remove `Membro` de todos os membros que o bot consegue gerenciar;
-- limpa os vínculos Minecraft deste servidor no snapshot existente do Supabase/local;
+- limpa os vínculos Minecraft deste servidor no snapshot existente do Supabase/local, incluindo registros antigos sem `guild_id` apenas para usuários que estão entre os membros atuais do servidor;
 - remove as sobrescritas individuais antigas do canal de registro;
 - não remove outros cargos, não altera apelidos e não cria nem apaga canais.
 
