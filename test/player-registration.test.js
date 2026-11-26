@@ -51,7 +51,7 @@ test('reset limpa os cadastros do servidor e entradas antigas sem guild_id, pres
   savePlayerRegistration(playerB, 'Guild_B', guildB);
   savePlayerRegistration(legacyPlayer, 'Legacy_Player');
 
-  assert.equal(clearPlayerRegistrationsForGuild(guildA), 2);
+  assert.equal(clearPlayerRegistrationsForGuild(guildA, [playerA, legacyPlayer]), 2);
   assert.equal(getPlayerRegistration(playerA), null);
   assert.equal(getPlayerRegistration(legacyPlayer), null);
   assert.equal(getPlayerRegistration(playerB).minecraft_nick, 'Guild_B');
