@@ -57,6 +57,7 @@ import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock, releaseWee
 import { exportTicketTranscript } from './transcripts.js';
 import { createBackup, listBackups } from './maintenance.js';
 import { registerPlayerForMember, validateMinecraftNick, refreshRegistrationPanel, reconcileGuildMembers, resetGuildRegistrations } from './registration.js';
+import { analyzeGuildPermissionSetup, configureGuildPermissions } from './permissions.js';
 
 const closingTickets = new Set();
 const orderDecisionsInFlight = new Set();
@@ -1941,6 +1942,88 @@ async function handleRegistrationCommand(interaction) {
   );
 }
 
+async function handlePermissionsCommand(interaction) {
+  if (!isAdministrator(interaction)) {
+    return replyPrivate(interaction, 'Somente administradores podem alterar a configuração geral de permissões do servidor.');
+  }
+
+  const action = interaction.options.getSubcommand();
+  if (action === 'analisar') {
+    try {
+      const result = await analyzeGuildPermissionSetup(interaction.guild);
+      const lines = [
+        '**Análise de permissões do ASTHEN**',
+        'Cargos personalizados encontrados: **' + result.roleCount + '**',
+        'Categorias: **' + result.categoryCount + '** · canais classificados: **' +
+          (result.registrationChannels + result.memberChannels + result.staffChannels + result.adminChannels + result.protectedTickets + result.protectedPersonalChannels + result.protectedCustomChannels) + '**',
+        '@everyone: somente **#' + result.registrationChannelName + '**',
+        'Canais comuns liberados para Membro: **' + result.memberChannels + '**',
+        'Canais administrativos: **' + result.adminChannels + '**',
+        'Tickets e canais pessoais preservados: **' + (result.protectedTickets + result.protectedPersonalChannels) + '**',
+        'Canais com regras próprias preservadas: **' + result.protectedCustomChannels + '**',
+        'Cargos de plataforma: ' + (result.platformRoles.join(', ') || 'nenhum detectado'),
+        'Equipe: ' + (result.staffRoles.join(', ') || 'nenhum cargo reconhecido'),
+        'Gerência: ' + (result.managerRoles.join(', ') || 'nenhum cargo reconhecido'),
+        'Integrações/bots preservados: ' + (result.serviceRoles.join(', ') || 'nenhum detectado'),
+        'Cargos de ping: ' + (result.pingRoles.join(', ') || 'nenhum detectado')
+      ];
+
+      if (result.dangerousMemberFlags.length) {
+        lines.push('**Bloqueio:** Membro possui permissões administrativas: ' + result.dangerousMemberFlags.join(', ') + '.');
+      }
+      if (result.dangerousPlatformRoles.length) {
+        lines.push('**Bloqueio:** cargos de plataforma com privilégios: ' +
+          result.dangerousPlatformRoles.map(item => item.name + ' (' + item.flags.join(', ') + ')').join('; ') + '.');
+      }
+      if (result.dangerousOtherRoles.length) {
+        lines.push('**Revisar antes de aplicar:** ' +
+          result.dangerousOtherRoles.map(item => item.name + ' (' + item.flags.join(', ') + ')').join('; ') + '.');
+      }
+      if (result.unknownRoles.length) {
+        lines.push('Outros cargos mantidos sem alteração: ' + result.unknownRoles.join(', ') + '.');
+      }
+
+      lines.push('Para aplicar: /permissoes configurar membro:@Membro confirmar:true.');
+      return replyPrivate(interaction, lines.join('\n').slice(0, 1950));
+    } catch (error) {
+      return replyPrivate(interaction, 'Não consegui analisar as permissões: ' + (error.message || 'erro desconhecido'));
+    }
+  }
+
+  if (action === 'configurar') {
+    const memberRole = interaction.options.getRole('membro', true);
+    if (interaction.options.getBoolean('confirmar', true) !== true) {
+      return replyPrivate(interaction, 'Nenhuma alteração foi feita. Execute /permissoes configurar membro:@Membro confirmar:true para confirmar.');
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      const result = await configureGuildPermissions(interaction.guild, memberRole);
+      const lines = [
+        '**Permissões do servidor configuradas.**',
+        '@everyone só consegue visualizar **#' + result.registrationChannelName + '**.',
+        'Cargo de acesso: **' + result.memberRoleName + '**.',
+        'Canais comuns liberados para Membro: **' + result.memberChannels + '**.',
+        'Canais administrativos separados por equipe: **' + result.adminChannels + '**.',
+        'Tickets e canais pessoais preservados: **' + (result.protectedTickets + result.protectedPersonalChannels) + '**.',
+        'Sobrescritas atualizadas: **' + result.updatedOverwrites + '**.'
+      ];
+      if (result.skipped) lines.push('Canais preservados por terem regras próprias: **' + result.skipped + '**.');
+      if (result.failed.length) {
+        lines.push('**Atenção:** ' + result.failed.length + ' alteração(ões) falharam. Corrija as permissões do bot e execute novamente.');
+        lines.push(result.failed.slice(0, 3).join('\n'));
+      }
+      if (result.panelWarning) lines.push('Painel de registro: ' + result.panelWarning);
+      lines.push('PC, Mobile e Console continuam como cargos de identificação; não liberam canais sem Membro.');
+      return interaction.editReply(lines.join('\n').slice(0, 1950));
+    } catch (error) {
+      console.error('[Asthen Permissões] Falha ao configurar o servidor:', error);
+      return interaction.editReply('**Configuração não concluída.** ' + (error.message || 'Verifique a hierarquia e as permissões do bot.'));
+    }
+  }
+
+  return replyPrivate(interaction, 'Ação de permissões desconhecida.');
+}
 async function handleAccountCommand(interaction) {
   const player = getPlayerRegistration(interaction.user.id);
   const subcommand = interaction.options.getSubcommand();
@@ -1969,6 +2052,7 @@ async function handleCommand(interaction) {
 
   if (interaction.commandName === 'configurar') return configureChannels(interaction);
   if (interaction.commandName === 'registro') return handleRegistrationCommand(interaction);
+  if (interaction.commandName === 'permissoes') return handlePermissionsCommand(interaction);
   if (interaction.commandName === 'conta') return handleAccountCommand(interaction);
   if (interaction.commandName === 'kit') return handleKitCommand(interaction);
   if (interaction.commandName === 'backup') return handleBackupCommand(interaction);
