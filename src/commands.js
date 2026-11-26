@@ -49,7 +49,14 @@ export const commandDefinitions = [
       .setName('atualizar')
       .setDescription('Atualiza o nick Minecraft de um jogador.')
       .addUserOption(option => option.setName('jogador').setDescription('Jogador que será atualizado.').setRequired(true))
-      .addStringOption(option => option.setName('nick').setDescription('Novo nick Minecraft.').setMinLength(1).setMaxLength(32).setRequired(true)))),
+      .addStringOption(option => option.setName('nick').setDescription('Novo nick Minecraft.').setMinLength(1).setMaxLength(32).setRequired(true)))
+    .addSubcommand(subcommand => subcommand
+      .setName('reiniciar')
+      .setDescription('Remove Membro e exige novo registro de todos.')
+      .addBooleanOption(option => option
+        .setName('confirmar')
+        .setDescription('Confirma a remoção do cargo e limpeza dos cadastros deste servidor.')
+        .setRequired(true)))),
 
   new SlashCommandBuilder()
     .setName('conta')
