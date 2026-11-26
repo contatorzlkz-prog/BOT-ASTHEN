@@ -2003,6 +2003,7 @@ async function handlePermissionsCommand(interaction) {
         '**Permissões do servidor configuradas.**',
         '@everyone só consegue visualizar **#' + result.registrationChannelName + '**.',
         'Cargo de acesso: **' + result.memberRoleName + '**.',
+        ...(result.registrationChannelCreated ? ['Canal #📝・registro criado em 👋 Entrada.'] : []),
         'Canais comuns liberados para Membro: **' + result.memberChannels + '**.',
         'Canais administrativos separados por equipe: **' + result.adminChannels + '**.',
         'Tickets e canais pessoais preservados: **' + (result.protectedTickets + result.protectedPersonalChannels) + '**.',
