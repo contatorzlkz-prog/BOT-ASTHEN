@@ -10,17 +10,15 @@ O cargo `Membro` significa que a pessoa já concluiu o registro Minecraft. Não 
 
 ## Configuração no Discord
 
-1. Crie a categoria `👋 Entrada`, caso ainda não exista.
-2. Dentro dela, crie o canal de texto `📝・registro`.
-3. Crie ou selecione o cargo `Membro`.
-4. Em Developer Portal → Bot → Privileged Gateway Intents, ative **Server Members Intent**.
-5. Dê ao bot **Manage Roles**, **Manage Nicknames**, **Manage Channels**, **View Channels**, **Send Messages** e **Read Message History**.
-6. Posicione o cargo do bot acima de `Membro` e dos cargos comuns que ele precisa administrar; mantenha-o abaixo dos cargos administrativos.
-7. Execute `/configurar registro:#📝・registro membro:@Membro`, selecionando o canal e o cargo nos campos do comando.
+1. Crie ou selecione o cargo `Membro`.
+2. Em Developer Portal → Bot → Privileged Gateway Intents, ative **Server Members Intent**.
+3. Dê ao bot **Manage Roles**, **Manage Nicknames**, **Manage Channels**, **View Channels**, **Send Messages** e **Read Message History**.
+4. Posicione o cargo do bot acima de `Membro` e dos cargos comuns que ele precisa administrar; mantenha-o abaixo dos cargos administrativos.
+5. Execute `/permissoes configurar membro:@Membro confirmar:true`. Se necessário, o bot cria a categoria `👋 Entrada` e o canal `📝・registro` automaticamente.
 
 ### Permissões do canal de registro
 
-O comando de configuração deixa `@everyone` ver o canal, bloqueia o envio de mensagens e impede que `Membro` veja o canal. O bot publica ou atualiza o painel com o botão **Registrar Minecraft**. Não conceda permissão para enviar mensagens a `@everyone`; o cadastro é enviado por formulário.
+O comando de configuração automática cria ou atualiza o canal, deixa `@everyone` ver o canal, bloqueia o envio de mensagens e impede que `Membro` veja o canal. O bot publica ou atualiza o painel com o botão **Registrar Minecraft**. Não conceda permissão para enviar mensagens a `@everyone`; o cadastro é enviado por formulário.
 
 ### Permissões dos canais de membros
 
