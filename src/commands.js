@@ -69,6 +69,24 @@ export const commandDefinitions = [
       .setDescription('Atualiza seu nick Minecraft cadastrado.')),
 
   administratorOnly(new SlashCommandBuilder()
+    .setName('permissoes')
+    .setDescription('Analisa e organiza as permissões dos canais do servidor.')
+    .addSubcommand(subcommand => subcommand
+      .setName('analisar')
+      .setDescription('Mostra a configuração de acesso que será aplicada.'))
+    .addSubcommand(subcommand => subcommand
+      .setName('configurar')
+      .setDescription('Aplica o acesso por Membro, equipe e canal de registro.')
+      .addRoleOption(option => option
+        .setName('membro')
+        .setDescription('Selecione o cargo Membro usado como acesso aos canais.')
+        .setRequired(true))
+      .addBooleanOption(option => option
+        .setName('confirmar')
+        .setDescription('Confirma a alteração das permissões dos canais.')
+        .setRequired(true)))),
+
+  administratorOnly(new SlashCommandBuilder()
     .setName('kit')
     .setDescription('Lista e edita os kits sincronizados do Minecraft.')
     .addSubcommand(subcommand => subcommand
