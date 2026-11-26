@@ -321,11 +321,17 @@ export async function configureGuildPermissions(guild, memberRole) {
     }
   };
 
-  // Categories are closed to @everyone and Membro. Access is then granted
-  // channel-by-channel, so a category overwrite cannot expose private tickets.
+  // Categories are closed to every role. Access is re-granted on each
+  // individual channel so inherited role allows cannot expose private tickets.
   for (const category of plan.categories) {
     await edit(category, guild.roles.everyone.id, { ViewChannel: false });
     await edit(category, memberRole.id, { ViewChannel: false });
+    for (const overwrite of category.permissionOverwrites.cache.values()) {
+      if (overwrite.type !== 0 || overwrite.id === guild.roles.everyone.id) continue;
+      if (overwrite.allow.has(FLAGS.ViewChannel)) {
+        await edit(category, overwrite.id, { ViewChannel: false });
+      }
+    }
     await clearPlatformOverwrites(category, groups, counters).catch(error =>
       counters.failed.push('Categoria ' + category.name + ': ' + error.message));
     await allowBotMember(category, botMember, counters).catch(error =>
@@ -375,6 +381,13 @@ export async function configureGuildPermissions(guild, memberRole) {
         : scope === 'admin-command' || scope === 'admin'
           ? groups.managers
           : groups.staff;
+      const allowedRoleIds = new Set(allowedRoles.map(role => role.id));
+      for (const overwrite of channel.permissionOverwrites.cache.values()) {
+        if (overwrite.type !== 0 || overwrite.id === guild.roles.everyone.id || overwrite.id === memberRole.id) continue;
+        if (overwrite.allow.has(FLAGS.ViewChannel) && !allowedRoleIds.has(overwrite.id)) {
+          await edit(channel, overwrite.id, { ViewChannel: false });
+        }
+      }
       for (const role of allowedRoles) {
         if (roleHasAdministrator(role)) continue;
         await edit(channel, role.id, { ViewChannel: true, ReadMessageHistory: true });
