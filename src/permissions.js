@@ -393,6 +393,12 @@ export async function configureGuildPermissions(guild, memberRole) {
         if (roleHasAdministrator(role)) continue;
         await edit(channel, role.id, { ViewChannel: true, ReadMessageHistory: true });
       }
+      for (const role of groups.services) {
+        await edit(channel, role.id, {
+          ViewChannel: true, ReadMessageHistory: true, SendMessages: true,
+          SendMessagesInThreads: true, AttachFiles: true, EmbedLinks: true
+        });
+      }
       for (const roleId of nextConfig.registrationBypassRoleIds || []) {
         if (roleId === memberRole.id || groups.staff.some(role => role.id === roleId)) continue;
         if (guild.roles.cache.has(roleId)) await edit(channel, roleId, { ViewChannel: true, ReadMessageHistory: true });
@@ -432,6 +438,12 @@ export async function configureGuildPermissions(guild, memberRole) {
     for (const role of groups.staff) {
       if (roleHasAdministrator(role)) continue;
       await edit(channel, role.id, { ViewChannel: true, ReadMessageHistory: true });
+    }
+    for (const role of groups.services) {
+      await edit(channel, role.id, {
+        ViewChannel: true, ReadMessageHistory: true, SendMessages: true,
+        SendMessagesInThreads: true, AttachFiles: true, EmbedLinks: true
+      });
     }
     await allowBotMember(channel, botMember, counters);
   }
