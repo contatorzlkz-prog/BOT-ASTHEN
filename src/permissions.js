@@ -221,10 +221,15 @@ export async function analyzeGuildPermissionSetup(guild, memberRoleId = null) {
   await guild.roles.fetch();
   await guild.channels.fetch();
   const config = getGuildConfig(guild.id);
-  const memberRole = (memberRoleId && guild.roles.cache.get(memberRoleId))
-    || (config.memberRoleId && guild.roles.cache.get(config.memberRoleId))
-    || [...guild.roles.cache.values()].find(role => normalizePermissionName(role.name) === 'membro');
-  if (!memberRole || memberRole.id === guild.roles.everyone.id) {
+  const roleCandidates = [
+    memberRoleId && guild.roles.cache.get(memberRoleId),
+    config.memberRoleId && guild.roles.cache.get(config.memberRoleId),
+    ...guild.roles.cache.values()
+  ];
+  const memberRole = roleCandidates.find(role =>
+    role && role.id !== guild.roles.everyone.id && normalizePermissionName(role.name) === 'membro'
+  );
+  if (!memberRole) {
     throw new Error('Não encontrei o cargo Membro. Selecione o cargo correto ao executar /permissoes configurar.');
   }
   const registrationChannel = (config.registrationChannelId && guild.channels.cache.get(config.registrationChannelId))
