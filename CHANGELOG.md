@@ -3,7 +3,7 @@
 ## 2.23.0 — 26/11/2026 · Configuração automática de permissões
 
 - Adiciona /permissoes analisar e /permissoes configurar, com seleção explícita do cargo Membro e confirmação.
-- Fecha categorias e canais para @everyone; somente o canal de registro permanece visível antes do cadastro.
+- Fecha categorias e canais para @everyone; somente o canal de registro permanece visível antes do cadastro. Cria automaticamente a categoria de entrada e o canal de registro quando ainda não existem.
 - Libera os canais comuns para Membro, separa acessos de Staff e gerência e mantém logs restrito.
 - Trata PC, Mobile e Console como cargos cosméticos do Onboarding, sem acesso próprio aos canais.
 - Preserva tickets ASTHEN, acessos individuais e canais com sobrescritas próprias de outros cargos.
