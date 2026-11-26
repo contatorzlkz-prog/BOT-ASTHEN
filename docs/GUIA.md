@@ -50,7 +50,7 @@ Os campos são opcionais quando o bot já reconhece os canais pelos nomes padrã
 
 O fluxo é automático: quem ainda não tem cadastro enxerga o canal de registro; depois de enviar o nick no botão **Registrar Minecraft**, recebe `Membro`, passa a enxergar os canais privados e deixa de enxergar o canal de registro. Não dê `Membro` pelo Onboarding nem manualmente, pois esse cargo é a confirmação de registro.
 
-Para obrigar todos a fazer o cadastro novamente, um administrador pode executar `/registro reiniciar confirmar:true`. O comando remove `Membro` dos membros que o bot consegue gerenciar, apaga os vínculos Minecraft associados a esse servidor (incluindo registros antigos sem `guild_id`) e remove as permissões individuais antigas do canal de registro. Ele não apaga os outros cargos nem altera os apelidos. O comando exige que o cargo do bot esteja acima de `Membro`; a conta proprietária do servidor é protegida pelo próprio Discord e pode precisar ter o cargo removido manualmente.
+Para obrigar todos a fazer o cadastro novamente, um administrador pode executar `/registro reiniciar confirmar:true`. O comando remove `Membro` dos membros que o bot consegue gerenciar, apaga os vínculos Minecraft associados a esse servidor; registros antigos sem `guild_id` só são limpos quando o ID do usuário está entre os membros encontrados no servidor e remove as permissões individuais antigas do canal de registro. Ele não apaga os outros cargos nem altera os apelidos. O comando exige que o cargo do bot esteja acima de `Membro`; a conta proprietária do servidor é protegida pelo próprio Discord e pode precisar ter o cargo removido manualmente.
 
 ### Painéis
 
