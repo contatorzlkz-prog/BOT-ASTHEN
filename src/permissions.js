@@ -235,12 +235,10 @@ export async function analyzeGuildPermissionSetup(guild, memberRoleId = null) {
   const registrationChannel = (config.registrationChannelId && guild.channels.cache.get(config.registrationChannelId))
     || [...guild.channels.cache.values()].find(channel =>
       !isCategory(channel) && normalizePermissionName(channel.name) === 'registro');
-  if (!registrationChannel) {
-    throw new Error('Não encontrei o canal 📝・registro. Crie-o primeiro e execute /configurar registro:#registro membro:@Membro.');
-  }
-  const plan = makePlan(guild, { ...config, registrationChannelId: registrationChannel.id }, memberRole,
+  const plan = makePlan(guild, { ...config, registrationChannelId: registrationChannel?.id || null }, memberRole,
     [...guild.channels.cache.values()]);
-  plan.summary.registrationChannelName = registrationChannel.name;
+  plan.summary.registrationChannelName = registrationChannel?.name || '📝・registro (será criado em 👋 Entrada)';
+  plan.summary.willCreateRegistrationChannel = !registrationChannel;
   plan.summary.unknownRoles = plan.groups.roles
     .filter(role => classifyPermissionRole(role) === 'other')
     .map(role => role.name);
@@ -259,12 +257,9 @@ export async function configureGuildPermissions(guild, memberRole) {
   await guild.roles.fetch();
   await guild.channels.fetch();
   const config = getGuildConfig(guild.id);
-  const registrationChannel = (config.registrationChannelId && guild.channels.cache.get(config.registrationChannelId))
+  let registrationChannel = (config.registrationChannelId && guild.channels.cache.get(config.registrationChannelId))
     || [...guild.channels.cache.values()].find(channel =>
       !isCategory(channel) && normalizePermissionName(channel.name) === 'registro');
-  if (!registrationChannel?.permissionOverwrites?.edit) {
-    throw new Error('Não encontrei um canal de texto chamado 📝・registro. Crie-o primeiro.');
-  }
 
   const botMember = guild.members.me || await guild.members.fetchMe();
   if (!botMember.permissions.has(FLAGS.ManageChannels)) {
@@ -275,6 +270,28 @@ export async function configureGuildPermissions(guild, memberRole) {
   }
   if (!botMember.roles.highest || botMember.roles.highest.comparePositionTo(memberRole) <= 0) {
     throw new Error('O cargo do bot precisa ficar acima de Membro na hierarquia.');
+  }
+
+  if (!registrationChannel) {
+    let entryCategory = [...guild.channels.cache.values()].find(channel =>
+      isCategory(channel) && normalizePermissionName(channel.name) === 'entrada');
+    if (!entryCategory) {
+      entryCategory = await guild.channels.create({
+        name: '👋 Entrada',
+        type: ChannelType.GuildCategory,
+        reason: 'ASTHEN: categoria de entrada para registro obrigatório'
+      });
+    }
+    registrationChannel = await guild.channels.create({
+      name: '📝・registro',
+      type: ChannelType.GuildText,
+      parent: entryCategory.id,
+      topic: 'Registro obrigatório do Minecraft para liberar os canais do servidor.',
+      reason: 'ASTHEN: canal de registro obrigatório'
+    });
+  }
+  if (!registrationChannel?.permissionOverwrites?.edit) {
+    throw new Error('O canal de registro encontrado não é um canal de texto configurável.');
   }
 
   const memberProblems = hasDangerousPermissions(memberRole);
