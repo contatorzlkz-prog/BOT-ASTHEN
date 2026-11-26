@@ -283,6 +283,21 @@ export function savePlayerRegistration(discordId, minecraftNick, guildId = null)
   return { ...record };
 }
 
+export function clearPlayerRegistrationsForGuild(guildId) {
+  const targetGuildId = String(guildId || '').trim();
+  if (!/^\d{17,20}$/.test(targetGuildId)) {
+    throw new Error('ID do servidor inválido para limpar os registros Minecraft.');
+  }
+
+  const idsToRemove = Object.entries(state.players)
+    .filter(([, record]) => !record?.guild_id || String(record.guild_id) === targetGuildId)
+    .map(([discordId]) => discordId);
+
+  for (const discordId of idsToRemove) delete state.players[discordId];
+  if (idsToRemove.length) saveStore();
+  return idsToRemove.length;
+}
+
 export function getGuildConfig(guildId) {
   return ensureGuildConfig(guildId);
 }
