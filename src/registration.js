@@ -3,6 +3,7 @@ import {
   findPlayerRegistrationByNick,
   getGuildConfig,
   getPlayerRegistration,
+  clearPlayerRegistrationsForGuild,
   savePlayerRegistration,
   updateGuildConfig
 } from './store.js';
@@ -270,6 +271,83 @@ export async function reconcileGuildMembers(guild) {
   }
   console.log('[Asthen Registro] Reconciliação concluída em ' + guild.name + ': ' + registered + ' registrado(s), ' + pending + ' pendência(s).');
   return { registered, pending, total: members.size };
+}
+
+export async function resetGuildRegistrations(guild) {
+  const config = getGuildConfig(guild.id);
+  if (!config.registrationChannelId) {
+    throw new Error('Configure primeiro o canal #registro com /configurar registro:#registro membro:@Membro.');
+  }
+  if (!config.memberRoleId) {
+    throw new Error('Configure primeiro o cargo Membro com /configurar membro:@Membro.');
+  }
+
+  const role = guild.roles.cache.get(config.memberRoleId)
+    || await guild.roles.fetch(config.memberRoleId).catch(() => null);
+  if (!role || role.id === guild.roles.everyone.id || role.managed) {
+    throw new Error('O cargo Membro configurado não existe ou não pode ser gerenciado.');
+  }
+
+  const botMember = guild.members.me;
+  if (!botMember?.permissions?.has?.(FLAGS.ManageRoles)) {
+    throw new Error('O bot precisa da permissão Gerenciar cargos.');
+  }
+  if (!botMember.roles.highest || botMember.roles.highest.comparePositionTo(role) <= 0) {
+    throw new Error('Coloque o cargo do bot acima de Membro na hierarquia do servidor.');
+  }
+
+  const channel = guild.channels.cache.get(config.registrationChannelId)
+    || await guild.channels.fetch(config.registrationChannelId).catch(() => null);
+  if (!channel?.permissionOverwrites?.edit) {
+    throw new Error('O canal de registro configurado não existe ou não permite editar permissões.');
+  }
+
+  // Ensure @everyone can enter the registration channel and Membro cannot see it.
+  await configureRegistrationChannel(channel, guild);
+
+  const members = await guild.members.fetch();
+  let rolesRemoved = 0;
+  let skippedProtected = 0;
+  const failed = [];
+  for (const member of members.values()) {
+    if (!member.roles.cache.has(role.id)) continue;
+    if (member.id === guild.client.user?.id || member.id === guild.ownerId) {
+      skippedProtected += 1;
+      continue;
+    }
+    try {
+      await member.roles.remove(role, 'ASTHEN: reset geral do registro Minecraft');
+      rolesRemoved += 1;
+    } catch (error) {
+      failed.push('<@' + member.id + '>: ' + error.message);
+    }
+  }
+
+  // Keep stored identities if Discord did not allow every role removal.
+  // Startup reconciliation would otherwise re-assign a role that was only partly reset.
+  if (failed.length) {
+    throw new Error(
+      'Não foi possível remover Membro de ' + failed.length + ' pessoa(s). Os cadastros foram preservados. ' +
+      failed.slice(0, 3).join(' | ') + (failed.length > 3 ? ' | ...' : '') +
+      ' Corrija a hierarquia/permissões e execute novamente.'
+    );
+  }
+
+  const recordsCleared = clearPlayerRegistrationsForGuild(guild.id);
+  let visibilityPending = 0;
+  for (const member of members.values()) {
+    if (member.id === guild.client.user?.id) continue;
+    const updated = await updateRegistrationChannelVisibility(member, false, config);
+    if (!updated) visibilityPending += 1;
+  }
+
+  await sendRegistrationLog(guild,
+    'Reset geral concluído: removido **Membro** de ' + rolesRemoved +
+    ' pessoa(s), limpos **' + recordsCleared + '** cadastro(s) Minecraft.' +
+    (skippedProtected ? '\nNão foi possível alterar ' + skippedProtected + ' conta(s) protegida(s) pelo Discord.' : '') +
+    (visibilityPending ? '\nFalha ao limpar a visibilidade individual de ' + visibilityPending + ' pessoa(s).' : ''));
+
+  return { total: members.size, rolesRemoved, recordsCleared, skippedProtected, visibilityPending };
 }
 
 export async function handleRegisteredNicknameUpdate(oldMember, newMember) {
