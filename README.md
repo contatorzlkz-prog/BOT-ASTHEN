@@ -137,12 +137,12 @@ O comando `/permissoes analisar` mostra como o bot classificou os cargos e canai
 
 ### Registro Minecraft e acesso aos canais
 
-Crie `#📝・registro` na categoria de entrada e o cargo `Membro`. Configure:
+Crie o cargo `Membro`. O comando `/permissoes configurar` cria `#📝・registro` dentro da categoria `👋 Entrada` se o canal ainda não existir. Configure:
 
 - Em `#📝・registro`: `@everyone` pode ver o canal, mas não enviar mensagens; o cargo `Membro` não pode ver o canal.
 - Nos canais e categorias exclusivos: negue **Ver canal** para `@everyone` e permita para `Membro`.
 - Não conceda `Membro` pelo Onboarding. O bot só atribui o cargo depois que o jogador envia o nick no formulário.
-- Configure com `/configurar registro:#📝・registro membro:@Membro`.
+- Escolha o cargo no seletor e execute `/permissoes configurar membro:@Membro confirmar:true`.
 
 Depois do registro, o jogador recebe `Membro`, vê os canais privados e deixa de ver `#📝・registro`. Para obrigar todos a registrar novamente, use `/registro reiniciar confirmar:true` como administrador. O comando remove o cargo e limpa os cadastros Minecraft deste servidor; não remove outros cargos nem altera apelidos.
 
