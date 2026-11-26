@@ -56,7 +56,7 @@ import { PIX_KEY_DEFAULT, PIX_QR_FILENAME, PIX_QR_IMAGE_PATH } from './pix.js';
 import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock, releaseWeeklyKitStock } from './supabase.js';
 import { exportTicketTranscript } from './transcripts.js';
 import { createBackup, listBackups } from './maintenance.js';
-import { registerPlayerForMember, validateMinecraftNick, refreshRegistrationPanel, reconcileGuildMembers } from './registration.js';
+import { registerPlayerForMember, validateMinecraftNick, refreshRegistrationPanel, reconcileGuildMembers, resetGuildRegistrations } from './registration.js';
 
 const closingTickets = new Set();
 const orderDecisionsInFlight = new Set();
@@ -1866,6 +1866,32 @@ async function handleRegistrationCommand(interaction) {
   }
 
   const subcommand = interaction.options.getSubcommand();
+  if (subcommand === 'reiniciar') {
+    if (!isAdministrator(interaction)) {
+      return replyPrivate(interaction, 'Somente o proprietário ou um administrador pode reiniciar todos os registros Minecraft.');
+    }
+    if (interaction.options.getBoolean('confirmar', true) !== true) {
+      return replyPrivate(interaction, 'Nenhuma alteração foi feita. Para executar o reset, use /registro reiniciar confirmar:true.');
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      const result = await resetGuildRegistrations(interaction.guild);
+      return interaction.editReply(
+        '**Reset do registro concluído.**\n' +
+        'Cargo Membro removido de: **' + result.rolesRemoved + '** pessoa(s).\n' +
+        'Cadastros apagados deste servidor: **' + result.recordsCleared + '**.\n' +
+        'Total de membros verificados: **' + result.total + '**.' +
+        (result.skippedProtected ? '\nContas protegidas pelo Discord: **' + result.skippedProtected + '**.' : '') +
+        (result.visibilityPending ? '\nPermissões que precisam de revisão: **' + result.visibilityPending + '**.' : '') +
+        '\nTodos deverão registrar o nick novamente em #registro.'
+      );
+    } catch (error) {
+      console.error('[Asthen Registro] Falha no reset geral:', error);
+      return interaction.editReply('**Reset não concluído.** ' + (error.message || 'Verifique as permissões e tente novamente.'));
+    }
+  }
+
   if (subcommand === 'atualizar') {
     const targetUser = interaction.options.getUser('jogador', true);
     const nick = interaction.options.getString('nick', true);
