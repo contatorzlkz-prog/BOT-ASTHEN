@@ -49,7 +49,10 @@ test('admin commands are compact and Pix is no longer a slash command', () => {
   assert.equal(command('pix'), undefined);
   assert.deepEqual(command('kit').options.map(option => option.name), ['listar', 'editar']);
   assert.deepEqual(command('configurar').options.map(option => option.name), ['atendimento', 'kits', 'logs', 'compradores', 'registro', 'membro', 'equipe']);
-  assert.deepEqual(command('registro').options.map(option => option.name), ['autorizar', 'revogar', 'atualizar']);
+  assert.deepEqual(command('registro').options.map(option => option.name), ['autorizar', 'revogar', 'atualizar', 'reiniciar']);
+  const resetCommand = command('registro').options.find(option => option.name === 'reiniciar');
+  assert.deepEqual(resetCommand.options.map(option => option.name), ['confirmar']);
+  assert.equal(resetCommand.options[0].type, 5);
   assert.deepEqual(command('conta').options.map(option => option.name), ['perfil', 'atualizar-nick']);
   assert.deepEqual(command('backup').options.map(option => option.name), ['status', 'criar', 'listar']);
   assert.deepEqual(command('bridge').options.map(option => option.name), ['status']);
