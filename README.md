@@ -19,7 +19,7 @@ Atendimento privado, loja de kits Bedrock e entrega integrada ao Plugin-ASTHEN.
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/ASTHEN-2.21.0-555B63?style=flat-square" alt="Versão 2.21.0">
+  <img src="https://img.shields.io/badge/ASTHEN-2.22.0-555B63?style=flat-square" alt="Versão 2.22.0">
   <img src="https://img.shields.io/badge/Node.js-22%2B-555B63?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 22 ou superior">
   <img src="https://img.shields.io/badge/discord.js-14.27.0-555B63?style=flat-square&logo=discord&logoColor=white" alt="discord.js 14.27.0">
   <img src="https://img.shields.io/badge/npm-lockfile-ativo-555B63?style=flat-square&logo=npm&logoColor=white" alt="Lockfile npm">
@@ -125,6 +125,17 @@ Configure os canais e o cargo da equipe:
 
 O cargo informado em `equipe` pode revisar pagamentos e fechar tickets. **Ele não recebe acesso ao canal `#logs`**.
 
+### Registro Minecraft e acesso aos canais
+
+Crie `#📝・registro` na categoria de entrada e o cargo `Membro`. Configure:
+
+- Em `#📝・registro`: `@everyone` pode ver o canal, mas não enviar mensagens; o cargo `Membro` não pode ver o canal.
+- Nos canais e categorias exclusivos: negue **Ver canal** para `@everyone` e permita para `Membro`.
+- Não conceda `Membro` pelo Onboarding. O bot só atribui o cargo depois que o jogador envia o nick no formulário.
+- Configure com `/configurar registro:#📝・registro membro:@Membro`.
+
+Depois do registro, o jogador recebe `Membro`, vê os canais privados e deixa de ver `#📝・registro`. Para obrigar todos a registrar novamente, use `/registro reiniciar confirmar:true` como administrador. O comando remove o cargo e limpa os cadastros Minecraft deste servidor; não remove outros cargos nem altera apelidos.
+
 <a id="minecraft-e-loja"></a>
 
 ## Minecraft e loja
@@ -224,7 +235,7 @@ No Linux/macOS, o bot restringe as permissões de `data/` e dos arquivos de esta
 
 <div align="center">
 
-**ASTHEN BOT · 2.19.0**
+**ASTHEN BOT · 2.22.0**
 
 <sub>Atendimento, loja e entregas em uma única integração.</sub>
 
