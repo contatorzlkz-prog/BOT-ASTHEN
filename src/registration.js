@@ -333,7 +333,7 @@ export async function resetGuildRegistrations(guild) {
     );
   }
 
-  const recordsCleared = clearPlayerRegistrationsForGuild(guild.id);
+  const recordsCleared = clearPlayerRegistrationsForGuild(guild.id, members.keys());
   let visibilityPending = 0;
   for (const member of members.values()) {
     if (member.id === guild.client.user?.id) continue;
