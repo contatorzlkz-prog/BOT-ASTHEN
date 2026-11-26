@@ -39,6 +39,19 @@ Configure canais e cargo da equipe:
 
 Os campos são opcionais quando o bot já reconhece os canais pelos nomes padrão. O cargo `equipe` autoriza revisar pagamentos e fechar tickets; **não concede acesso a `#logs`**. Esse canal permanece restrito a administradores e ao bot.
 
+### Registro obrigatório por cargo
+
+1. Crie `#📝・registro` na categoria `👋 Entrada` e crie o cargo `Membro`.
+2. Execute `/configurar registro:#📝・registro membro:@Membro`.
+3. No canal de registro, deixe `@everyone` com **Ver canal** permitido e **Enviar mensagens** negado. O bot também configura o bloqueio do cargo `Membro` nesse canal.
+4. Em cada categoria/canal exclusivo para jogadores registrados, negue **Ver canal** para `@everyone` e permita **Ver canal** para `Membro`. Deixe os canais públicos e administrativos fora dessa regra.
+5. Coloque o cargo do bot acima de `Membro` e conceda ao bot **Gerenciar cargos**, **Gerenciar canais**, **Gerenciar apelidos**, **Ver canais**, **Enviar mensagens** e **Ler histórico de mensagens**.
+6. Ative **Server Members Intent** em Developer Portal → Bot → Privileged Gateway Intents.
+
+O fluxo é automático: quem ainda não tem cadastro enxerga o canal de registro; depois de enviar o nick no botão **Registrar Minecraft**, recebe `Membro`, passa a enxergar os canais privados e deixa de enxergar o canal de registro. Não dê `Membro` pelo Onboarding nem manualmente, pois esse cargo é a confirmação de registro.
+
+Para obrigar todos a fazer o cadastro novamente, um administrador pode executar `/registro reiniciar confirmar:true`. O comando remove `Membro` dos membros que o bot consegue gerenciar, apaga os vínculos Minecraft associados a esse servidor (incluindo registros antigos sem `guild_id`) e remove as permissões individuais antigas do canal de registro. Ele não apaga os outros cargos nem altera os apelidos. O comando exige que o cargo do bot esteja acima de `Membro`; a conta proprietária do servidor é protegida pelo próprio Discord e pode precisar ter o cargo removido manualmente.
+
 ### Painéis
 
 Na primeira inicialização da versão 2.15.0, os painéis antigos foram atualizados para corrigir o layout. Nas inicializações seguintes, o bot procura e preserva as mensagens existentes. Se um painel for apagado, o bot poderá publicar outro. Para atualizar manualmente um painel, use `/configurar atendimento:#atendimento` ou `/configurar kits:#kits`.
