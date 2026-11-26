@@ -207,6 +207,11 @@ function makePlan(guild, config, memberRole, channels) {
       dangerousPlatformRoles: groups.platform
         .map(role => ({ name: role.name, flags: hasDangerousPermissions(role) }))
         .filter(item => item.flags.length),
+      dangerousOtherRoles: groups.roles
+        .filter(role => !groups.staff.some(staffRole => staffRole.id === role.id)
+          && !groups.services.some(serviceRole => serviceRole.id === role.id)
+          && hasDangerousPermissions(role).length)
+        .map(role => ({ name: role.name, flags: hasDangerousPermissions(role) })),
       dangerousMemberFlags: hasDangerousPermissions(memberRole)
     }
   };
@@ -271,6 +276,20 @@ export async function configureGuildPermissions(guild, memberRole) {
   if (memberProblems.length) {
     throw new Error('O cargo Membro tem permissões administrativas (' + memberProblems.join(', ') +
       '). Remova essas permissões do cargo antes de aplicar a configuração.');
+  }
+
+  const initialGroups = roleGroups(guild, memberRole, config);
+  const dangerousOtherRoles = initialGroups.roles.filter(role =>
+    !initialGroups.staff.some(staffRole => staffRole.id === role.id)
+    && !initialGroups.services.some(serviceRole => serviceRole.id === role.id)
+    && hasDangerousPermissions(role).length
+  );
+  if (dangerousOtherRoles.length) {
+    const details = dangerousOtherRoles.slice(0, 5).map(role =>
+      role.name + ': ' + hasDangerousPermissions(role).join(', ')
+    );
+    throw new Error('Antes de aplicar, remova permissões administrativas destes cargos não administrativos: ' +
+      details.join(' | ') + '. O configurador não altera permissões globais de cargos.');
   }
 
   const configStaff = config.staffRoleId && guild.roles.cache.get(config.staffRoleId);
