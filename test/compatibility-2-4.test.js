@@ -45,7 +45,7 @@ test('support selector uses Minecraft server departments', () => {
 
 test('admin commands are compact and Pix is no longer a slash command', () => {
   const names = commandDefinitions.map(item => item.toJSON().name);
-  assert.deepEqual(names, ['configurar', 'registro', 'conta', 'kit', 'backup', 'bridge']);
+  assert.deepEqual(names, ['configurar', 'registro', 'permissoes', 'conta', 'kit', 'backup', 'bridge']);
   assert.equal(command('pix'), undefined);
   assert.deepEqual(command('kit').options.map(option => option.name), ['listar', 'editar']);
   assert.deepEqual(command('configurar').options.map(option => option.name), ['atendimento', 'kits', 'logs', 'compradores', 'registro', 'membro', 'equipe']);
@@ -53,6 +53,12 @@ test('admin commands are compact and Pix is no longer a slash command', () => {
   const resetCommand = command('registro').options.find(option => option.name === 'reiniciar');
   assert.deepEqual(resetCommand.options.map(option => option.name), ['confirmar']);
   assert.equal(resetCommand.options[0].type, 5);
+  assert.deepEqual(command('permissoes').options.map(option => option.name), ['analisar', 'configurar']);
+  const permissionSetup = command('permissoes').options.find(option => option.name === 'configurar');
+  assert.deepEqual(permissionSetup.options.map(option => option.name), ['membro', 'confirmar']);
+  assert.equal(permissionSetup.options[0].type, 8);
+  assert.equal(permissionSetup.options[1].type, 5);
+  assert.equal(command('permissoes').default_member_permissions, '8');
   assert.deepEqual(command('conta').options.map(option => option.name), ['perfil', 'atualizar-nick']);
   assert.deepEqual(command('backup').options.map(option => option.name), ['status', 'criar', 'listar']);
   assert.deepEqual(command('bridge').options.map(option => option.name), ['status']);
