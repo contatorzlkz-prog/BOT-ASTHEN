@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.23.0 — 26/11/2026 · Configuração automática de permissões
+
+- Adiciona /permissoes analisar e /permissoes configurar, com seleção explícita do cargo Membro e confirmação.
+- Fecha categorias e canais para @everyone; somente o canal de registro permanece visível antes do cadastro.
+- Libera os canais comuns para Membro, separa acessos de Staff e gerência e mantém logs restrito.
+- Trata PC, Mobile e Console como cargos cosméticos do Onboarding, sem acesso próprio aos canais.
+- Preserva tickets ASTHEN, acessos individuais e canais com sobrescritas próprias de outros cargos.
+- Audita privilégios globais e bloqueia aplicação se cargos cosméticos ou Membro tiverem permissões administrativas.
+- Atualiza documentação, testes e metadados do pacote para 2.23.0.
+
+---
+
 ## 2.22.0 — 26/11/2026 · Registro obrigatório por cargo
 
 - Adiciona /registro reiniciar confirmar:true para remover Membro de todos os membros do servidor e limpar os cadastros antigos, com confirmação explícita e validação de permissões.
