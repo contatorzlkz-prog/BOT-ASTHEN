@@ -19,7 +19,7 @@ Atendimento privado, loja de kits Bedrock e entrega integrada ao Plugin-ASTHEN.
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/ASTHEN-2.22.0-555B63?style=flat-square" alt="Versão 2.22.0">
+  <img src="https://img.shields.io/badge/ASTHEN-2.23.0-555B63?style=flat-square" alt="Versão 2.23.0">
   <img src="https://img.shields.io/badge/Node.js-22%2B-555B63?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 22 ou superior">
   <img src="https://img.shields.io/badge/discord.js-14.27.0-555B63?style=flat-square&logo=discord&logoColor=white" alt="discord.js 14.27.0">
   <img src="https://img.shields.io/badge/npm-lockfile-ativo-555B63?style=flat-square&logo=npm&logoColor=white" alt="Lockfile npm">
@@ -124,6 +124,16 @@ Configure os canais e o cargo da equipe:
 ```
 
 O cargo informado em `equipe` pode revisar pagamentos e fechar tickets. **Ele não recebe acesso ao canal `#logs`**.
+
+### Configuração automática de permissões
+
+O comando `/permissoes analisar` mostra como o bot classificou os cargos e canais. Depois, aplique com `/permissoes configurar membro:@Membro confirmar:true`.
+
+- `@everyone` é o cargo base que todo membro sempre possui. Com a configuração aplicada, somente `#📝・registro` fica visível antes do cadastro.
+- `Membro` libera os canais normais e permite escrever/conectar nas áreas comuns.
+- `PC`, `Mobile` e `Console` são apenas identificadores escolhidos no Onboarding. Não liberam canais.
+- `Staff`, `Ger. Host`, `Ger. Discord`, `Ger. Server` e `Proprietario` recebem acesso conforme o nível do canal. `#logs` fica limitado à gerência superior.
+- Tickets ASTHEN e canais com permissões individuais ou cargos especiais são preservados; o configurador não apaga cargos nem altera permissões globais.
 
 ### Registro Minecraft e acesso aos canais
 
@@ -235,7 +245,7 @@ No Linux/macOS, o bot restringe as permissões de `data/` e dos arquivos de esta
 
 <div align="center">
 
-**ASTHEN BOT · 2.22.0**
+**ASTHEN BOT · 2.23.0**
 
 <sub>Atendimento, loja e entregas em uma única integração.</sub>
 
