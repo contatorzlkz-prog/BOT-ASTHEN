@@ -19,7 +19,7 @@ Atendimento privado, loja de kits Bedrock e entrega integrada ao Plugin-ASTHEN.
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/ASTHEN-2.19.0-555B63?style=flat-square" alt="Versão 2.19.0">
+  <img src="https://img.shields.io/badge/ASTHEN-2.23.0-555B63?style=flat-square" alt="Versão 2.23.0">
   <img src="https://img.shields.io/badge/Node.js-22%2B-555B63?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 22 ou superior">
   <img src="https://img.shields.io/badge/discord.js-14.27.0-555B63?style=flat-square&logo=discord&logoColor=white" alt="discord.js 14.27.0">
   <img src="https://img.shields.io/badge/npm-lockfile-ativo-555B63?style=flat-square&logo=npm&logoColor=white" alt="Lockfile npm">
@@ -125,6 +125,27 @@ Configure os canais e o cargo da equipe:
 
 O cargo informado em `equipe` pode revisar pagamentos e fechar tickets. **Ele não recebe acesso ao canal `#logs`**.
 
+### Configuração automática de permissões
+
+O comando `/permissoes analisar` mostra como o bot classificou os cargos e canais. Depois, aplique com `/permissoes configurar membro:@Membro confirmar:true`.
+
+- `@everyone` é o cargo base que todo membro sempre possui. Com a configuração aplicada, somente `#📝・registro` fica visível antes do cadastro.
+- `Membro` libera os canais normais e permite escrever/conectar nas áreas comuns.
+- `PC`, `Mobile` e `Console` são apenas identificadores escolhidos no Onboarding. Não liberam canais.
+- `Staff`, `Ger. Host`, `Ger. Discord`, `Ger. Server` e `Proprietario` recebem acesso conforme o nível do canal. `#logs` fica limitado à gerência superior.
+- Tickets ASTHEN e canais com permissões individuais ou cargos especiais são preservados; o configurador não apaga cargos nem altera permissões globais.
+
+### Registro Minecraft e acesso aos canais
+
+Crie o cargo `Membro`. O comando `/permissoes configurar` cria `#📝・registro` dentro da categoria `👋 Entrada` se o canal ainda não existir. Configure:
+
+- Em `#📝・registro`: `@everyone` pode ver o canal, mas não enviar mensagens; o cargo `Membro` não pode ver o canal.
+- Nos canais e categorias exclusivos: negue **Ver canal** para `@everyone` e permita para `Membro`.
+- Não conceda `Membro` pelo Onboarding. O bot só atribui o cargo depois que o jogador envia o nick no formulário.
+- Escolha o cargo no seletor e execute `/permissoes configurar membro:@Membro confirmar:true`.
+
+Depois do registro, o jogador recebe `Membro`, vê os canais privados e deixa de ver `#📝・registro`. Para obrigar todos a registrar novamente, use `/registro reiniciar confirmar:true` como administrador. O comando remove o cargo e limpa os cadastros Minecraft deste servidor; não remove outros cargos nem altera apelidos.
+
 <a id="minecraft-e-loja"></a>
 
 ## Minecraft e loja
@@ -224,7 +245,7 @@ No Linux/macOS, o bot restringe as permissões de `data/` e dos arquivos de esta
 
 <div align="center">
 
-**ASTHEN BOT · 2.19.0**
+**ASTHEN BOT · 2.23.0**
 
 <sub>Atendimento, loja e entregas em uma única integração.</sub>
 

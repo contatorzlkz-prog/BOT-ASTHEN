@@ -1,6 +1,6 @@
 {
   "name": "asthen-discord-bot",
-  "version": "2.19.0",
+  "version": "2.23.0",
   "private": false,
   "type": "module",
   "description": "Bot de Discord com atendimento privado e loja de kits.",
@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "check": "node --check src/index.js && node --check src/channel-discovery.js && node --check src/commands.js && node --check src/config.js && node --check src/interactions.js && node --check src/tickets.js && node --check src/keyed-lock.js && node --check src/ui.js && node --check src/store.js && node --check src/bridge.js && node --check bot-integration/asthen-bridge.js && node --check src/pix.js && node --check src/supabase.js",
+    "check": "node --check src/index.js && node --check src/channel-discovery.js && node --check src/commands.js && node --check src/config.js && node --check src/interactions.js && node --check src/tickets.js && node --check src/registration.js && node --check src/permissions.js && node --check src/maintenance.js && node --check src/transcripts.js && node --check src/maintenance-cli.js && node --check src/keyed-lock.js && node --check src/ui.js && node --check src/store.js && node --check src/bridge.js && node --check bot-integration/asthen-bridge.js && node --check src/pix.js && node --check src/supabase.js",
     "check:commands": "node --input-type=module -e \"import('./src/commands.js').then(({commandDefinitions}) => { commandDefinitions.forEach(command => command.toJSON()); console.log('Slash commands: valid'); })\"",
     "test": "node --import ./test/setup.js --test --test-concurrency=1 --test-reporter=dot",
     "verify": "npm run check && npm run check:commands && npm test"

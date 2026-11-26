@@ -1,3 +1,48 @@
+# Changelog
+
+## 2.23.0 — 26/11/2026 · Configuração automática de permissões
+
+- Adiciona /permissoes analisar e /permissoes configurar, com seleção explícita do cargo Membro e confirmação.
+- Fecha categorias e canais para @everyone; somente o canal de registro permanece visível antes do cadastro. Cria automaticamente a categoria de entrada e o canal de registro quando ainda não existem.
+- Libera os canais comuns para Membro, separa acessos de Staff e gerência e mantém logs restrito.
+- Trata PC, Mobile e Console como cargos cosméticos do Onboarding, sem acesso próprio aos canais.
+- Preserva tickets ASTHEN, acessos individuais e canais com sobrescritas próprias de outros cargos.
+- Audita privilégios globais e bloqueia aplicação se cargos cosméticos ou Membro tiverem permissões administrativas.
+- Atualiza documentação, testes e metadados do pacote para 2.23.0.
+
+---
+
+## 2.22.0 — 26/11/2026 · Registro obrigatório por cargo
+
+- Adiciona /registro reiniciar confirmar:true para remover Membro de todos os membros do servidor e limpar os cadastros antigos, com confirmação explícita e validação de permissões.
+- O reset limpa as sobrescritas individuais do canal de registro; os membros voltam a enxergar o formulário e só recuperam os canais privados depois de registrar novamente. Registros legados sem `guild_id` só são apagados para usuários confirmados como membros deste servidor.
+- Mantém o bloqueio do canal de registro para Membro e a atribuição automática do cargo após salvar o nick.
+- Atualiza README, guias, pacote, lockfile e VERSION.txt para 2.22.0.
+
+---
+
+## 2.21.0 — 25/11/2026 · Registro e identidade Minecraft
+
+- Adiciona registro de jogadores vinculado ao ID do Discord no snapshot Supabase existente.
+- Sincroniza nick, apelido e cargo Membro; restringe #registro a quem precisa cadastrar, mantendo exceções para equipe e cargos autorizados.
+- A loja consulta o nick automaticamente e deixa a atualização cadastral como ação secundária; preserva compras, kits, preços, estoque, pagamentos e entregas.
+- Adiciona /conta e atualização administrativa de nick, logs de registro e reconciliação na entrada/inicialização.
+- Mantém backup, transcrições de tickets, limpeza, monitoramento e inicialização automática da versão 2.20.0.
+
+---
+
+## 2.20.0 — 22/11/2026
+
+- Ao fechar tickets, a conversa completa é exportada para o canal privado `#logs`; anexos pequenos são copiados para os logs e mantidos localmente.
+- Rascunhos abandonados expiram após 7 dias; tickets fechados só são removidos do estado depois de exportados e após 90 dias.
+- Backups automáticos a cada 12 horas, verificação SHA-256, retenção limitada e restauração offline com cópia de segurança prévia.
+- `/backup status`, `/backup criar` e `/backup listar` para administração dos backups.
+- Monitoramento da API Bridge, último contato autenticado do Plugin-ASTHEN, idade da fila e alertas de queda/recuperação em `#logs`.
+- Inicialização automática no logon do Windows e serviço systemd no Linux, com reinício após falhas.
+- Bloqueio de instâncias duplicadas do bot e sincronização da versão `VERSION.txt` com o pacote.
+
+---
+
 ## 2.18.0 — 18/11/2026
 
 - O menu de #kits mostra o preço e a quantidade disponível em cada opção, antes da seleção do produto.

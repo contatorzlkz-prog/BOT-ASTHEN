@@ -4,7 +4,8 @@ export const STANDARD_CHANNELS = Object.freeze([
   { key: 'supportPanelChannelId', name: 'atendimento' },
   { key: 'shopPanelChannelId', name: 'kits' },
   { key: 'logsChannelId', name: 'logs' },
-  { key: 'buyersChannelId', name: 'compradores' }
+  { key: 'buyersChannelId', name: 'compradores' },
+  { key: 'registrationChannelId', name: 'registro' }
 ]);
 
 export function normalizeChannelName(value) {

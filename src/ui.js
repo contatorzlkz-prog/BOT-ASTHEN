@@ -8,7 +8,7 @@ import {
 import { CONFIG, hexToInt } from './config.js';
 import { PIX_KEY_DEFAULT } from './pix.js';
 
-export const PANEL_LAYOUT_VERSION = '2.18.0';
+export const PANEL_LAYOUT_VERSION = '2.21.0';
 
 const brandColor = () => hexToInt(CONFIG.brand.color);
 
@@ -86,6 +86,21 @@ function canBuyKit(kit) {
     && kit?.pluginForSale === true
     && kit?.forSale === true
     && !(Number.isInteger(kit?.weeklyRemaining) && kit.weeklyRemaining <= 0);
+}
+
+export function makeRegistrationPanel() {
+  const embed = new EmbedBuilder()
+    .setColor(brandColor())
+    .setTitle('Registro Minecraft')
+    .setDescription(
+      'Vincule seu Discord ao seu jogador Minecraft para liberar o acesso de membro.\n\n' +
+      'Informe seu nick atual. O cadastro também será usado automaticamente na loja e nos atendimentos.'
+    );
+  const button = new ButtonBuilder()
+    .setCustomId('registration:open')
+    .setLabel('Registrar Minecraft')
+    .setStyle(ButtonStyle.Primary);
+  return { embeds: [embed], components: [new ActionRowBuilder().addComponents(button)] };
 }
 
 export function makeSupportPanel() {
@@ -339,13 +354,14 @@ export function makeKitPreviewControls(draft) {
   );
 }
 
-export function makeSupportTicketEmbed(kind, user) {
+export function makeSupportTicketEmbed(kind, user, minecraftNick = '') {
   const descriptions = CONFIG.support.descriptions;
   return new EmbedBuilder()
     .setColor(supportColor(kind))
     .setTitle(supportTitles[kind] || 'Atendimento')
     .setDescription(
-      '**Solicitante:** <@' + user.id + '>\n\n' +
+      '**Solicitante:** <@' + user.id + '>' +
+      (minecraftNick ? '\n**Minecraft:** ' + normalizeVisibleText(minecraftNick) : '') + '\n\n' +
       normalizeVisibleText(descriptions[kind] || descriptions.outros || 'Descreva o assunto para a equipe.') +
       '\n\nEnvie aqui os detalhes e imagens que ajudem a equipe.'
     )
@@ -361,7 +377,7 @@ export function makePurchaseReviewEmbed(draft) {
     .addFields(
       { name: 'Kit', value: displayKitName(draft.kit), inline: true },
       { name: 'Preço', value: String(draft.kit.price), inline: true },
-      { name: 'Gamertag Bedrock', value: String(draft.minecraftNick), inline: true }
+      { name: 'Identificação Minecraft', value: String(draft.minecraftNick || 'Não cadastrada'), inline: true }
     );
   if (Number.isInteger(draft.kit.weeklyRemaining)) {
     embed.addFields({
@@ -381,7 +397,6 @@ export function makePurchaseReviewControls(draft) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('shop:confirm:' + revision).setLabel('Confirmar pedido').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('shop:switch-kit:' + revision).setLabel('Trocar kit').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('shop:edit-nick:' + revision).setLabel('Editar gamertag').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('shop:cancel:' + revision).setLabel('Cancelar').setStyle(ButtonStyle.Danger)
   );
 }

@@ -86,6 +86,7 @@ function startBridge(opts) {
   const resultWaiters = new Map();
   const pendingPulls = new Set();
   let lastKits = [];
+  let lastPluginContactAt = null;
   let closing = false;
   let lastUnauthorizedWarningAt = 0;
 
@@ -299,6 +300,16 @@ function startBridge(opts) {
       if (job.status === 'QUEUED' || job.status === 'LEASED') count += 1;
     }
     return count;
+  }
+
+  function oldestPendingAgeMs() {
+    let oldest = Infinity;
+    for (const job of jobs.values()) {
+      if (job.status === 'QUEUED' || job.status === 'LEASED') {
+        oldest = Math.min(oldest, Number(job.createdAt) || Date.now());
+      }
+    }
+    return Number.isFinite(oldest) ? Math.max(0, Date.now() - oldest) : null;
   }
 
   function queueCounts() {
@@ -554,6 +565,7 @@ function startBridge(opts) {
         return sendJson(res, 401, { success: false, status: 'UNAUTHORIZED' });
       }
 
+      lastPluginContactAt = Date.now();
       if (req.method === 'GET' && url.pathname === '/plugin/v1/pull') {
         const rawLimit = url.searchParams.get('limit') || '5';
         const parsedLimit = Number.parseInt(rawLimit, 10);
@@ -773,6 +785,8 @@ function startBridge(opts) {
     pendingCount: activePendingCount,
     longPollCount: () => pendingPulls.size,
     queueCounts,
+    oldestPendingAgeMs,
+    lastPluginContactAt: () => lastPluginContactAt,
     getJob: requestId => {
       const job = jobs.get(requestId);
       return job ? clone(job) : null;

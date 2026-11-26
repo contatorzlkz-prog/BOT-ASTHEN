@@ -74,8 +74,26 @@ function snapshotHasData(snapshot) {
       Object.keys(snapshot.guilds || {}).length
       || Object.keys(snapshot.tickets || {}).length
       || Object.keys(snapshot.purchaseDrafts || {}).length
+      || Object.keys(snapshot.players || {}).length
     )
   );
+}
+
+function mergePlayerRecords(localPlayers = {}, remotePlayers = {}) {
+  const merged = {};
+  const ids = new Set([...Object.keys(remotePlayers || {}), ...Object.keys(localPlayers || {})]);
+  for (const id of ids) {
+    const local = localPlayers?.[id];
+    const remote = remotePlayers?.[id];
+    if (!local) merged[id] = remote;
+    else if (!remote) merged[id] = local;
+    else {
+      const localUpdated = Date.parse(local.updated_at || local.created_at || '') || 0;
+      const remoteUpdated = Date.parse(remote.updated_at || remote.created_at || '') || 0;
+      merged[id] = localUpdated >= remoteUpdated ? local : remote;
+    }
+  }
+  return merged;
 }
 
 function normalizeSnapshot(value) {
@@ -84,6 +102,9 @@ function normalizeSnapshot(value) {
     tickets: value?.tickets && typeof value.tickets === 'object' ? value.tickets : {},
     purchaseDrafts: value?.purchaseDrafts && typeof value.purchaseDrafts === 'object'
       ? value.purchaseDrafts
+      : {},
+    players: value?.players && typeof value.players === 'object' && !Array.isArray(value.players)
+      ? value.players
       : {}
   };
 }
@@ -249,7 +270,18 @@ export async function initializeSupabaseSync({
       return { enabled: true, restored: true };
     }
 
-    scheduleSupabaseSync(localSnapshot);
+    // The existing snapshot remains the single persistence model. Merge the
+    // player index separately so an older local guild/ticket snapshot cannot
+    // erase remote registrations when local state.json already has data.
+    if (remoteSnapshot && Object.keys(remoteSnapshot.players || {}).length) {
+      const mergedPlayers = mergePlayerRecords(localSnapshot.players, remoteSnapshot.players);
+      if (JSON.stringify(mergedPlayers) !== JSON.stringify(localSnapshot.players || {})) {
+        applySnapshot({ ...localSnapshot, players: mergedPlayers });
+        saveLocal();
+      }
+    }
+
+    scheduleSupabaseSync(getSnapshot());
     return { enabled: true, restored: false };
   } catch (error) {
     lastSyncError = error.name === 'AbortError'
