@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.22.0 — 26/11/2026 · Registro obrigatório por cargo
+
+- Adiciona /registro reiniciar confirmar:true para remover Membro de todos os membros do servidor e limpar os cadastros antigos, com confirmação explícita e validação de permissões.
+- O reset limpa as sobrescritas individuais do canal de registro; os membros voltam a enxergar o formulário e só recuperam os canais privados depois de registrar novamente.
+- Mantém o bloqueio do canal de registro para Membro e a atribuição automática do cargo após salvar o nick.
+- Atualiza README, guias, pacote, lockfile e VERSION.txt para 2.22.0.
+
+---
+
 ## 2.21.0 — 25/11/2026 · Registro e identidade Minecraft
 
 - Adiciona registro de jogadores vinculado ao ID do Discord no snapshot Supabase existente.
