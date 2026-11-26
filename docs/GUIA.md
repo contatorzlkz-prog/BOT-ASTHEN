@@ -41,8 +41,8 @@ Os campos são opcionais quando o bot já reconhece os canais pelos nomes padrã
 
 ### Registro obrigatório por cargo
 
-1. Crie `#📝・registro` na categoria `👋 Entrada` e crie o cargo `Membro`.
-2. Execute `/configurar registro:#📝・registro membro:@Membro`.
+1. Crie o cargo `Membro`.
+2. Execute `/permissoes configurar membro:@Membro confirmar:true`. Se não existir `#📝・registro`, o bot cria o canal dentro de `👋 Entrada` (e cria a categoria se necessário).
 3. No canal de registro, deixe `@everyone` com **Ver canal** permitido e **Enviar mensagens** negado. O bot também configura o bloqueio do cargo `Membro` nesse canal.
 4. Em cada categoria/canal exclusivo para jogadores registrados, negue **Ver canal** para `@everyone` e permita **Ver canal** para `Membro`. Deixe os canais públicos e administrativos fora dessa regra.
 5. Coloque o cargo do bot acima de `Membro` e conceda ao bot **Gerenciar cargos**, **Gerenciar canais**, **Gerenciar apelidos**, **Ver canais**, **Enviar mensagens** e **Ler histórico de mensagens**.
@@ -58,7 +58,7 @@ Na primeira inicialização da versão 2.15.0, os painéis antigos foram atualiz
 
 ### Configuração automática das permissões
 
-Primeiro confira a proposta com `/permissoes analisar`. Para aplicar, selecione o cargo correto `Membro` no campo do comando e use `/permissoes configurar membro:@Membro confirmar:true`.
+Primeiro confira a proposta com `/permissoes analisar`. Para aplicar, selecione o cargo correto `Membro` no campo do comando e use `/permissoes configurar membro:@Membro confirmar:true`. Se o canal de registro não existir, o bot cria `📝・registro` dentro de `👋 Entrada`.
 
 O configurador fecha todas as categorias para `@everyone` e deixa somente o canal de registro visível antes do cadastro. Nos canais comuns, `Membro` pode visualizar e escrever; nos canais de voz, pode visualizar, conectar e falar. Canais administrativos recebem acessos separados para `Staff`, `Ger. Host`, `Ger. Discord`, `Ger. Server` e `Proprietario`; `#logs` fica mais restrito.
 
