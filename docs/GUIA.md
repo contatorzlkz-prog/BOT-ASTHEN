@@ -56,6 +56,16 @@ Para obrigar todos a fazer o cadastro novamente, um administrador pode executar 
 
 Na primeira inicialização da versão 2.15.0, os painéis antigos foram atualizados para corrigir o layout. Nas inicializações seguintes, o bot procura e preserva as mensagens existentes. Se um painel for apagado, o bot poderá publicar outro. Para atualizar manualmente um painel, use `/configurar atendimento:#atendimento` ou `/configurar kits:#kits`.
 
+### Configuração automática das permissões
+
+Primeiro confira a proposta com `/permissoes analisar`. Para aplicar, selecione o cargo correto `Membro` no campo do comando e use `/permissoes configurar membro:@Membro confirmar:true`.
+
+O configurador fecha todas as categorias para `@everyone` e deixa somente o canal de registro visível antes do cadastro. Nos canais comuns, `Membro` pode visualizar e escrever; nos canais de voz, pode visualizar, conectar e falar. Canais administrativos recebem acessos separados para `Staff`, `Ger. Host`, `Ger. Discord`, `Ger. Server` e `Proprietario`; `#logs` fica mais restrito.
+
+`PC`, `Mobile` e `Console` são cargos cosméticos do Onboarding. Todo usuário continua tendo `@everyone`, mesmo depois de escolher uma plataforma, e esses cargos não liberam canais. O comando remove sobrescritas de visibilidade desses três cargos, sem alterar suas permissões globais.
+
+Tickets do ASTHEN, canais com sobrescritas individuais e canais com regras próprias de outros cargos são protegidos e não recebem acesso geral de `Membro`. O comando também não altera permissões globais dos cargos. Se encontrar um cargo cosmético com privilégios administrativos ou se `Membro` tiver permissões administrativas, a aplicação é bloqueada para evitar bypass.
+
 ## 3. Loja e kits
 
 O **Plugin-ASTHEN é a única origem dos kits reais**. Crie o kit no Minecraft, configure preço e disponibilidade no plugin e aguarde a sincronização. O kit aparece no seletor do canal `#kits`.
