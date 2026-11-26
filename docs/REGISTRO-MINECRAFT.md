@@ -1,4 +1,4 @@
-# Registro Minecraft — ASTHEN BOT 2.22.0
+# Registro Minecraft — ASTHEN BOT 2.23.0
 
 ## Modelo de acesso
 
@@ -57,6 +57,19 @@ A confirmação é obrigatória. O bot precisa estar acima de `Membro` na hierar
 - `/conta atualizar-nick`: abre o formulário para atualizar o nick.
 - `/registro atualizar jogador:@Jogador nick:NickNovo`: atualização administrativa.
 - `/registro autorizar cargo:@Equipe` e `/registro revogar cargo:@Equipe`: controlam exceções para visualizar o canal de registro.
+
+## Configuração automática das permissões
+
+Use `/permissoes analisar` para conferir os cargos e canais detectados. Para aplicar, escolha o cargo pelo seletor do Discord: `/permissoes configurar membro:@Membro confirmar:true`.
+
+- `@everyone` é implícito e continua atribuído a todos os usuários. Ele só consegue ver o canal de registro.
+- `Membro` recebe acesso aos canais comuns e pode escrever; nos canais de voz, pode conectar e falar.
+- `PC`, `Mobile` e `Console` são apenas rótulos de plataforma do Onboarding. Não dão acesso aos canais.
+- `Staff` e os cargos de gerência recebem acesso aos canais de trabalho conforme seu nível. Logs fica restrito à gerência superior.
+- Tickets do ASTHEN, canais com acesso individual e canais com regras específicas de outros cargos são preservados.
+- O configurador não altera permissões globais dos cargos e bloqueia a aplicação quando encontra privilégios administrativos em cargos cosméticos ou no cargo Membro.
+
+O bot precisa de **Manage Channels** e **Manage Roles**, e seu cargo deve ficar acima de `Membro`. Revise o resultado de `/permissoes analisar` antes da aplicação.
 
 ## Supabase
 
