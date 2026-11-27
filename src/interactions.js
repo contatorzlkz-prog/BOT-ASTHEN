@@ -1,5 +1,6 @@
 import {
   ActionRowBuilder,
+  ButtonBuilder,
   ButtonStyle,
   ModalBuilder,
   MessageFlags,
@@ -172,15 +173,14 @@ async function refreshPublishedShopPanel(guild, guildId) {
   try {
     const channel = await fetchTextChannel(guild, config.shopPanelChannelId);
     if (!channel) return false;
-    const changes = await updatePanel(guild, config, 'shop', channel);
-    updateGuildConfig(guildId, changes);
+    // O painel público é estático. O catálogo atualizado é carregado quando o
+    // usuário clica no botão; nenhuma mensagem já publicada precisa ser editada.
     return true;
   } catch (error) {
-    console.error('[Asthen] Kit atualizado, mas não foi possível atualizar o painel da loja:', error.message);
+    console.error('[Asthen] Não foi possível localizar o painel da loja:', error.message);
     return false;
   }
 }
-
 function shopPanelRefreshNotice(refreshed) {
   return refreshed === false
     ? '\nNão consegui atualizar automaticamente a mensagem do canal #kits. Confira as permissões de envio e histórico do bot nesse canal.'
