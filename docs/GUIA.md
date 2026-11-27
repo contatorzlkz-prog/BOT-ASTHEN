@@ -56,29 +56,41 @@ Para obrigar todos a fazer o cadastro novamente, um administrador pode executar 
 
 Na primeira inicialização da versão 2.15.0, os painéis antigos foram atualizados para corrigir o layout. Nas inicializações seguintes, o bot procura e preserva as mensagens existentes. Se um painel for apagado, o bot poderá publicar outro. Para atualizar manualmente um painel, use `/configurar atendimento:#atendimento` ou `/configurar kits:#kits`.
 
-### Configuração automática das permissões
+### Comandos principais
 
-Primeiro confira a proposta com `/permissoes analisar`. Para aplicar, selecione o cargo correto `Membro` no campo do comando e use `/permissoes configurar membro:@Membro confirmar:true`. Se o canal de registro não existir, o bot cria `📝・registro` dentro de `👋 Entrada`.
+O ASTHEN utiliza três comandos de entrada:
 
-O configurador fecha todas as categorias para `@everyone` e deixa somente o canal de registro visível antes do cadastro. Nos canais comuns, `Membro` pode visualizar e escrever; nos canais de voz, pode visualizar, conectar e falar. Canais administrativos recebem acessos separados para `Staff`, `Ger. Host`, `Ger. Discord`, `Ger. Server` e `Proprietario`; `#logs` fica mais restrito.
+- `/configurar`: salva os canais principais e seleciona os cargos `Membro` e `equipe`.
+- `/kit configurar`: abre o painel visual de edição do catálogo de kits.
+- `/outros`: reúne as ferramentas administrativas em grupos.
 
-`PC`, `Mobile` e `Console` são cargos cosméticos do Onboarding. Todo usuário continua tendo `@everyone`, mesmo depois de escolher uma plataforma, e esses cargos não liberam canais. O comando remove sobrescritas de visibilidade desses três cargos, sem alterar suas permissões globais.
+Dentro de `/outros`:
+- `seguranca analisar`: prévia dos cargos e canais.
+- `seguranca aplicar membro:@Membro confirmar:true`: verifica a hierarquia, aplica a política e exige novo registro de todos.
+- `tiktok publicar link:<URL> frame:<imagem opcional>`: publica no canal `#vídeos-novos`.
+- `backup status` e `backup criar`: consultar e criar backups.
+- `minecraft status`: saúde da API, plugin e fila.
 
-Tickets do ASTHEN, canais com sobrescritas individuais e canais com regras próprias de outros cargos são protegidos e não recebem acesso geral de `Membro`. O comando também não altera permissões globais dos cargos. Se encontrar um cargo cosmético com privilégios administrativos ou se `Membro` tiver permissões administrativas, a aplicação é bloqueada para evitar bypass.
+### Política de acesso e anti-raid
+
+Primeiro configure `registro` e `membro` em `/configurar`. O canal `📝・registro` é criado automaticamente em `👋 Entrada` se não existir.
+
+Aplique em `/outros seguranca aplicar membro:@Membro confirmar:true`. A confirmação é obrigatória: o bot verifica a hierarquia antes de alterar as permissões, remove o cargo `Membro` de todos os membros que consegue gerenciar, limpa os registros antigos desse servidor e recalibra o acesso aos tickets. O dono do servidor não pode ter o próprio cargo removido pelo bot, por limitação do Discord.
+
+- `@everyone`: somente visualização de `#registro`.
+- `Membro`: acesso aos canais comuns após concluir o formulário.
+- `PC`, `Mobile`, `Console`: cargos cosméticos; não dão acesso aos canais.
+- `Staff` e cargos de gerência: acesso conforme o tipo do canal. Logs fica restrito à gerência superior.
+- Tickets ASTHEN: o dono só recupera acesso depois de registrar.
+- Canais comuns: mensagens, reações e figurinhas; sem anexos, tópicos, enquetes, menções gerais ou comandos de aplicativo. Slowmode mínimo de cinco segundos.
+- `#vídeos-novos`: membros podem ler e reagir; apenas o bot pode publicar.
+- `#comandos-adm`: comandos de aplicativo liberados somente para Staff e gerência. Administradores mantêm o bypass do Discord.
+
+O bot não modifica apelidos do Discord. O nick Minecraft fica salvo no vínculo e é utilizado automaticamente pela loja e pelos tickets. Administradores podem mudar os apelidos diretamente no Discord.
 
 ### Publicação de vídeos do TikTok
 
-No canal `#comandos-adm`, um administrador pode usar `/tiktok publicar link:<URL>`. O bot localiza `#vídeos-novos`, verifica se o ID do vídeo já foi publicado e envia um card sem a capa padrão do TikTok.
-
-O parâmetro opcional `frame` aceita uma imagem PNG, JPG, WEBP ou GIF de até 8 MB, anexada diretamente pelo Discord. Essa imagem é usada como um quadro personalizado. Sem anexo, o card fica sem imagem. O bot não baixa nem recorta o vídeo automaticamente.
-
-### Comandos de bots e anti-spam
-
-A configuração automática nega **Usar comandos de aplicativos** a `@everyone` em todos os canais. Staff e gerência recebem essa permissão somente em `#comandos-adm`; administradores mantêm o bypass nativo do Discord. Isso bloqueia slash commands e comandos de contexto de outros bots para cargos comuns.
-
-Nos canais comuns, `Membro` pode ler, enviar mensagens, reagir e usar emojis/figurinhas externas. Não pode anexar arquivos, criar tópicos públicos/privados, escrever em tópicos, criar enquetes, mencionar todos ou usar aplicativos externos. O slowmode fica em pelo menos 5 segundos sem reduzir tempos maiores já configurados.
-
-`#vídeos-novos` fica em modo de leitura para Membro, com reações permitidas. O bot é o responsável pelas publicações.
+Use `/outros tiktok publicar` no canal `#comandos-adm`. Informe o link e, opcionalmente, anexe um frame PNG, JPG, WEBP ou GIF de até 8 MB. Sem imagem, o card é limpo e não usa a capa estática do TikTok. O bot verifica duplicados nas últimas 50 mensagens.
 
 ## 3. Loja e kits
 
@@ -86,8 +98,8 @@ O **Plugin-ASTHEN é a única origem dos kits reais**. Crie o kit no Minecraft, 
 
 Comandos administrativos no Discord:
 
-- `/kit listar`: consulta os kits e o estado de venda recebido do Minecraft.
-- `/kit editar`: altera nome exibido, descrição e imagem HTTPS.
+- `/kit configurar`: consulta os kits e o estado de venda recebido do Minecraft.
+- `/kit configurar`: altera nome exibido, descrição e imagem HTTPS.
 
 O Discord não cria kits, não altera seus itens nem define preço ou disponibilidade oficial. Essas ações pertencem ao Plugin-ASTHEN.
 
@@ -159,8 +171,8 @@ O ASTHEN cria um backup ao iniciar e a cada 12 horas. Cada cópia contém `.env`
 
 Comandos de administrador no Discord:
 
-- `/backup status`: consulta os últimos backups e sua integridade.
-- `/backup criar`: cria uma cópia manual.
+- `/outros backup status`: consulta os últimos backups e sua integridade.
+- `/outros backup criar`: cria uma cópia manual.
 - `/backup listar`: lista os backups disponíveis.
 
 Para restaurar no Windows, feche o bot e execute `RESTAURAR.bat`. No Linux, execute `bash linux/restore-backup.sh` depois de parar o serviço, ou use `node src/maintenance-cli.js restore ID_DO_BACKUP`. A ferramenta exige que o processo esteja parado, verifica os hashes e cria primeiro uma cópia de segurança do estado atual. Não edite manualmente os arquivos dentro de uma pasta de backup.
@@ -175,7 +187,7 @@ O bot também cria `data/asthen.pid` para impedir duas instâncias simultâneas.
 
 ### Monitoramento Minecraft
 
-O comando `/bridge status` mostra o último contato autenticado do Plugin-ASTHEN, se ele está respondendo e a idade do pedido mais antigo na fila. Se a Bridge cair ou o plugin ficar mais de 90 segundos sem contato após já ter conectado, o bot envia um alerta de queda/recuperação para `#logs`. O monitoramento também avisa quando a saúde do Supabase muda entre normal e erro.
+O comando `/outros minecraft status` mostra o último contato autenticado do Plugin-ASTHEN, se ele está respondendo e a idade do pedido mais antigo na fila. Se a Bridge cair ou o plugin ficar mais de 90 segundos sem contato após já ter conectado, o bot envia um alerta de queda/recuperação para `#logs`. O monitoramento também avisa quando a saúde do Supabase muda entre normal e erro.
 
 ## 8. Verificações
 
