@@ -353,18 +353,12 @@ export async function configureGuildPermissions(guild, memberRole) {
   // Categories are closed to every role. Access is re-granted on each
   // individual channel so inherited role allows cannot expose private tickets.
   for (const category of plan.categories) {
-    await edit(category, guild.roles.everyone.id, {
-      ViewChannel: false, UseApplicationCommands: false
-    });
-    await edit(category, memberRole.id, {
-      ViewChannel: false, UseApplicationCommands: false, CreatePublicThreads: false,
-      CreatePrivateThreads: false, SendMessagesInThreads: false, MentionEveryone: false,
-      SendTTSMessages: false, SendPolls: false, UseExternalApps: false, ManageThreads: false
-    });
+    await edit(category, guild.roles.everyone.id, { ViewChannel: false });
+    await edit(category, memberRole.id, { ViewChannel: false });
     for (const overwrite of category.permissionOverwrites.cache.values()) {
       if (overwrite.type !== 0 || overwrite.id === guild.roles.everyone.id) continue;
-      if (overwrite.allow.has(FLAGS.ViewChannel) || overwrite.allow.has(FLAGS.UseApplicationCommands)) {
-        await edit(category, overwrite.id, { ViewChannel: false, UseApplicationCommands: false });
+      if (overwrite.allow.has(FLAGS.ViewChannel)) {
+        await edit(category, overwrite.id, { ViewChannel: false });
       }
     }
     await clearPlatformOverwrites(category, groups, counters).catch(error =>
@@ -465,6 +459,16 @@ export async function configureGuildPermissions(guild, memberRole) {
     }
 
     if (scope === 'video-feed') {
+      for (const overwrite of channel.permissionOverwrites.cache.values()) {
+        if (overwrite.id === botMember.id) continue;
+        if (overwrite.allow.has(FLAGS.SendMessages)) {
+          await edit(channel, overwrite.id, {
+            SendMessages: false, SendMessagesInThreads: false,
+            CreatePublicThreads: false, CreatePrivateThreads: false,
+            UseApplicationCommands: false
+          });
+        }
+      }
       await edit(channel, memberRole.id, {
         ViewChannel: true, ReadMessageHistory: true, SendMessages: false,
         AddReactions: true, UseExternalEmojis: true, UseExternalStickers: true,
@@ -472,7 +476,7 @@ export async function configureGuildPermissions(guild, memberRole) {
         CreatePublicThreads: false, CreatePrivateThreads: false, SendMessagesInThreads: false,
         MentionEveryone: false, SendTTSMessages: false, SendPolls: false, UseExternalApps: false
       });
-      for (const role of [...groups.managers, ...groups.staff]) {
+      for (const role of [...groups.managers, ...groups.staff, ...groups.services]) {
         if (roleHasAdministrator(role)) continue;
         await edit(channel, role.id, {
           ViewChannel: true, ReadMessageHistory: true, SendMessages: false,
