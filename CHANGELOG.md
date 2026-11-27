@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.24.0 — 27/11/2026 · TikTok, comandos e anti-spam
+## 2.24.0 — 26/11/2026 · TikTok, comandos e anti-spam
 
 - Adiciona /tiktok publicar para enviar vídeos do TikTok automaticamente para #vídeos-novos, com verificação de duplicados e opção de anexar um frame manual.
 - O card não usa a capa estática original do TikTok; sem frame fornecido, publica um card limpo com link oficial.
