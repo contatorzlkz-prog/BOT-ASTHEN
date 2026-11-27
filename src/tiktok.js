@@ -125,17 +125,11 @@ export async function publishTikTokVideo(guild, rawUrl, frame = null) {
   const frameFile = await buildFrameAttachment(frame);
   const embed = new EmbedBuilder()
     .setColor(0x7652c7)
-    .setAuthor({
-      name: 'ASTHEN MC  •  NOVO VÍDEO',
-      url: video.url
-    })
-    .setTitle(metadata?.title || 'Novo vídeo no TikTok')
+    .setAuthor({ name: 'ASTHEN MC', url: video.url })
+    .setTitle(metadata?.title || 'Vídeo novo')
     .setURL(video.url)
-    .setDescription(
-      (metadata?.authorName ? 'Publicado por **' + metadata.authorName.replace(/[*_~`|]/g, '') + '**\n\n' : '') +
-      '[▶  ASSISTIR NO TIKTOK](' + video.url + ')'
-    )
-    .setFooter({ text: '@' + video.username + '  •  ASTHEN MC' })
+    .setDescription('[▶ Assistir no TikTok](' + video.url + ')')
+    .setFooter({ text: '@' + video.username })
     .setTimestamp(new Date());
 
   if (frameFile) embed.setImage('attachment://' + frameFile.filename);
