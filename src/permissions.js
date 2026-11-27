@@ -596,7 +596,7 @@ export async function configureGuildPermissions(guild, memberRole, {
     if (counters.failed.length) {
       counters.resetSkipped = true;
     } else {
-      const reset = await resetGuildRegistrations(guild, { prepared: resetPlan, log: false });
+      const reset = await resetGuildRegistrations(guild, { prepared: resetPlan });
       counters.reset = reset;
     }
   }
