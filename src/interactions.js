@@ -44,10 +44,7 @@ import {
   makeOrderLogEmbed,
   makePurchaseReviewControls,
   makePurchaseReviewEmbed,
-  makeShopPanel,
-  makeSupportPanel,
   makeSupportTicketEmbed,
-  PANEL_LAYOUT_VERSION
 } from './ui.js';
 import { archiveAndDeleteTicket, createPrivateTicket } from './tickets.js';
 import { CONFIG } from './config.js';
@@ -167,70 +164,6 @@ async function fetchTextChannel(guild, channelId) {
   const channel = guild.channels.cache.get(channelId)
     ?? await guild.channels.fetch(channelId).catch(() => null);
   return channel?.isTextBased() && typeof channel.send === 'function' ? channel : null;
-}
-
-function isMissingDiscordMessage(error) {
-  const code = Number(error?.code ?? error?.rawError?.code);
-  return code === 10008 || code === 10003 || error?.status === 404;
-}
-
-async function fetchPanelMessage(channel, messageId) {
-  if (!messageId) return null;
-  try {
-    return await channel.messages.fetch(messageId);
-  } catch (error) {
-    if (isMissingDiscordMessage(error)) return null;
-    throw error;
-  }
-}
-
-async function updatePanel(guild, config, kind, channel) {
-  const isShop = kind === 'shop';
-  const channelKey = isShop ? 'shopPanelChannelId' : 'supportPanelChannelId';
-  const messageKey = isShop ? 'shopPanelMessageId' : 'supportPanelMessageId';
-  const versionKey = isShop ? 'shopPanelVersion' : 'supportPanelVersion';
-  const oldChannelId = config[channelKey];
-  const oldMessageId = config[messageKey];
-  const payload = isShop
-    ? makeShopPanel(await getShopKitsWithCurrentStock(guild.id))
-    : makeSupportPanel();
-  let message = null;
-
-  // Reaproveita o painel no canal atual, mas não deixa um ID antigo travar a configuração.
-  if (oldChannelId === channel.id && oldMessageId) {
-    message = await fetchPanelMessage(channel, oldMessageId);
-    if (message) {
-      try {
-        message = await message.edit(payload);
-      } catch (error) {
-        if (!isMissingDiscordMessage(error)) throw error;
-        message = null;
-      }
-    }
-  }
-
-  if (!message) {
-    // Ao mudar de canal, tenta remover o painel anterior. A falha nessa limpeza
-    // não pode impedir a publicação no novo canal.
-    if (oldChannelId && oldMessageId && oldChannelId !== channel.id) {
-      const oldChannel = await fetchTextChannel(guild, oldChannelId);
-      if (oldChannel) {
-        const oldMessage = await fetchPanelMessage(oldChannel, oldMessageId);
-        if (oldMessage) await oldMessage.delete().catch(error => {
-          if (!isMissingDiscordMessage(error)) {
-            console.warn('[Asthen] Não foi possível remover o painel antigo:', error.message);
-          }
-        });
-      }
-    }
-    message = await channel.send(payload);
-  }
-
-  return {
-    [channelKey]: channel.id,
-    [messageKey]: message.id,
-    [versionKey]: PANEL_LAYOUT_VERSION
-  };
 }
 
 async function refreshPublishedShopPanel(guild, guildId) {
