@@ -1897,10 +1897,13 @@ async function handlePermissionsCommand(interaction) {
 
   if (action === 'aplicar') {
     const memberRole = interaction.options.getRole('membro', true);
-    const resetRegistrations = interaction.options.getBoolean('redefinir_registros', true);
+    if (interaction.options.getBoolean('confirmar', true) !== true) {
+      return replyPrivate(interaction, 'Nenhuma alteração foi feita. Para redefinir os cadastros e aplicar a política, confirme com TRUE.');
+    }
+    const resetRegistrations = true;
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
-      const result = await configureGuildPermissions(interaction.guild, memberRole, { resetRegistrations });
+      const result = await configureGuildPermissions(interaction.guild, memberRole, { resetRegistrations: true });
       const lines = [
         '**Política de acesso aplicada.**',
         '@everyone só vê #registro antes do cadastro.',
@@ -1954,8 +1957,6 @@ async function handleCommand(interaction) {
   if (interaction.commandName === 'configurar') return configureChannels(interaction);
   if (interaction.commandName === 'kit') return handleKitCommand(interaction);
   if (interaction.commandName === 'outros') return handleOtherCommand(interaction);
-}
-
 }
 
 export async function handleInteraction(interaction) {
