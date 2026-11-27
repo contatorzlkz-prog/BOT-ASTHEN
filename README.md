@@ -19,7 +19,7 @@ Atendimento privado, loja de kits Bedrock e entrega integrada ao Plugin-ASTHEN.
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/ASTHEN-2.23.0-555B63?style=flat-square" alt="Versão 2.23.0">
+  <img src="https://img.shields.io/badge/ASTHEN-2.24.0-555B63?style=flat-square" alt="Versão 2.24.0">
   <img src="https://img.shields.io/badge/Node.js-22%2B-555B63?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 22 ou superior">
   <img src="https://img.shields.io/badge/discord.js-14.27.0-555B63?style=flat-square&logo=discord&logoColor=white" alt="discord.js 14.27.0">
   <img src="https://img.shields.io/badge/npm-lockfile-ativo-555B63?style=flat-square&logo=npm&logoColor=white" alt="Lockfile npm">
@@ -125,14 +125,21 @@ Configure os canais e o cargo da equipe:
 
 O cargo informado em `equipe` pode revisar pagamentos e fechar tickets. **Ele não recebe acesso ao canal `#logs`**.
 
+### Publicação de vídeos do TikTok
+
+No canal `#comandos-adm`, um administrador pode usar `/tiktok publicar link:<URL>`. O bot localiza `#vídeos-novos`, verifica se o ID do vídeo já foi publicado e envia um card sem a capa padrão do TikTok.
+
+O parâmetro opcional `frame` aceita uma imagem PNG, JPG, WEBP ou GIF de até 8 MB, anexada diretamente pelo Discord. Essa imagem é usada como um quadro personalizado. Sem anexo, o card fica sem imagem.
+
 ### Configuração automática de permissões
 
 O comando `/permissoes analisar` mostra como o bot classificou os cargos e canais. Depois, aplique com `/permissoes configurar membro:@Membro confirmar:true`.
 
 - `@everyone` é o cargo base que todo membro sempre possui. Com a configuração aplicada, somente `#📝・registro` fica visível antes do cadastro.
-- `Membro` libera os canais normais e permite escrever/conectar nas áreas comuns.
+- `Membro` libera canais comuns, com mensagens, reações e figurinhas; sem anexos, tópicos, enquetes, menções gerais ou comandos de aplicativos. O chat comum recebe slowmode de 5 segundos.
 - `PC`, `Mobile` e `Console` são apenas identificadores escolhidos no Onboarding. Não liberam canais.
 - `Staff`, `Ger. Host`, `Ger. Discord`, `Ger. Server` e `Proprietario` recebem acesso conforme o nível do canal. `#logs` fica limitado à gerência superior.
+- `PC`, `Mobile` e `Console` não liberam comandos. `#vídeos-novos` é leitura para Membro, com reações; só o bot publica. `#comandos-adm` é o canal de comandos para Staff e gerência; administradores mantêm o bypass.
 - Tickets ASTHEN e canais com permissões individuais ou cargos especiais são preservados; o configurador não apaga cargos nem altera permissões globais.
 
 ### Registro Minecraft e acesso aos canais
@@ -245,7 +252,7 @@ No Linux/macOS, o bot restringe as permissões de `data/` e dos arquivos de esta
 
 <div align="center">
 
-**ASTHEN BOT · 2.23.0**
+**ASTHEN BOT · 2.24.0**
 
 <sub>Atendimento, loja e entregas em uma única integração.</sub>
 
