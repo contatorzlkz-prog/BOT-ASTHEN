@@ -1879,12 +1879,12 @@ async function handleTikTokCommand(interaction) {
   try {
     const result = await publishTikTokVideo(interaction.guild, link, frame);
     const frameText = result.frameAttached
-      ? 'O frame enviado foi usado no card.'
-      : 'Card limpo publicado sem a capa automática do TikTok. Para exibir um frame, anexe uma imagem no campo frame.';
+      ? 'A imagem enviada foi incluída no card.'
+      : 'O card foi publicado sem imagem de capa.';
     return interaction.editReply(
-      '**Vídeo publicado em #' + result.channel.name + '!**\n' +
+      '**Publicação no ar em #' + result.channel.name + '!**\n' +
       (result.title ? '**' + result.title.replace(/[*_~|]/g, '') + '**\n' : '') +
-      frameText + '\n[Ver publicação no Discord](' + result.message.url + ')'
+      frameText + '\n[Ver anúncio no Discord](' + result.message.url + ')'
     );
   } catch (error) {
     console.error('[Asthen TikTok] Falha ao publicar vídeo:', error);
