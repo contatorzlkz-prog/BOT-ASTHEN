@@ -56,8 +56,7 @@ import { PIX_KEY_DEFAULT, PIX_QR_FILENAME, PIX_QR_IMAGE_PATH } from './pix.js';
 import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock, releaseWeeklyKitStock } from './supabase.js';
 import { exportTicketTranscript } from './transcripts.js';
 import { createBackup, listBackups } from './maintenance.js';
-import { registerPlayerForMember, validateMinecraftNick, configureRegistrationChannel, refreshRegistrationPanel } from './registration.js';
-import { analyzeGuildPermissionSetup, configureGuildPermissions } from './permissions.js';
+import { registerPlayerForMember, validateMinecraftNick, refreshRegistrationPanel } from './registration.js';
 import { publishTikTokVideo } from './tiktok.js';
 import { normalizeChannelName } from './channel-discovery.js';
 
@@ -289,92 +288,6 @@ export async function secureLogsChannel(channel, guild) {
 }
 
 
-
-async function configureChannels(interaction) {
-  if (!canManage(interaction)) {
-    return replyPrivate(interaction, 'Você precisa da permissão Gerenciar servidor para configurar os canais.');
-  }
-
-  const supportChannel = interaction.options.getChannel('atendimento');
-  const shopChannel = interaction.options.getChannel('kits');
-  const logsChannel = interaction.options.getChannel('logs');
-  const buyersChannel = interaction.options.getChannel('compradores');
-  const registrationChannel = interaction.options.getChannel('registro');
-  const memberRole = interaction.options.getRole('membro');
-  const staffRole = interaction.options.getRole('equipe');
-
-  if (!supportChannel && !shopChannel && !logsChannel && !buyersChannel
-      && !registrationChannel && !memberRole && !staffRole) {
-    return replyPrivate(interaction,
-      'Informe pelo menos um canal ou cargo para salvar a configuração.');
-  }
-
-  const config = getGuildConfig(interaction.guildId);
-  const changes = {};
-  const updated = [];
-
-  if (supportChannel) {
-    Object.assign(changes, await updatePanel(interaction.guild, config, 'support', supportChannel));
-    updated.push('atendimento: ' + supportChannel.toString());
-  }
-  if (shopChannel) {
-    Object.assign(changes, await updatePanel(interaction.guild, config, 'shop', shopChannel));
-    updated.push('kits: ' + shopChannel.toString());
-  }
-  if (logsChannel) {
-    changes.logsChannelId = logsChannel.id;
-    updated.push('logs: ' + logsChannel.toString());
-  }
-  if (buyersChannel) {
-    changes.buyersChannelId = buyersChannel.id;
-    updated.push('compradores: ' + buyersChannel.toString());
-  }
-  if (registrationChannel) {
-    changes.registrationChannelId = registrationChannel.id;
-    updated.push('registro: ' + registrationChannel.toString());
-  }
-  if (memberRole) {
-    if (memberRole.managed || memberRole.id === interaction.guild.roles.everyone.id) {
-      return replyPrivate(interaction, 'Selecione um cargo comum chamado Membro, não um cargo gerenciado.');
-    }
-    changes.memberRoleId = memberRole.id;
-    updated.push('cargo Membro: ' + memberRole.toString());
-  }
-  if (staffRole) {
-    changes.staffRoleId = staffRole.id;
-    updated.push('equipe: ' + staffRole.toString());
-  }
-
-  const effectiveStaffRoleId = changes.staffRoleId ?? config.staffRoleId;
-  const effectiveLogsId = changes.logsChannelId ?? config.logsChannelId;
-  if ((logsChannel || staffRole) && effectiveLogsId) {
-    const targetLogsChannel = logsChannel ?? await fetchTextChannel(interaction.guild, effectiveLogsId);
-    if (!targetLogsChannel) {
-      return replyPrivate(interaction, 'O canal de logs configurado não existe mais. Verifique o canal #logs e as permissões do bot.');
-    }
-    await secureLogsChannel(targetLogsChannel, interaction.guild, effectiveStaffRoleId, config.staffRoleId);
-  }
-
-  updateGuildConfig(interaction.guildId, changes);
-
-  const effectiveRegistrationId = changes.registrationChannelId ?? config.registrationChannelId;
-  if (effectiveRegistrationId) {
-    const targetRegistration = registrationChannel
-      ?? await fetchTextChannel(interaction.guild, effectiveRegistrationId);
-    if (targetRegistration) {
-      await configureRegistrationChannel(targetRegistration, interaction.guild);
-      await refreshRegistrationPanel(interaction.guild).catch(error => {
-        console.warn('[Asthen Registro] Não foi possível atualizar o painel:', error.message);
-      });
-    }
-  }
-
-  return replyPrivate(
-    interaction,
-    'Configuração salva. ' + updated.join(' · ') +
-    '. A política de acesso do servidor é administrada diretamente nas configurações do Discord.'
-  );
-}
 
 function makeKitEditModal(kit, field) {
   const fields = {
@@ -1861,87 +1774,6 @@ async function handleTikTokCommand(interaction) {
     return interaction.editReply('**Não foi possível publicar.** ' + (error.message || 'Confira o link e tente novamente.'));
   }
 }
-async function handlePermissionsCommand(interaction) {
-  if (!isAdministrator(interaction)) {
-    return replyPrivate(interaction, 'Somente administradores podem alterar a segurança dos canais.');
-  }
-
-  const action = interaction.options.getSubcommand();
-  if (action === 'analisar') {
-    try {
-      const result = await analyzeGuildPermissionSetup(interaction.guild);
-      const lines = [
-        '**Prévia de segurança do ASTHEN**',
-        'Cargos: **' + result.roleCount + '** · categorias: **' + result.categoryCount + '**',
-        '@everyone: somente #registro.',
-        'Canais de Membro: **' + result.memberChannels + '** · vídeos: **' + result.videoFeedChannels + '**',
-        'Administrativos: **' + result.adminChannels + '** · tickets: **' + result.protectedTickets + '**',
-        'PC, Mobile e Console: cosméticos, sem acesso próprio.',
-        'Equipe: ' + (result.staffRoles.join(', ') || 'nenhuma detectada'),
-        'Gerência: ' + (result.managerRoles.join(', ') || 'nenhuma detectada'),
-        'Bots de serviço: ' + (result.serviceRoles.join(', ') || 'nenhum detectado')
-      ];
-      if (result.dangerousRoles.length) {
-        lines.push('**Bloqueio:** Administrador detectado em ' + result.dangerousRoles.join(', ') + '. Remova essa permissão desses cargos antes de aplicar.');
-      }
-      if (result.unknownRoles.length) {
-        lines.push('Outros cargos: ' + result.unknownRoles.join(', ') + '. Sem liberação de canais.');
-      }
-      lines.push('As permissões do servidor são administradas diretamente nas configurações do Discord.');
-      return replyPrivate(interaction, lines.join('\n').slice(0, 1950));
-    } catch (error) {
-      return replyPrivate(interaction, 'Não consegui analisar: ' + (error.message || 'erro desconhecido'));
-    }
-  }
-
-  if (action === 'aplicar') {
-    const memberRole = interaction.options.getRole('membro', true);
-    if (interaction.options.getBoolean('confirmar', true) !== true) {
-      return replyPrivate(interaction, 'Nenhuma alteração foi feita. Para redefinir os cadastros e aplicar a política, confirme com TRUE.');
-    }
-    const resetRegistrations = true;
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    try {
-      const result = await configureGuildPermissions(interaction.guild, memberRole, { resetRegistrations: true });
-      const lines = [
-        '**Política de acesso aplicada.**',
-        '@everyone só vê #registro antes do cadastro.',
-        'Membro libera canais comuns; PC/Mobile/Console continuam cosméticos.',
-        'Comandos de bots bloqueados para cargos comuns.',
-        '#vídeos-novos: leitura e reações; só o bot publica.',
-        'Canais atualizados: **' + result.updatedOverwrites + '**.'
-      ];
-      if (result.registrationChannelCreated) lines.push('#📝・registro criado em 👋 Entrada.');
-      if (result.reset) {
-        lines.push('Membro removido de **' + result.reset.rolesRemoved + '** pessoas; cadastros limpos: **' + result.reset.recordsCleared + '**.');
-        if (result.reset.skippedProtected) lines.push('Contas protegidas pelo Discord: **' + result.reset.skippedProtected + '**.');
-        if (result.reset.failed.length) lines.push('Falhas na remoção de cargo: **' + result.reset.failed.length + '**.');
-        if (result.reset.visibilityPending || result.reset.ticketPending) {
-          lines.push('Permissões pendentes: **' + (result.reset.visibilityPending + result.reset.ticketPending) + '**.');
-        }
-      }
-      if (result.failed.length) {
-        lines.push('**Alterações pendentes:** ' + result.failed.length + '. Confira hierarquia e permissões do bot.');
-        lines.push(result.failed.slice(0, 2).join('\n'));
-      }
-      if (result.panelWarning) lines.push('Painel de registro: ' + result.panelWarning);
-      if (result.resetSkipped) {
-        lines.push('**Reset cancelado:** houve falha ao configurar pelo menos um canal. Nenhum cargo Membro ou cadastro foi removido.');
-      } else if (result.reset?.complete === false || result.failed.length) {
-        lines.push('A configuração ficou parcialmente aplicada; corrija os itens pendentes e execute novamente.');
-      } else {
-        lines.push('Todos precisam concluir o registro Minecraft novamente.');
-      }
-      return interaction.editReply(lines.join('\n').slice(0, 1950));
-    } catch (error) {
-      console.error('[Asthen Segurança] Falha ao aplicar política:', error);
-      return interaction.editReply('**Configuração cancelada sem alterar os canais.** ' + (error.message || 'Confira a hierarquia e permissões do bot.'));
-    }
-  }
-
-  return replyPrivate(interaction, 'Ação de segurança desconhecida.');
-}
-
 async function handleAdminCommand(interaction) {
   const group = interaction.options.getSubcommandGroup();
   if (group === 'videos') return handleTikTokCommand(interaction);
