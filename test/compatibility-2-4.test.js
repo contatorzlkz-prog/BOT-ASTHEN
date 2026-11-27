@@ -43,32 +43,35 @@ test('support selector uses Minecraft server departments', () => {
   assert.equal(description.includes('\\n'), false);
 });
 
-test('admin commands are compact and Pix is no longer a slash command', () => {
+test('admin commands are consolidated into configurar, kit configurar and outros', () => {
   const names = commandDefinitions.map(item => item.toJSON().name);
-  assert.deepEqual(names, ['configurar', 'registro', 'conta', 'tiktok', 'permissoes', 'kit', 'backup', 'bridge']);
-  assert.equal(command('pix'), undefined);
-  assert.deepEqual(command('kit').options.map(option => option.name), ['listar', 'editar']);
-  assert.deepEqual(command('configurar').options.map(option => option.name), ['atendimento', 'kits', 'logs', 'compradores', 'registro', 'membro', 'equipe']);
-  assert.deepEqual(command('registro').options.map(option => option.name), ['autorizar', 'revogar', 'atualizar', 'reiniciar']);
-  const resetCommand = command('registro').options.find(option => option.name === 'reiniciar');
-  assert.deepEqual(resetCommand.options.map(option => option.name), ['confirmar']);
-  assert.equal(resetCommand.options[0].type, 5);
-  assert.deepEqual(command('permissoes').options.map(option => option.name), ['analisar', 'configurar']);
-  const permissionSetup = command('permissoes').options.find(option => option.name === 'configurar');
-  assert.deepEqual(permissionSetup.options.map(option => option.name), ['membro', 'confirmar']);
-  assert.equal(permissionSetup.options[0].type, 8);
-  assert.equal(permissionSetup.options[1].type, 5);
-  assert.equal(command('permissoes').default_member_permissions, '8');
-  assert.deepEqual(command('tiktok').options.map(option => option.name), ['publicar']);
-  const tiktokPublish = command('tiktok').options[0];
-  assert.deepEqual(tiktokPublish.options.map(option => option.name), ['link', 'frame']);
-  assert.equal(tiktokPublish.options[0].type, 3);
-  assert.equal(tiktokPublish.options[1].type, 11);
-  assert.equal(command('tiktok').default_member_permissions, '8');
-  assert.deepEqual(command('conta').options.map(option => option.name), ['perfil', 'atualizar-nick']);
-  assert.deepEqual(command('backup').options.map(option => option.name), ['status', 'criar', 'listar']);
-  assert.deepEqual(command('bridge').options.map(option => option.name), ['status']);
+  assert.deepEqual(names, ['configurar', 'kit', 'outros']);
+  assert.deepEqual(command('configurar').options.map(option => option.name),
+    ['atendimento', 'kits', 'logs', 'compradores', 'registro', 'membro', 'equipe']);
+  assert.deepEqual(command('kit').options.map(option => option.name), ['configurar']);
   assert.equal(command('kit').default_member_permissions, '8');
+
+  const others = command('outros');
+  assert.equal(others.default_member_permissions, '8');
+  assert.deepEqual(others.options.map(option => option.name), ['seguranca', 'tiktok', 'backup', 'minecraft']);
+
+  const security = others.options.find(option => option.name === 'seguranca');
+  assert.deepEqual(security.options.map(option => option.name), ['analisar', 'aplicar']);
+  const apply = security.options.find(option => option.name === 'aplicar');
+  assert.deepEqual(apply.options.map(option => option.name), ['membro', 'confirmar']);
+  assert.equal(apply.options[0].type, 8);
+  assert.equal(apply.options[1].type, 5);
+
+  const tiktok = others.options.find(option => option.name === 'tiktok');
+  assert.deepEqual(tiktok.options.map(option => option.name), ['publicar']);
+  assert.deepEqual(tiktok.options[0].options.map(option => option.name), ['link', 'frame']);
+  assert.equal(tiktok.options[0].options[0].type, 3);
+  assert.equal(tiktok.options[0].options[1].type, 11);
+
+  const backup = others.options.find(option => option.name === 'backup');
+  assert.deepEqual(backup.options.map(option => option.name), ['status', 'criar']);
+  const minecraft = others.options.find(option => option.name === 'minecraft');
+  assert.deepEqual(minecraft.options.map(option => option.name), ['status']);
 });
 
 test('painel fixo de kits abre a seleção direta mesmo sem catálogo real', () => {
