@@ -93,8 +93,13 @@ export function makeRegistrationPanel() {
     .setColor(brandColor())
     .setTitle('Registro Minecraft')
     .setDescription(
-      'Vincule seu Discord ao seu jogador Minecraft para liberar o acesso de membro.\n\n' +
-      'Informe seu nick atual. O cadastro também será usado automaticamente na loja e nos atendimentos.'
+      'Libere seu acesso ao servidor vinculando seu Discord ao seu nick Minecraft.\n\n' +
+      '**Como funciona**\n' +
+      '1. Clique em Registrar Minecraft e informe seu nick.\n' +
+      '2. Confira o nick e confirme novamente.\n' +
+      '3. Aguarde 3 segundos para receber o cargo Membro.\n\n' +
+      'Quando o cargo for aplicado, este canal ficará oculto automaticamente para você. ' +
+      'O canal não será apagado: ele continuará disponível para quem ainda precisa se registrar.'
     );
   const button = new ButtonBuilder()
     .setCustomId('registration:open')
@@ -127,38 +132,20 @@ export function makeSupportPanel() {
   return { embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] };
 }
 
-export function makeShopPanel(kits) {
-  const entries = Array.isArray(kits) ? kits : [{
-    id: 'asthen-demo-kit',
-    name: 'ASTHEN_DEMO_KIT',
-    displayName: 'Kit Demonstração',
-    description: 'Amostra visual. Não gera compra, Pix ou entrega.',
-    price: 'Demonstração',
-    demo: true,
-    enabled: false,
-    pluginEnabled: false,
-    pluginForSale: false,
-    forSale: false
-  }];
+export function makeShopPanel() {
   const embed = new EmbedBuilder()
     .setColor(brandColor())
     .setTitle('Loja ASTHEN')
-    .setDescription(entries.length
-      ? CONFIG.shop.panelDescription
-      : 'Nenhum kit está disponível na loja no momento.');
-
-  const components = entries.length ? [makeCatalogMenu(entries, 0)] : [];
-  if (entries.length > Math.min(25, Math.max(1, Number(CONFIG.shop.maxKits) || 25))) {
-    components.push(new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('shop:catalog')
-        .setLabel('Ver todos os kits')
-        .setStyle(ButtonStyle.Secondary)
-    ));
-  }
-  return { embeds: [embed], components };
+    .setDescription(
+      CONFIG.shop.panelDescription +
+      '\n\nAbra o catálogo para consultar os kits, preços e disponibilidade atualizados.'
+    );
+  const button = new ButtonBuilder()
+    .setCustomId('shop:catalog')
+    .setLabel('Ver kits disponíveis')
+    .setStyle(ButtonStyle.Primary);
+  return { embeds: [embed], components: [new ActionRowBuilder().addComponents(button)] };
 }
-
 
 
 export function makeCatalogMenu(kits = [], page = 0) {
