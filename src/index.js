@@ -119,7 +119,7 @@ async function refreshShopCatalogPanel(guild) {
     shopPayload,
     'kits',
     { channel: 'shopPanelChannelId', message: 'shopPanelMessageId', version: 'shopPanelVersion' },
-    'shop:select:0'
+    'shop:catalog'
   );
 }
 
