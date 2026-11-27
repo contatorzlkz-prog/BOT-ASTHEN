@@ -466,7 +466,7 @@ async function setRolesForChannel(channel, scope, groups, config, counters) {
 }
 
 export async function configureGuildPermissions(guild, memberRole, {
-  resetRegistrations = false
+  resetRegistrations = true
 } = {}) {
   if (!memberRole || normalizePermissionName(memberRole.name) !== 'membro') {
     throw new Error('Selecione o cargo chamado Membro.');
