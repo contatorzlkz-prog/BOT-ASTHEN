@@ -56,7 +56,7 @@ import { PIX_KEY_DEFAULT, PIX_QR_FILENAME, PIX_QR_IMAGE_PATH } from './pix.js';
 import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock, releaseWeeklyKitStock } from './supabase.js';
 import { exportTicketTranscript } from './transcripts.js';
 import { createBackup, listBackups } from './maintenance.js';
-import { registerPlayerForMember, validateMinecraftNick, refreshRegistrationPanel, reconcileGuildMembers, resetGuildRegistrations } from './registration.js';
+import { registerPlayerForMember, validateMinecraftNick, configureRegistrationChannel, refreshRegistrationPanel } from './registration.js';
 import { analyzeGuildPermissionSetup, configureGuildPermissions } from './permissions.js';
 import { publishTikTokVideo } from './tiktok.js';
 import { normalizeChannelName } from './channel-discovery.js';
@@ -299,13 +299,14 @@ async function configureChannels(interaction) {
   const shopChannel = interaction.options.getChannel('kits');
   const logsChannel = interaction.options.getChannel('logs');
   const buyersChannel = interaction.options.getChannel('compradores');
+  const registrationChannel = interaction.options.getChannel('registro');
+  const memberRole = interaction.options.getRole('membro');
   const staffRole = interaction.options.getRole('equipe');
 
-  if (!supportChannel && !shopChannel && !logsChannel && !buyersChannel && !staffRole) {
-    return replyPrivate(
-      interaction,
-      'Informe pelo menos um campo. Exemplo: /configurar atendimento:#atendimento kits:#kits logs:#logs compradores:#compradores equipe:@Equipe'
-    );
+  if (!supportChannel && !shopChannel && !logsChannel && !buyersChannel
+      && !registrationChannel && !memberRole && !staffRole) {
+    return replyPrivate(interaction,
+      'Informe pelo menos um canal ou cargo para salvar a configuração.');
   }
 
   const config = getGuildConfig(interaction.guildId);
@@ -316,44 +317,63 @@ async function configureChannels(interaction) {
     Object.assign(changes, await updatePanel(interaction.guild, config, 'support', supportChannel));
     updated.push('atendimento: ' + supportChannel.toString());
   }
-
   if (shopChannel) {
     Object.assign(changes, await updatePanel(interaction.guild, config, 'shop', shopChannel));
     updated.push('kits: ' + shopChannel.toString());
   }
-
+  if (logsChannel) {
+    changes.logsChannelId = logsChannel.id;
+    updated.push('logs: ' + logsChannel.toString());
+  }
+  if (buyersChannel) {
+    changes.buyersChannelId = buyersChannel.id;
+    updated.push('compradores: ' + buyersChannel.toString());
+  }
+  if (registrationChannel) {
+    changes.registrationChannelId = registrationChannel.id;
+    updated.push('registro: ' + registrationChannel.toString());
+  }
+  if (memberRole) {
+    if (memberRole.managed || memberRole.id === interaction.guild.roles.everyone.id
+        || normalizeChannelName(memberRole.name) === 'everyone') {
+      return replyPrivate(interaction, 'Selecione um cargo comum chamado Membro, não um cargo gerenciado.');
+    }
+    changes.memberRoleId = memberRole.id;
+    updated.push('cargo Membro: ' + memberRole.toString());
+  }
   if (staffRole) {
     changes.staffRoleId = staffRole.id;
     updated.push('equipe: ' + staffRole.toString());
   }
 
   const effectiveStaffRoleId = changes.staffRoleId ?? config.staffRoleId;
-
-  if (logsChannel) {
-    changes.logsChannelId = logsChannel.id;
-    updated.push('logs privados: ' + logsChannel.toString());
-  }
-
   const effectiveLogsId = changes.logsChannelId ?? config.logsChannelId;
   if ((logsChannel || staffRole) && effectiveLogsId) {
     const targetLogsChannel = logsChannel ?? await fetchTextChannel(interaction.guild, effectiveLogsId);
     if (!targetLogsChannel) {
-      return replyPrivate(interaction, 'O canal de logs configurado não existe mais. Escolha outro canal em /configurar logs.');
+      return replyPrivate(interaction, 'O canal de logs configurado não existe mais. Escolha outro canal em /configurar.');
     }
     await secureLogsChannel(targetLogsChannel, interaction.guild, effectiveStaffRoleId, config.staffRoleId);
   }
 
-  if (buyersChannel) {
-    changes.buyersChannelId = buyersChannel.id;
-    updated.push('compradores: ' + buyersChannel.toString());
-  }
-
   updateGuildConfig(interaction.guildId, changes);
+
+  const effectiveRegistrationId = changes.registrationChannelId ?? config.registrationChannelId;
+  if (effectiveRegistrationId) {
+    const targetRegistration = registrationChannel
+      ?? await fetchTextChannel(interaction.guild, effectiveRegistrationId);
+    if (targetRegistration) {
+      await configureRegistrationChannel(targetRegistration, interaction.guild);
+      await refreshRegistrationPanel(interaction.guild).catch(error => {
+        console.warn('[Asthen Registro] Não foi possível atualizar o painel:', error.message);
+      });
+    }
+  }
 
   return replyPrivate(
     interaction,
-    'Configuração atualizada.\n' + updated.map(item => '• ' + item).join('\n') +
-    '\n\nOs tickets serão criados na categoria de atendimento ou de kits, conforme o tipo de solicitação.'
+    'Configuração salva. ' + updated.join(' · ') +
+    '. A política de acesso completa é aplicada em /outros seguranca aplicar.'
   );
 }
 
