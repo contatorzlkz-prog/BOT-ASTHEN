@@ -46,7 +46,7 @@ async function sendRegistrationLog(guild, { title, description, color = 0x7652c7
 }
 
 function ticketOwnerId(channel) {
-  const match = String(channel?.topic || '').match(/(?:^|\\|)owner:(\\d{17,20})(?:\\||$)/);
+  const match = String(channel?.topic || '').match(/(?:^|\|)owner:(\d{17,20})(?:\||$)/);
   return match ? match[1] : null;
 }
 
