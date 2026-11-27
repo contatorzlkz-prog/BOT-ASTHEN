@@ -69,6 +69,22 @@ export const commandDefinitions = [
       .setDescription('Atualiza seu nick Minecraft cadastrado.')),
 
   administratorOnly(new SlashCommandBuilder()
+    .setName('tiktok')
+    .setDescription('Publica um vídeo do TikTok no canal de novidades.')
+    .addSubcommand(subcommand => subcommand
+      .setName('publicar')
+      .setDescription('Envia um novo vídeo para #vídeos-novos.')
+      .addStringOption(option => option
+        .setName('link')
+        .setDescription('Link completo do vídeo no TikTok.')
+        .setMaxLength(2048)
+        .setRequired(true))
+      .addAttachmentOption(option => option
+        .setName('frame')
+        .setDescription('Imagem opcional de um frame do vídeo (não usa a capa do TikTok).')
+        .setRequired(false)))),
+
+  administratorOnly(new SlashCommandBuilder()
     .setName('permissoes')
     .setDescription('Analisa e organiza as permissões dos canais do servidor.')
     .addSubcommand(subcommand => subcommand
