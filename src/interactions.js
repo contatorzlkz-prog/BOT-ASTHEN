@@ -1235,17 +1235,6 @@ async function handleBridgeCommand(interaction) {
     'Pedido mais antigo na fila: ' + (status.oldestPendingAgeMs === null || status.oldestPendingAgeMs === undefined
       ? 'nenhum'
       : Math.floor(status.oldestPendingAgeMs / 1000) + 's'),
-    'Plugin Minecraft: ' + (!status.lastPluginContactAt
-      ? 'aguardando primeiro contato autenticado'
-      : status.pluginOnline
-        ? 'conectado'
-        : 'sem comunicação há ' + Math.floor((Date.now() - status.lastPluginContactAt) / 1000) + 's'),
-    'Último contato do plugin: ' + (status.lastPluginContactAt
-      ? new Date(status.lastPluginContactAt).toLocaleString('pt-BR')
-      : 'nenhum contato nesta execução'),
-    'Pedido mais antigo na fila: ' + (status.oldestPendingAgeMs === null || status.oldestPendingAgeMs === undefined
-      ? 'nenhum'
-      : Math.floor(status.oldestPendingAgeMs / 1000) + 's'),
     'Kits recebidos do plugin: ' + status.kits.length,
     status.lastKitsSyncAt ? 'Última lista recebida: ' + status.lastKitsSyncAt : 'Aguardando primeira sincronização do plugin.',
     'Supabase: ' + (database.enabled ? 'configurado' : 'desativado'),
@@ -1875,7 +1864,7 @@ async function handleTikTokCommand(interaction) {
 }
 async function handlePermissionsCommand(interaction) {
   if (!isAdministrator(interaction)) {
-    return replyPrivate(interaction, 'Somente administradores podem alterar a configuração geral de permissões do servidor.');
+    return replyPrivate(interaction, 'Somente administradores podem alterar a segurança dos canais.');
   }
 
   const action = interaction.options.getSubcommand();
@@ -1883,95 +1872,90 @@ async function handlePermissionsCommand(interaction) {
     try {
       const result = await analyzeGuildPermissionSetup(interaction.guild);
       const lines = [
-        '**Análise de permissões do ASTHEN**',
-        'Cargos personalizados encontrados: **' + result.roleCount + '**',
-        'Categorias: **' + result.categoryCount + '** · canais classificados: **' +
-          (result.registrationChannels + result.memberChannels + result.staffChannels + result.adminChannels + result.protectedTickets + result.protectedPersonalChannels + result.protectedCustomChannels) + '**',
-        '@everyone: somente **#' + result.registrationChannelName + '**',
-        'Canais comuns liberados para Membro: **' + result.memberChannels + '**',
-        'Canal de vídeos em leitura para Membro: **' + result.videoFeedChannels + '**',
-        'Comandos de bots: cargos comuns bloqueados; Staff e gerência em #comandos-adm.',
-        'Canais administrativos: **' + result.adminChannels + '**',
-        'Tickets e canais pessoais preservados: **' + (result.protectedTickets + result.protectedPersonalChannels) + '**',
-        'Canais com regras próprias preservadas: **' + result.protectedCustomChannels + '**',
-        'Cargos de plataforma: ' + (result.platformRoles.join(', ') || 'nenhum detectado'),
-        'Equipe: ' + (result.staffRoles.join(', ') || 'nenhum cargo reconhecido'),
-        'Gerência: ' + (result.managerRoles.join(', ') || 'nenhum cargo reconhecido'),
-        'Integrações/bots preservados: ' + (result.serviceRoles.join(', ') || 'nenhum detectado'),
-        'Cargos de ping: ' + (result.pingRoles.join(', ') || 'nenhum detectado')
+        '**Prévia de segurança do ASTHEN**',
+        'Cargos: **' + result.roleCount + '** · categorias: **' + result.categoryCount + '**',
+        '@everyone: somente #registro.',
+        'Canais de Membro: **' + result.memberChannels + '** · vídeos: **' + result.videoFeedChannels + '**',
+        'Administrativos: **' + result.adminChannels + '** · tickets: **' + result.protectedTickets + '**',
+        'PC, Mobile e Console: cosméticos, sem acesso próprio.',
+        'Equipe: ' + (result.staffRoles.join(', ') || 'nenhuma detectada'),
+        'Gerência: ' + (result.managerRoles.join(', ') || 'nenhuma detectada'),
+        'Bots de serviço: ' + (result.serviceRoles.join(', ') || 'nenhum detectado')
       ];
-
-      if (result.dangerousMemberFlags.length) {
-        lines.push('**Bloqueio:** Membro possui permissões administrativas: ' + result.dangerousMemberFlags.join(', ') + '.');
-      }
-      if (result.dangerousPlatformRoles.length) {
-        lines.push('**Bloqueio:** cargos de plataforma com privilégios: ' +
-          result.dangerousPlatformRoles.map(item => item.name + ' (' + item.flags.join(', ') + ')').join('; ') + '.');
-      }
-      if (result.dangerousOtherRoles.length) {
-        lines.push('**Revisar antes de aplicar:** ' +
-          result.dangerousOtherRoles.map(item => item.name + ' (' + item.flags.join(', ') + ')').join('; ') + '.');
+      if (result.dangerousRoles.length) {
+        lines.push('**Bloqueio:** Administrador detectado em ' + result.dangerousRoles.join(', ') + '. Remova essa permissão desses cargos antes de aplicar.');
       }
       if (result.unknownRoles.length) {
-        lines.push('Outros cargos mantidos sem alteração: ' + result.unknownRoles.join(', ') + '.');
+        lines.push('Outros cargos: ' + result.unknownRoles.join(', ') + '. Sem liberação de canais.');
       }
-
-      lines.push('Para aplicar: /permissoes configurar membro:@Membro confirmar:true.');
+      lines.push('Aplique em /outros seguranca aplicar.');
       return replyPrivate(interaction, lines.join('\n').slice(0, 1950));
     } catch (error) {
-      return replyPrivate(interaction, 'Não consegui analisar as permissões: ' + (error.message || 'erro desconhecido'));
+      return replyPrivate(interaction, 'Não consegui analisar: ' + (error.message || 'erro desconhecido'));
     }
   }
 
-  if (action === 'configurar') {
+  if (action === 'aplicar') {
     const memberRole = interaction.options.getRole('membro', true);
-    if (interaction.options.getBoolean('confirmar', true) !== true) {
-      return replyPrivate(interaction, 'Nenhuma alteração foi feita. Execute /permissoes configurar membro:@Membro confirmar:true para confirmar.');
-    }
-
+    const resetRegistrations = interaction.options.getBoolean('redefinir_registros', true);
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
-      const result = await configureGuildPermissions(interaction.guild, memberRole);
+      const result = await configureGuildPermissions(interaction.guild, memberRole, { resetRegistrations });
       const lines = [
-        '**Permissões do servidor configuradas.**',
-        '@everyone só consegue visualizar **#' + result.registrationChannelName + '**.',
-        'Cargo de acesso: **' + result.memberRoleName + '**.',
-        ...(result.registrationChannelCreated ? ['Canal #📝・registro criado em 👋 Entrada.'] : []),
-        'Canais comuns liberados para Membro: **' + result.memberChannels + '**.',
-        'Canais administrativos separados por equipe: **' + result.adminChannels + '**.',
-        'Tickets e canais pessoais preservados: **' + (result.protectedTickets + result.protectedPersonalChannels) + '**.',
-        'Sobrescritas atualizadas: **' + result.updatedOverwrites + '**.',
-        'Comandos de bots: bloqueados para cargos comuns; Staff e gerência usam #comandos-adm.',
-        'Canais comuns: conversa, reações e figurinhas; sem tópicos, enquetes ou anexos; slowmode de 5s.',
-        'Canal #vídeos-novos: leitura e reações para Membro; publicação pelo bot.'
+        '**Política de acesso aplicada.**',
+        '@everyone só vê #registro antes do cadastro.',
+        'Membro libera canais comuns; PC/Mobile/Console continuam cosméticos.',
+        'Comandos de bots bloqueados para cargos comuns.',
+        '#vídeos-novos: leitura e reações; só o bot publica.',
+        'Canais atualizados: **' + result.updatedOverwrites + '**.'
       ];
-      if (result.skipped) lines.push('Canais preservados por terem regras próprias: **' + result.skipped + '**.');
+      if (result.registrationChannelCreated) lines.push('#📝・registro criado em 👋 Entrada.');
+      if (result.reset) {
+        lines.push('Membro removido de **' + result.reset.rolesRemoved + '** pessoas; cadastros limpos: **' + result.reset.recordsCleared + '**.');
+        if (result.reset.skippedProtected) lines.push('Contas protegidas pelo Discord: **' + result.reset.skippedProtected + '**.');
+        if (result.reset.failed.length) lines.push('Falhas na remoção de cargo: **' + result.reset.failed.length + '**.');
+        if (result.reset.visibilityPending || result.reset.ticketPending) {
+          lines.push('Permissões pendentes: **' + (result.reset.visibilityPending + result.reset.ticketPending) + '**.');
+        }
+      }
       if (result.failed.length) {
-        lines.push('**Atenção:** ' + result.failed.length + ' alteração(ões) falharam. Corrija as permissões do bot e execute novamente.');
-        lines.push(result.failed.slice(0, 3).join('\n'));
+        lines.push('**Alterações pendentes:** ' + result.failed.length + '. Confira hierarquia e permissões do bot.');
+        lines.push(result.failed.slice(0, 2).join('\n'));
       }
       if (result.panelWarning) lines.push('Painel de registro: ' + result.panelWarning);
-      lines.push('PC, Mobile e Console continuam como cargos de identificação; não liberam canais sem Membro.');
+      if (result.reset?.complete === false || result.failed.length) {
+        lines.push('A configuração ficou parcialmente aplicada; corrija os itens pendentes e execute novamente.');
+      } else {
+        lines.push(resetRegistrations
+          ? 'Todos precisam concluir o registro Minecraft novamente.'
+          : 'Os cadastros existentes foram preservados.');
+      }
       return interaction.editReply(lines.join('\n').slice(0, 1950));
     } catch (error) {
-      console.error('[Asthen Permissões] Falha ao configurar o servidor:', error);
-      return interaction.editReply('**Configuração não concluída.** ' + (error.message || 'Verifique a hierarquia e as permissões do bot.'));
+      console.error('[Asthen Segurança] Falha ao aplicar política:', error);
+      return interaction.editReply('**Configuração cancelada sem alterar os canais.** ' + (error.message || 'Confira a hierarquia e permissões do bot.'));
     }
   }
 
-  return replyPrivate(interaction, 'Ação de permissões desconhecida.');
+  return replyPrivate(interaction, 'Ação de segurança desconhecida.');
 }
-async function handleCommand(interaction) {
-  if (!interaction.guild) return replyPrivate(interaction, 'Use este comando dentro de um servidor.');
 
+async function handleOtherCommand(interaction) {
+  const group = interaction.options.getSubcommandGroup();
+  if (group === 'seguranca') return handlePermissionsCommand(interaction);
+  if (group === 'tiktok') return handleTikTokCommand(interaction);
+  if (group === 'backup') return handleBackupCommand(interaction);
+  if (group === 'minecraft') return handleBridgeCommand(interaction);
+  return replyPrivate(interaction, 'Grupo administrativo desconhecido.');
+}
+
+async function handleCommand(interaction) {
+  if (!interaction.guild) return replyPrivate(interaction, 'Use este comando dentro do servidor.');
   if (interaction.commandName === 'configurar') return configureChannels(interaction);
-  if (interaction.commandName === 'registro') return handleRegistrationCommand(interaction);
-  if (interaction.commandName === 'permissoes') return handlePermissionsCommand(interaction);
-  if (interaction.commandName === 'tiktok') return handleTikTokCommand(interaction);
-  if (interaction.commandName === 'conta') return handleAccountCommand(interaction);
   if (interaction.commandName === 'kit') return handleKitCommand(interaction);
-  if (interaction.commandName === 'backup') return handleBackupCommand(interaction);
-  if (interaction.commandName === 'bridge') return handleBridgeCommand(interaction);
+  if (interaction.commandName === 'outros') return handleOtherCommand(interaction);
+}
+
 }
 
 export async function handleInteraction(interaction) {
