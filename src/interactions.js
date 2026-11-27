@@ -56,7 +56,7 @@ import { PIX_KEY_DEFAULT, PIX_QR_FILENAME, PIX_QR_IMAGE_PATH } from './pix.js';
 import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock, releaseWeeklyKitStock } from './supabase.js';
 import { exportTicketTranscript } from './transcripts.js';
 import { createBackup, listBackups } from './maintenance.js';
-import { registerPlayerForMember, validateMinecraftNick, refreshRegistrationPanel } from './registration.js';
+import { registerPlayerForMember, validateMinecraftNick, validateRegistrationForMember, refreshRegistrationPanel } from './registration.js';
 import { publishTikTokVideo } from './tiktok.js';
 import { normalizeChannelName } from './channel-discovery.js';
 
@@ -64,6 +64,8 @@ const closingTickets = new Set();
 const orderDecisionsInFlight = new Set();
 const deliveryAttemptsInFlight = new Set();
 const stockReleaseAttemptsInFlight = new Set();
+const pendingRegistrations = new Map();
+const PENDING_REGISTRATION_TTL_MS = 5 * 60 * 1000;
 
 function normalizeImageUrl(value) {
   if (!value) return '';
@@ -1732,20 +1734,134 @@ async function handleRegistrationSubmit(interaction) {
     return replyPrivate(interaction, 'Informe um nick Minecraft válido, sem espaços no começo/fim e com até 32 caracteres.');
   }
 
-  const member = await interaction.guild.members.fetch(interaction.user.id);
   try {
-    const result = await registerPlayerForMember(member, minecraftNick, 'autoatendimento');
-    const status = result.sync.errors.length
-      ? '\nO cadastro foi salvo; a equipe recebeu um aviso sobre uma pendência de acesso.'
-      : '\nCargo Membro e canais liberados.';
-    return replyPrivate(
-      interaction,
-      (result.previous ? 'Nick Minecraft atualizado: **' : 'Registro concluído: **') +
-      result.record.minecraft_nick + '**.' + status
-    );
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    validateRegistrationForMember(member, minecraftNick);
+
+    const now = Date.now();
+    for (const [token, pending] of pendingRegistrations) {
+      if (pending.expiresAt <= now) pendingRegistrations.delete(token);
+    }
+    const token = randomUUID();
+    pendingRegistrations.set(token, {
+      guildId: interaction.guildId,
+      userId: interaction.user.id,
+      minecraftNick,
+      expiresAt: now + PENDING_REGISTRATION_TTL_MS,
+      processing: false
+    });
+
+    const previous = getPlayerRegistration(interaction.user.id);
+    return interaction.reply({
+      content:
+        '**Confira seu registro Minecraft**\n' +
+        'Nick informado: **' + minecraftNick + '**\n\n' +
+        (previous ? 'Você já possui um registro. Esta confirmação atualizará o nick vinculado.' : 'Ao confirmar, seu Discord será vinculado a esse nick.') +
+        '\n\nClique em **Confirmar e liberar acesso** para concluir. Depois da confirmação final, aguarde 3 segundos: o cargo Membro será aplicado e este canal ficará oculto automaticamente para você. **O canal não será apagado do servidor.**',
+      components: [new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('registration:confirm:' + token)
+          .setLabel('Confirmar e liberar acesso')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('registration:cancel:' + token)
+          .setLabel('Cancelar')
+          .setStyle(ButtonStyle.Secondary)
+      )],
+      flags: MessageFlags.Ephemeral
+    });
   } catch (error) {
-    return replyPrivate(interaction, error.message || 'Não foi possível salvar seu registro Minecraft.');
+    return replyPrivate(interaction, error.message || 'Não foi possível preparar seu registro Minecraft.');
   }
+}
+
+async function handleRegistrationConfirmation(interaction, token) {
+  const pending = pendingRegistrations.get(token);
+  if (!pending || pending.expiresAt <= Date.now()) {
+    pendingRegistrations.delete(token);
+    return interaction.update({
+      content: 'Esta confirmação expirou. Clique em Registrar Minecraft para iniciar novamente.',
+      embeds: [],
+      components: []
+    });
+  }
+  if (pending.userId !== interaction.user.id || pending.guildId !== interaction.guildId) {
+    return replyPrivate(interaction, 'Esta confirmação pertence a outro usuário.');
+  }
+  if (pending.processing) {
+    return replyPrivate(interaction, 'Seu registro já está sendo processado. Aguarde a confirmação.');
+  }
+
+  pending.processing = true;
+  try {
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    validateRegistrationForMember(member, pending.minecraftNick);
+  } catch (error) {
+    pendingRegistrations.delete(token);
+    return interaction.update({
+      content: 'Não foi possível confirmar esse registro: ' + (error.message || 'Confira o nick e tente novamente.'),
+      embeds: [],
+      components: []
+    });
+  }
+
+  await interaction.update({
+    content:
+      '**Confirmação final recebida.**\n\n' +
+      'Aguarde **3 segundos**. O ASTHEN vai liberar o cargo Membro; assim que ele for aplicado, este canal ficará automaticamente oculto para você. **O canal não será excluído do servidor.**',
+    embeds: [],
+    components: []
+  });
+
+  await new Promise(resolve => setTimeout(resolve, 3000));
+
+  try {
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    const result = await registerPlayerForMember(member, pending.minecraftNick, 'autoatendimento');
+    pendingRegistrations.delete(token);
+
+    if (result.sync.errors.length) {
+      return interaction.editReply({
+        content:
+          '**Nick salvo, mas a liberação ficou pendente.**\n' +
+          'Nick: **' + result.record.minecraft_nick + '**\n' +
+          result.sync.errors.map(item => '• ' + item).join('\n') +
+          '\nA equipe foi avisada. O canal continuará acessível enquanto o cargo não for aplicado.',
+        embeds: [],
+        components: []
+      });
+    }
+
+    return interaction.editReply({
+      content:
+        '**Registro concluído!**\n' +
+        'Nick Minecraft: **' + result.record.minecraft_nick + '**\n' +
+        'Cargo Membro liberado. O canal de registro vai desaparecer automaticamente da sua lista porque esse cargo não tem acesso a ele. O canal continua existindo para novos membros.',
+      embeds: [],
+      components: []
+    });
+  } catch (error) {
+    pendingRegistrations.delete(token);
+    console.error('[Asthen Registro] Falha ao concluir confirmação:', error);
+    return interaction.editReply({
+      content: 'Não foi possível concluir a liberação do cargo. A equipe precisa verificar o registro; tente novamente mais tarde.',
+      embeds: [],
+      components: []
+    });
+  }
+}
+
+async function handleRegistrationCancellation(interaction, token) {
+  const pending = pendingRegistrations.get(token);
+  if (!pending || pending.userId !== interaction.user.id || pending.guildId !== interaction.guildId) {
+    return replyPrivate(interaction, 'Esta confirmação expirou ou não pertence a você.');
+  }
+  pendingRegistrations.delete(token);
+  return interaction.update({
+    content: 'Registro cancelado. Nenhuma alteração foi feita. Clique em Registrar Minecraft para tentar novamente.',
+    embeds: [],
+    components: []
+  });
 }
 
 async function handleTikTokCommand(interaction) {
@@ -1792,6 +1908,12 @@ export async function handleInteraction(interaction) {
   if (interaction.isChatInputCommand()) return handleCommand(interaction);
 
   if (interaction.isButton()) {
+    if (interaction.customId.startsWith('registration:confirm:')) {
+      return handleRegistrationConfirmation(interaction, interaction.customId.split(':').at(-1));
+    }
+    if (interaction.customId.startsWith('registration:cancel:')) {
+      return handleRegistrationCancellation(interaction, interaction.customId.split(':').at(-1));
+    }
     if (interaction.customId === 'registration:open') {
       const player = getPlayerRegistration(interaction.user.id);
       return interaction.showModal(makeMinecraftNickModal('registration:submit', player?.minecraft_nick || ''));
