@@ -16,11 +16,25 @@ export function validateMinecraftNick(value) {
   return nick === nick.trim() && /^[A-Za-z0-9_. ]{1,32}$/.test(nick);
 }
 
+const REGISTRATION_STAFF_NAMES = new Set([
+  'proprietario', 'gerhost', 'gerdiscord', 'gerserver', 'staff'
+]);
+
+function normalizeRegistrationRoleName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\\u0300-\\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
 export function memberCanBypassRegistration(member, config = getGuildConfig(member.guild.id)) {
   if (member.permissions?.has?.(FLAGS.Administrator)
       || member.permissions?.has?.(FLAGS.ManageGuild)) return true;
   if (config.staffRoleId && member.roles?.cache?.has?.(config.staffRoleId)) return true;
-  return (config.registrationBypassRoleIds || []).some(roleId => member.roles?.cache?.has?.(roleId));
+  if ((config.registrationBypassRoleIds || []).some(roleId => member.roles?.cache?.has?.(roleId))) return true;
+  return [...(member.roles?.cache?.values?.() || [])]
+    .some(role => REGISTRATION_STAFF_NAMES.has(normalizeRegistrationRoleName(role.name)));
 }
 
 async function sendRegistrationLog(guild, { title, description, color = 0x7652c7 }) {
@@ -132,7 +146,14 @@ export async function configureRegistrationChannel(channel, guild) {
     }
   }
 
-  const bypassRoles = new Set([config.staffRoleId, ...(config.registrationBypassRoleIds || [])].filter(Boolean));
+  const namedStaffRoles = [...guild.roles.cache.values()]
+    .filter(role => REGISTRATION_STAFF_NAMES.has(normalizeRegistrationRoleName(role.name)))
+    .map(role => role.id);
+  const bypassRoles = new Set([
+    config.staffRoleId,
+    ...(config.registrationBypassRoleIds || []),
+    ...namedStaffRoles
+  ].filter(Boolean));
   for (const roleId of bypassRoles) {
     if (!guild.roles.cache.has(roleId)) continue;
     await channel.permissionOverwrites.edit(roleId, {
@@ -220,10 +241,12 @@ export async function applyRegisteredIdentity(member, record = getPlayerRegistra
     return { registered: false, errors, ticketsUpdated: tickets.updated };
   }
 
-  try {
-    await updateMemberRole(member, true, config);
-  } catch (error) {
-    errors.push('cargo Membro: ' + error.message);
+  if (!memberCanBypassRegistration(member, config)) {
+    try {
+      await updateMemberRole(member, true, config);
+    } catch (error) {
+      errors.push('cargo Membro: ' + error.message);
+    }
   }
 
   const tickets = await updateMemberTicketVisibility(member, true, config);
