@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.25.0 — 26/11/2026 · Comandos unificados e segurança de registro
+
+- Reduz os comandos principais para /configurar, /kit configurar e /outros com grupos de segurança, TikTok, backup e Minecraft.
+- Remove /registro e /conta como comandos independentes; o nick Minecraft é alterado pelo formulário de registro, sem sincronizar o apelido do Discord.
+- Consolida cada cadastro em um único embed de log, sem notificações separadas da sincronização.
+- /outros seguranca aplicar exige confirmação, verifica a hierarquia, remove Membro de todos que o bot consegue gerenciar e reinicia os vínculos de registro.
+- PC, Mobile e Console permanecem cosméticos; canais comuns só liberam acesso por Membro, e os tickets são condicionados ao registro do dono.
+- Mantém canais de equipe, logs, comandos administrativos e vídeos com permissões específicas; membros comuns não podem criar tópicos, enquetes, anexos, menções gerais ou executar comandos de aplicativos.
+- Atualiza testes, README, guias, painel de registro e metadados para 2.25.0.
+
+---
+
+
 ## 2.24.0 — 26/11/2026 · TikTok, comandos e anti-spam
 
 - Adiciona /tiktok publicar para enviar vídeos do TikTok automaticamente para #vídeos-novos, com verificação de duplicados e opção de anexar um frame manual.
