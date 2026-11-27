@@ -249,7 +249,7 @@ async function refreshPublishedShopPanel(guild, guildId) {
 
 function shopPanelRefreshNotice(refreshed) {
   return refreshed === false
-    ? '\nNão consegui atualizar automaticamente a mensagem do canal #kits. Confira as permissões do bot e use /configurar kits para republicar o painel.'
+    ? '\nNão consegui atualizar automaticamente a mensagem do canal #kits. Confira as permissões de envio e histórico do bot nesse canal.'
     : '';
 }
 
@@ -372,7 +372,7 @@ async function configureChannels(interaction) {
   return replyPrivate(
     interaction,
     'Configuração salva. ' + updated.join(' · ') +
-    '. A política de acesso completa é aplicada em /outros seguranca aplicar.'
+    '. A política de acesso do servidor é administrada diretamente nas configurações do Discord.'
   );
 }
 
@@ -411,7 +411,7 @@ async function handleKitCommand(interaction) {
   }
   const pluginKits = getGuildConfig(interaction.guildId).kits.filter(kit => kit.pluginManaged === true);
   if (!pluginKits.length) {
-    return replyPrivate(interaction, 'Nenhum kit foi sincronizado ainda. Crie os kits no Minecraft e confira /outros minecraft status.');
+    return replyPrivate(interaction, 'Nenhum kit foi sincronizado ainda. Crie os kits no Minecraft e confira /admin minecraft status.');
   }
   return interaction.reply({
     content: 'Configuração de kits · selecione um kit para editar nome, descrição ou imagem.',
@@ -443,7 +443,7 @@ async function handleKitAdminSelection(interaction) {
   if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem editar kits.');
   const kitId = interaction.values[0];
   const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId && item.pluginManaged === true);
-  if (!kit) return replyPrivate(interaction, 'Este kit não está mais sincronizado. Confira /outros minecraft status.');
+  if (!kit) return replyPrivate(interaction, 'Este kit não está mais sincronizado. Confira /admin minecraft status.');
   return interaction.update({
     content: 'Kit selecionado: **' + String(kit.displayName || makeKitDisplayName(kit.name)) + '**. Escolha o que deseja editar.',
     embeds: [makeKitPreviewEmbed(kit)],
@@ -956,7 +956,7 @@ async function closeTicket(interaction) {
   }
 
   const logsChannel = await fetchTextChannel(interaction.guild, config.logsChannelId);
-  if (!logsChannel) return replyPrivate(interaction, 'Não posso fechar este ticket sem arquivar a conversa. Configure um canal privado de logs com /configurar logs:#canal e tente novamente.');
+  if (!logsChannel) return replyPrivate(interaction, 'Não posso fechar este ticket sem arquivar a conversa. Confira se o canal #logs existe e se o bot consegue enviar mensagens e anexos nele.');
 
   closingTickets.add(interaction.channelId);
   try {
@@ -1038,12 +1038,12 @@ async function decideOrder(interaction, decision) {
   orderDecisionsInFlight.add(interaction.channelId);
   try {
     const logsChannel = await fetchTextChannel(interaction.guild, config.logsChannelId);
-    if (!logsChannel) return replyPrivate(interaction, 'O canal privado de logs não está configurado. Use /configurar logs:#canal.');
+    if (!logsChannel) return replyPrivate(interaction, 'O canal privado de logs não está configurado. Configure #logs no Discord e reinicie o bot.');
 
     let buyersChannel = null;
     if (decision === 'approved') {
       buyersChannel = await fetchTextChannel(interaction.guild, config.buyersChannelId);
-      if (!buyersChannel) return replyPrivate(interaction, 'O canal de compradores não está configurado. Use /configurar compradores:#canal.');
+      if (!buyersChannel) return replyPrivate(interaction, 'O canal de compradores não está configurado. Confira se existe #compradores e reinicie o bot.');
     }
 
     await interaction.deferUpdate();
@@ -1887,7 +1887,7 @@ async function handlePermissionsCommand(interaction) {
       if (result.unknownRoles.length) {
         lines.push('Outros cargos: ' + result.unknownRoles.join(', ') + '. Sem liberação de canais.');
       }
-      lines.push('Aplique em /outros seguranca aplicar.');
+      lines.push('As permissões do servidor são administradas diretamente nas configurações do Discord.');
       return replyPrivate(interaction, lines.join('\n').slice(0, 1950));
     } catch (error) {
       return replyPrivate(interaction, 'Não consegui analisar: ' + (error.message || 'erro desconhecido'));
@@ -1942,10 +1942,9 @@ async function handlePermissionsCommand(interaction) {
   return replyPrivate(interaction, 'Ação de segurança desconhecida.');
 }
 
-async function handleOtherCommand(interaction) {
+async function handleAdminCommand(interaction) {
   const group = interaction.options.getSubcommandGroup();
-  if (group === 'seguranca') return handlePermissionsCommand(interaction);
-  if (group === 'tiktok') return handleTikTokCommand(interaction);
+  if (group === 'videos') return handleTikTokCommand(interaction);
   if (group === 'backup') return handleBackupCommand(interaction);
   if (group === 'minecraft') return handleBridgeCommand(interaction);
   return replyPrivate(interaction, 'Grupo administrativo desconhecido.');
@@ -1953,9 +1952,8 @@ async function handleOtherCommand(interaction) {
 
 async function handleCommand(interaction) {
   if (!interaction.guild) return replyPrivate(interaction, 'Use este comando dentro do servidor.');
-  if (interaction.commandName === 'configurar') return configureChannels(interaction);
   if (interaction.commandName === 'kit') return handleKitCommand(interaction);
-  if (interaction.commandName === 'outros') return handleOtherCommand(interaction);
+  if (interaction.commandName === 'admin') return handleAdminCommand(interaction);
 }
 
 export async function handleInteraction(interaction) {
