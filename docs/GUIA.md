@@ -41,13 +41,13 @@ O bot reconhece automaticamente os canais que usam os nomes padrão da tabela. N
 4. Mantenha o cargo do bot acima de `Membro` e conceda somente as permissões necessárias ao funcionamento do bot.
 5. Ative **Server Members Intent** em Developer Portal → Bot → Privileged Gateway Intents.
 
-O fluxo é automático: quem ainda não tem cadastro enxerga o canal de registro; depois de enviar o nick no botão **Registrar Minecraft**, recebe `Membro`, passa a enxergar os canais privados e deixa de enxergar o canal de registro. Não dê `Membro` pelo Onboarding nem manualmente, pois esse cargo é a confirmação de registro.
+O cadastro tem confirmação dupla: o jogador clica em **Registrar Minecraft**, informa o nick e envia o formulário; em seguida confere o nick e clica em **Confirmar e liberar acesso**. Após a confirmação final, o bot aguarda 3 segundos, salva o vínculo e aplica `Membro`. Como esse cargo tem **Ver canal** negado em `#registro`, o canal desaparece automaticamente para o jogador. O canal não é excluído e continua disponível para quem ainda precisa se registrar. Não dê `Membro` pelo Onboarding nem manualmente.
 
 O bot não oferece comando para remover o cargo `Membro` em massa ou forçar um novo cadastro de todos. O registro normal continua funcionando para novos membros; alterações de cargos e permissões devem ser feitas manualmente no Discord.
 
 ### Painéis
 
-O bot procura os painéis existentes e preserva as mensagens nas inicializações seguintes. Se um painel for apagado, ele poderá ser publicado novamente na próxima inicialização. Não há comando de barra para trocar canais ou republicar painéis manualmente.
+O bot procura os painéis existentes e preserva as mensagens nas inicializações seguintes. Mensagens já publicadas não são editadas automaticamente. Quando o painel de registro muda de versão, o bot publica a nova versão uma única vez e mantém a anterior intacta. O painel da loja é estático: o catálogo, os preços e o estoque são carregados quando o usuário clica para abrir a loja. Se um painel for apagado, ele poderá ser publicado novamente na próxima inicialização.
 
 ### Comandos principais
 
@@ -77,7 +77,7 @@ O bot não modifica apelidos do Discord. O nick Minecraft fica salvo no vínculo
 
 ### Publicação de vídeos do TikTok
 
-Use `/admin videos publicar` no canal `#comandos-adm`. Informe o link e, opcionalmente, anexe um frame PNG, JPG, WEBP ou GIF de até 8 MB. Sem imagem, o card é limpo e não usa a capa estática do TikTok. O bot verifica duplicados nas últimas 50 mensagens.
+Use `/admin videos publicar` no canal `#comandos-adm`. Informe o link e, opcionalmente, anexe um frame PNG, JPG, WEBP ou GIF de até 8 MB. A publicação em `#vídeos-novos` usa o título do TikTok quando disponível, uma chamada visual do ASTHEN MC e um botão direto para assistir. Sem imagem anexada, o card mantém o layout limpo, sem uma capa automática. O bot verifica duplicados nas últimas 50 mensagens.
 
 ## 3. Loja e kits
 
