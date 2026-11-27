@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.24.0 — 26/11/2026 · TikTok, comandos e anti-spam
+
+- Adiciona /tiktok publicar para enviar vídeos do TikTok automaticamente para #vídeos-novos, com verificação de duplicados e opção de anexar um frame manual.
+- O card não usa a capa estática original do TikTok; sem frame fornecido, publica um card limpo com link oficial.
+- Restringe comandos de aplicativo: cargos comuns não podem usar slash/context commands; Staff e gerência podem usar em #comandos-adm; administradores mantêm bypass.
+- Membros comuns podem conversar, reagir e usar figurinhas, mas não criar tópicos, enviar em tópicos, anexar arquivos, criar enquetes, mencionar @everyone ou usar apps externos.
+- Aplica slowmode mínimo de 5 segundos em canais comuns e mantém #vídeos-novos em leitura para membros.
+- Atualiza os testes, README, guia e metadados para 2.24.0.
+
+---
+
 ## 2.23.0 — 26/11/2026 · Configuração automática de permissões
 
 - Adiciona /permissoes analisar e /permissoes configurar, com seleção explícita do cargo Membro e confirmação.

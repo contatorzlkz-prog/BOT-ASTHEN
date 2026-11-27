@@ -51,6 +51,7 @@ export function classifyPermissionChannel({
 
   if (channelId && registrationChannelId && channelId === registrationChannelId) return 'registration';
   if (channel === 'registro') return 'registration';
+  if (channel === 'videosnovos') return 'video-feed';
   if (String(topic || '').startsWith('ASTHEN|type:')) return 'ticket';
   if (channel === 'logs') return 'logs';
   if (channel === 'comandosadm') return 'admin-command';
@@ -154,7 +155,7 @@ async function clearPlatformOverwrites(channel, groups, counters) {
   for (const role of groups.platform) {
     const existing = channel.permissionOverwrites.cache.get(role.id);
     if (!existing) continue;
-    await editOverwrite(channel, role.id, { ViewChannel: null }, counters);
+    await editOverwrite(channel, role.id, { ViewChannel: null, UseApplicationCommands: null }, counters);
   }
 }
 
@@ -204,6 +205,7 @@ function makePlan(guild, config, memberRole, channels) {
       protectedTickets: count('ticket'),
       protectedPersonalChannels: count('private'),
       protectedCustomChannels: count('custom'),
+      videoFeedChannels: count('video-feed'),
       dangerousPlatformRoles: groups.platform
         .map(role => ({ name: role.name, flags: hasDangerousPermissions(role) }))
         .filter(item => item.flags.length),
@@ -370,14 +372,28 @@ export async function configureGuildPermissions(guild, memberRole) {
     const isRegistration = scope === 'registration';
     await edit(channel, guild.roles.everyone.id, {
       ViewChannel: isRegistration,
+      UseApplicationCommands: false,
       ...(isRegistration ? { ReadMessageHistory: true, SendMessages: false, SendMessagesInThreads: false } : {})
     });
+
+    // Remove old per-role command grants everywhere. Only #comandos-adm will
+    // explicitly re-enable application commands for the approved management roles.
+    for (const overwrite of channel.permissionOverwrites.cache.values()) {
+      if (overwrite.type !== 0 || overwrite.id === guild.roles.everyone.id) continue;
+      if (overwrite.allow.has(FLAGS.UseApplicationCommands)) {
+        await edit(channel, overwrite.id, { UseApplicationCommands: false });
+      }
+    }
 
     await clearPlatformOverwrites(channel, groups, counters).catch(error =>
       counters.failed.push('Cargos de plataforma em #' + channel.name + ': ' + error.message));
 
     if (scope === 'ticket' || scope === 'private' || scope === 'custom') {
-      await edit(channel, memberRole.id, { ViewChannel: false, SendMessages: false });
+      await edit(channel, memberRole.id, {
+        ViewChannel: false, SendMessages: false, UseApplicationCommands: false,
+        CreatePublicThreads: false, CreatePrivateThreads: false, SendMessagesInThreads: false,
+        MentionEveryone: false, SendTTSMessages: false, SendPolls: false, UseExternalApps: false
+      });
       if (scope === 'ticket') counters.skipped += 1;
       if (scope === 'private' || scope === 'custom') counters.skipped += 1;
       if (scope !== 'ticket') {
@@ -388,7 +404,11 @@ export async function configureGuildPermissions(guild, memberRole) {
     }
 
     if (scope === 'registration') {
-      await edit(channel, memberRole.id, { ViewChannel: false, ReadMessageHistory: false, SendMessages: false });
+      await edit(channel, memberRole.id, {
+        ViewChannel: false, ReadMessageHistory: false, SendMessages: false,
+        UseApplicationCommands: false, CreatePublicThreads: false, CreatePrivateThreads: false,
+        SendMessagesInThreads: false, MentionEveryone: false
+      });
       for (const role of groups.staff) {
         if (roleHasAdministrator(role)) continue;
         await edit(channel, role.id, { ViewChannel: true, ReadMessageHistory: true });
@@ -408,12 +428,18 @@ export async function configureGuildPermissions(guild, memberRole) {
     }
 
     if (scope === 'logs' || scope === 'admin-command' || scope === 'staff' || scope === 'admin') {
-      await edit(channel, memberRole.id, { ViewChannel: false, SendMessages: false });
+      await edit(channel, memberRole.id, {
+        ViewChannel: false, SendMessages: false, UseApplicationCommands: false,
+        CreatePublicThreads: false, CreatePrivateThreads: false, SendMessagesInThreads: false,
+        MentionEveryone: false, SendTTSMessages: false, SendPolls: false, UseExternalApps: false
+      });
       const allowedRoles = scope === 'logs'
         ? groups.logsManagers
-        : scope === 'admin-command' || scope === 'admin'
-          ? groups.managers
-          : groups.staff;
+        : scope === 'admin-command'
+          ? [...groups.managers, ...groups.staff]
+          : scope === 'admin'
+            ? groups.managers
+            : groups.staff;
       const allowedRoleIds = new Set(allowedRoles.map(role => role.id));
       for (const overwrite of channel.permissionOverwrites.cache.values()) {
         if (overwrite.type !== 0 || overwrite.id === guild.roles.everyone.id || overwrite.id === memberRole.id) continue;
@@ -423,7 +449,37 @@ export async function configureGuildPermissions(guild, memberRole) {
       }
       for (const role of allowedRoles) {
         if (roleHasAdministrator(role)) continue;
-        await edit(channel, role.id, { ViewChannel: true, ReadMessageHistory: true });
+        await edit(channel, role.id, {
+          ViewChannel: true, ReadMessageHistory: true,
+          ...(scope === 'admin-command' ? { UseApplicationCommands: true } : {})
+        });
+      }
+      await allowBotMember(channel, botMember, counters);
+      continue;
+    }
+
+    if (scope === 'video-feed') {
+      for (const overwrite of channel.permissionOverwrites.cache.values()) {
+        if (overwrite.id === botMember.id) continue;
+        await edit(channel, overwrite.id, {
+          SendMessages: false, SendMessagesInThreads: false,
+          CreatePublicThreads: false, CreatePrivateThreads: false,
+          UseApplicationCommands: false
+        });
+      }
+      await edit(channel, memberRole.id, {
+        ViewChannel: true, ReadMessageHistory: true, SendMessages: false,
+        AddReactions: true, UseExternalEmojis: true, UseExternalStickers: true,
+        AttachFiles: false, EmbedLinks: false, UseApplicationCommands: false,
+        CreatePublicThreads: false, CreatePrivateThreads: false, SendMessagesInThreads: false,
+        MentionEveryone: false, SendTTSMessages: false, SendPolls: false, UseExternalApps: false
+      });
+      for (const role of [...groups.managers, ...groups.staff, ...groups.services]) {
+        if (roleHasAdministrator(role)) continue;
+        await edit(channel, role.id, {
+          ViewChannel: true, ReadMessageHistory: true, SendMessages: false,
+          UseApplicationCommands: false
+        });
       }
       await allowBotMember(channel, botMember, counters);
       continue;
@@ -432,17 +488,37 @@ export async function configureGuildPermissions(guild, memberRole) {
     // All ordinary channels are Membro-only and writable. The platform
     // selection roles stay cosmetic and never satisfy this access gate.
     const memberPermissions = isVoiceChannel(channel)
-      ? { ViewChannel: true, Connect: true, Speak: true, UseVAD: true }
-      : { ViewChannel: true, ReadMessageHistory: true, SendMessages: true, SendMessagesInThreads: true };
+      ? { ViewChannel: true, Connect: true, Speak: true, UseVAD: true, UseApplicationCommands: false }
+      : {
+          ViewChannel: true, ReadMessageHistory: true, SendMessages: true,
+          AddReactions: true, UseExternalEmojis: true, UseExternalStickers: true,
+          EmbedLinks: true, AttachFiles: false, UseApplicationCommands: false,
+          CreatePublicThreads: false, CreatePrivateThreads: false, SendMessagesInThreads: false,
+          MentionEveryone: false, SendTTSMessages: false, SendPolls: false,
+          UseExternalApps: false, ManageThreads: false
+        };
     await edit(channel, memberRole.id, memberPermissions);
+    if (channel.type === ChannelType.GuildText && (channel.rateLimitPerUser || 0) < 5) {
+      try {
+        await channel.setRateLimitPerUser(5, 'ASTHEN: anti-spam para conversas comuns');
+      } catch (error) {
+        counters.failed.push('Slowmode em #' + channel.name + ': ' + error.message);
+      }
+    }
     for (const role of groups.staff) {
       if (roleHasAdministrator(role)) continue;
-      await edit(channel, role.id, { ViewChannel: true, ReadMessageHistory: true });
+      await edit(channel, role.id, {
+        ViewChannel: true, ReadMessageHistory: true, SendMessages: true,
+        AddReactions: true, EmbedLinks: true, UseApplicationCommands: false,
+        CreatePublicThreads: false, CreatePrivateThreads: false, SendMessagesInThreads: false,
+        MentionEveryone: false, SendTTSMessages: false, SendPolls: false, UseExternalApps: false
+      });
     }
     for (const role of groups.services) {
       await edit(channel, role.id, {
         ViewChannel: true, ReadMessageHistory: true, SendMessages: true,
-        SendMessagesInThreads: true, AttachFiles: true, EmbedLinks: true
+        SendMessagesInThreads: false, CreatePublicThreads: false, CreatePrivateThreads: false,
+        AttachFiles: true, EmbedLinks: true, AddReactions: true, UseApplicationCommands: false
       });
     }
     await allowBotMember(channel, botMember, counters);

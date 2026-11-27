@@ -66,6 +66,20 @@ O configurador fecha todas as categorias para `@everyone` e deixa somente o cana
 
 Tickets do ASTHEN, canais com sobrescritas individuais e canais com regras próprias de outros cargos são protegidos e não recebem acesso geral de `Membro`. O comando também não altera permissões globais dos cargos. Se encontrar um cargo cosmético com privilégios administrativos ou se `Membro` tiver permissões administrativas, a aplicação é bloqueada para evitar bypass.
 
+### Publicação de vídeos do TikTok
+
+No canal `#comandos-adm`, um administrador pode usar `/tiktok publicar link:<URL>`. O bot localiza `#vídeos-novos`, verifica se o ID do vídeo já foi publicado e envia um card sem a capa padrão do TikTok.
+
+O parâmetro opcional `frame` aceita uma imagem PNG, JPG, WEBP ou GIF de até 8 MB, anexada diretamente pelo Discord. Essa imagem é usada como um quadro personalizado. Sem anexo, o card fica sem imagem. O bot não baixa nem recorta o vídeo automaticamente.
+
+### Comandos de bots e anti-spam
+
+A configuração automática nega **Usar comandos de aplicativos** a `@everyone` em todos os canais. Staff e gerência recebem essa permissão somente em `#comandos-adm`; administradores mantêm o bypass nativo do Discord. Isso bloqueia slash commands e comandos de contexto de outros bots para cargos comuns.
+
+Nos canais comuns, `Membro` pode ler, enviar mensagens, reagir e usar emojis/figurinhas externas. Não pode anexar arquivos, criar tópicos públicos/privados, escrever em tópicos, criar enquetes, mencionar todos ou usar aplicativos externos. O slowmode fica em pelo menos 5 segundos sem reduzir tempos maiores já configurados.
+
+`#vídeos-novos` fica em modo de leitura para Membro, com reações permitidas. O bot é o responsável pelas publicações.
+
 ## 3. Loja e kits
 
 O **Plugin-ASTHEN é a única origem dos kits reais**. Crie o kit no Minecraft, configure preço e disponibilidade no plugin e aguarde a sincronização. O kit aparece no seletor do canal `#kits`.

@@ -1,4 +1,4 @@
-# Registro Minecraft — ASTHEN BOT 2.23.0
+# Registro Minecraft — ASTHEN BOT 2.24.0
 
 ## Modelo de acesso
 
