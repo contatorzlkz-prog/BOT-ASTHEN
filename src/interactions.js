@@ -1986,6 +1986,8 @@ async function handlePermissionsCommand(interaction) {
           (result.registrationChannels + result.memberChannels + result.staffChannels + result.adminChannels + result.protectedTickets + result.protectedPersonalChannels + result.protectedCustomChannels) + '**',
         '@everyone: somente **#' + result.registrationChannelName + '**',
         'Canais comuns liberados para Membro: **' + result.memberChannels + '**',
+        'Canal de vídeos em leitura para Membro: **' + result.videoFeedChannels + '**',
+        'Comandos de bots: cargos comuns bloqueados; Staff e gerência em #comandos-adm.',
         'Canais administrativos: **' + result.adminChannels + '**',
         'Tickets e canais pessoais preservados: **' + (result.protectedTickets + result.protectedPersonalChannels) + '**',
         'Canais com regras próprias preservadas: **' + result.protectedCustomChannels + '**',
