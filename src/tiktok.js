@@ -89,7 +89,7 @@ async function buildFrameAttachment(frame) {
   }
 
   const filename = 'asthen-tiktok-frame.' + extension;
-  return new AttachmentBuilder(buffer, { name: filename });
+  return { file: new AttachmentBuilder(buffer, { name: filename }), filename };
 }
 
 async function findVideoChannel(guild) {
@@ -138,11 +138,11 @@ export async function publishTikTokVideo(guild, rawUrl, frame = null) {
     .setFooter({ text: '@' + video.username + '  •  ASTHEN MC' })
     .setTimestamp(new Date());
 
-  if (frameFile) embed.setImage('attachment://' + frameFile.name);
+  if (frameFile) embed.setImage('attachment://' + frameFile.filename);
 
   const message = await channel.send({
     embeds: [embed],
-    files: frameFile ? [frameFile] : [],
+    files: frameFile ? [frameFile.file] : [],
     allowedMentions: { parse: [] }
   });
 
