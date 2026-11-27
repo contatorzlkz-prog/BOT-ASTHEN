@@ -593,8 +593,12 @@ export async function configureGuildPermissions(guild, memberRole, {
   }
 
   if (resetRegistrations && resetPlan) {
-    const reset = await resetGuildRegistrations(guild, { prepared: resetPlan, log: false });
-    counters.reset = reset;
+    if (counters.failed.length) {
+      counters.resetSkipped = true;
+    } else {
+      const reset = await resetGuildRegistrations(guild, { prepared: resetPlan, log: false });
+      counters.reset = reset;
+    }
   }
 
   let panelWarning = '';
@@ -616,6 +620,7 @@ export async function configureGuildPermissions(guild, memberRole, {
     failed,
     panelWarning,
     reset: counters.reset || null,
+    resetSkipped: Boolean(counters.resetSkipped),
     memberRoleName: memberRole.name,
     registrationChannelName: registrationChannel.name,
     registrationChannelCreated
