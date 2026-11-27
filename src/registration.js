@@ -119,9 +119,11 @@ async function updateRegistrationChannelVisibility(member, registered, config) {
   // de visualização para que a negação do cargo tenha efeito automaticamente.
   // Assim, não criamos um deny individual que possa sobrepor a regra do servidor.
   const access = memberCanBypassRegistration(member, config) ? true : null;
+  const reason = registered
+    ? 'ASTHEN: após o cadastro, o cargo Membro controla a visibilidade do registro'
+    : 'ASTHEN: acesso ao registro herdado das permissões dos cargos';
   try {
-    await channel.permissionOverwrites.edit(member.id, { ViewChannel: access },
-      'ASTHEN: visibilidade do registro controlada pelos cargos do servidor');
+    await channel.permissionOverwrites.edit(member.id, { ViewChannel: access }, reason);
     return true;
   } catch (error) {
     console.warn('[Asthen Registro] Não foi possível sincronizar a visibilidade de #' + channel.name + ' para ' + member.user.tag + ':', error.message);
@@ -267,6 +269,10 @@ export async function applyRegisteredIdentity(member, record = getPlayerRegistra
 }
 
 export function validateRegistrationForMember(member, minecraftNick) {
+  const config = getGuildConfig(member.guild.id);
+  if (!config.memberRoleId) {
+    throw new Error('O cargo Membro ainda não está configurado. Peça à equipe para verificar o registro.');
+  }
   const nick = String(minecraftNick ?? '');
   if (!validateMinecraftNick(nick)) {
     throw new Error('Informe um nick Minecraft válido, sem espaços no começo/fim e com até 32 caracteres.');
