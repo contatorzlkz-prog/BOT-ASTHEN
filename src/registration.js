@@ -7,7 +7,9 @@ import {
   savePlayerRegistration,
   updateGuildConfig
 } from './store.js';
-import { makeRegistrationPanel, PANEL_LAYOUT_VERSION } from './ui.js';
+import { makeRegistrationPanel } from './ui.js';
+
+const REGISTRATION_PANEL_VERSION = 'registration-flow-v2';
 
 const FLAGS = PermissionsBitField.Flags;
 
@@ -113,10 +115,13 @@ async function updateRegistrationChannelVisibility(member, registered, config) {
     || await member.guild.channels.fetch(config.registrationChannelId).catch(() => null);
   if (!channel?.permissionOverwrites?.edit) return false;
 
-  const access = memberCanBypassRegistration(member, config) ? true : registered ? false : null;
+  // O cargo Membro é quem esconde o canal. Remova apenas a permissão individual
+  // de visualização para que a negação do cargo tenha efeito automaticamente.
+  // Assim, não criamos um deny individual que possa sobrepor a regra do servidor.
+  const access = memberCanBypassRegistration(member, config) ? true : null;
   try {
     await channel.permissionOverwrites.edit(member.id, { ViewChannel: access },
-      'ASTHEN: visibilidade individual do canal de registro');
+      'ASTHEN: visibilidade do registro controlada pelos cargos do servidor');
     return true;
   } catch (error) {
     console.warn('[Asthen Registro] Não foi possível sincronizar a visibilidade de #' + channel.name + ' para ' + member.user.tag + ':', error.message);
@@ -203,21 +208,23 @@ export async function refreshRegistrationPanel(guild) {
     }
   }
 
-  const payload = makeRegistrationPanel();
-  if (message) {
-    if (config.registrationPanelVersion !== PANEL_LAYOUT_VERSION) await message.edit(payload);
+  // Mensagens publicadas nunca são editadas. Quando o painel muda de versão,
+  // publique um novo painel uma única vez e preserve o anterior como histórico.
+  if (message && config.registrationPanelVersion === REGISTRATION_PANEL_VERSION) {
     updateGuildConfig(guild.id, {
       registrationPanelMessageId: message.id,
-      registrationPanelVersion: PANEL_LAYOUT_VERSION
+      registrationPanelVersion: REGISTRATION_PANEL_VERSION
     });
+    console.log('[Asthen Registro] Painel existente preservado em #' + channel.name + '.');
     return true;
   }
 
-  const created = await channel.send(payload);
+  const created = await channel.send(makeRegistrationPanel());
   updateGuildConfig(guild.id, {
     registrationPanelMessageId: created.id,
-    registrationPanelVersion: PANEL_LAYOUT_VERSION
+    registrationPanelVersion: REGISTRATION_PANEL_VERSION
   });
+  console.log('[Asthen Registro] Novo painel publicado em #' + channel.name + '; mensagens anteriores preservadas.');
   return true;
 }
 
@@ -259,7 +266,7 @@ export async function applyRegisteredIdentity(member, record = getPlayerRegistra
   return { registered: true, errors, ticketsUpdated: tickets.updated };
 }
 
-export async function registerPlayerForMember(member, minecraftNick, source = 'autoatendimento') {
+export function validateRegistrationForMember(member, minecraftNick) {
   const nick = String(minecraftNick ?? '');
   if (!validateMinecraftNick(nick)) {
     throw new Error('Informe um nick Minecraft válido, sem espaços no começo/fim e com até 32 caracteres.');
@@ -268,8 +275,11 @@ export async function registerPlayerForMember(member, minecraftNick, source = 'a
   if (existing && existing.discord_id !== member.id) {
     throw new Error('Este nick Minecraft já está vinculado a outra conta Discord.');
   }
+  return { nick, previous: getPlayerRegistration(member.id) };
+}
 
-  const previous = getPlayerRegistration(member.id);
+export async function registerPlayerForMember(member, minecraftNick, source = 'autoatendimento') {
+  const { nick, previous } = validateRegistrationForMember(member, minecraftNick);
   const record = savePlayerRegistration(member.id, nick, member.guild.id);
   const sync = await applyRegisteredIdentity(member, record);
   const status = sync.errors.length
