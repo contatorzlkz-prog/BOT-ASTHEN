@@ -168,8 +168,7 @@ Comandos disponíveis no Discord:
 
 | Comando | Ação |
 |---|---|
-| `/kit listar` | Consulta os kits e o estado de venda recebido do Minecraft. |
-| `/kit editar` | Ajusta nome exibido, descrição e imagem HTTPS. |
+| `/kit configurar` | Abre o painel visual de configuração dos kits. |
 
 O Discord não cria kits nem altera seus itens, preços ou disponibilidade oficial.
 
