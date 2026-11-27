@@ -129,7 +129,7 @@ export async function publishTikTokVideo(guild, rawUrl, frame = null) {
     .setTitle(metadata?.title || 'Confira o novo vídeo')
     .setURL(video.url)
     .setDescription(
-      'Tem conteúdo novo no TikTok do ASTHEN MC.\\n\\n' +
+      'Tem conteúdo novo no TikTok do ASTHEN MC.\n\n' +
       'Assista à publicação e acompanhe as novidades do servidor.'
     )
     .setFooter({ text: 'TikTok  ·  @' + video.username })
@@ -138,7 +138,7 @@ export async function publishTikTokVideo(guild, rawUrl, frame = null) {
   if (frameFile) embed.setImage('attachment://' + frameFile.filename);
 
   const message = await channel.send({
-    content: '**ASTHEN MC | NOVO VÍDEO**\\nConfira a publicação mais recente:',
+    content: '**ASTHEN MC | NOVO VÍDEO**\nConfira a publicação mais recente:',
     embeds: [embed],
     components: [new ActionRowBuilder().addComponents(
       new ButtonBuilder()
