@@ -56,7 +56,7 @@ import { PIX_KEY_DEFAULT, PIX_QR_FILENAME, PIX_QR_IMAGE_PATH } from './pix.js';
 import { getSupabaseStatus, getWeeklyKitStock, reserveWeeklyKitStock, releaseWeeklyKitStock } from './supabase.js';
 import { exportTicketTranscript } from './transcripts.js';
 import { createBackup, listBackups } from './maintenance.js';
-import { registerPlayerForMember, validateMinecraftNick, refreshRegistrationPanel, reconcileGuildMembers, resetGuildRegistrations } from './registration.js';
+import { registerPlayerForMember, validateMinecraftNick, configureRegistrationChannel, refreshRegistrationPanel } from './registration.js';
 import { analyzeGuildPermissionSetup, configureGuildPermissions } from './permissions.js';
 import { publishTikTokVideo } from './tiktok.js';
 import { normalizeChannelName } from './channel-discovery.js';
@@ -299,13 +299,14 @@ async function configureChannels(interaction) {
   const shopChannel = interaction.options.getChannel('kits');
   const logsChannel = interaction.options.getChannel('logs');
   const buyersChannel = interaction.options.getChannel('compradores');
+  const registrationChannel = interaction.options.getChannel('registro');
+  const memberRole = interaction.options.getRole('membro');
   const staffRole = interaction.options.getRole('equipe');
 
-  if (!supportChannel && !shopChannel && !logsChannel && !buyersChannel && !staffRole) {
-    return replyPrivate(
-      interaction,
-      'Informe pelo menos um campo. Exemplo: /configurar atendimento:#atendimento kits:#kits logs:#logs compradores:#compradores equipe:@Equipe'
-    );
+  if (!supportChannel && !shopChannel && !logsChannel && !buyersChannel
+      && !registrationChannel && !memberRole && !staffRole) {
+    return replyPrivate(interaction,
+      'Informe pelo menos um canal ou cargo para salvar a configuração.');
   }
 
   const config = getGuildConfig(interaction.guildId);
@@ -316,44 +317,62 @@ async function configureChannels(interaction) {
     Object.assign(changes, await updatePanel(interaction.guild, config, 'support', supportChannel));
     updated.push('atendimento: ' + supportChannel.toString());
   }
-
   if (shopChannel) {
     Object.assign(changes, await updatePanel(interaction.guild, config, 'shop', shopChannel));
     updated.push('kits: ' + shopChannel.toString());
   }
-
+  if (logsChannel) {
+    changes.logsChannelId = logsChannel.id;
+    updated.push('logs: ' + logsChannel.toString());
+  }
+  if (buyersChannel) {
+    changes.buyersChannelId = buyersChannel.id;
+    updated.push('compradores: ' + buyersChannel.toString());
+  }
+  if (registrationChannel) {
+    changes.registrationChannelId = registrationChannel.id;
+    updated.push('registro: ' + registrationChannel.toString());
+  }
+  if (memberRole) {
+    if (memberRole.managed || memberRole.id === interaction.guild.roles.everyone.id) {
+      return replyPrivate(interaction, 'Selecione um cargo comum chamado Membro, não um cargo gerenciado.');
+    }
+    changes.memberRoleId = memberRole.id;
+    updated.push('cargo Membro: ' + memberRole.toString());
+  }
   if (staffRole) {
     changes.staffRoleId = staffRole.id;
     updated.push('equipe: ' + staffRole.toString());
   }
 
   const effectiveStaffRoleId = changes.staffRoleId ?? config.staffRoleId;
-
-  if (logsChannel) {
-    changes.logsChannelId = logsChannel.id;
-    updated.push('logs privados: ' + logsChannel.toString());
-  }
-
   const effectiveLogsId = changes.logsChannelId ?? config.logsChannelId;
   if ((logsChannel || staffRole) && effectiveLogsId) {
     const targetLogsChannel = logsChannel ?? await fetchTextChannel(interaction.guild, effectiveLogsId);
     if (!targetLogsChannel) {
-      return replyPrivate(interaction, 'O canal de logs configurado não existe mais. Escolha outro canal em /configurar logs.');
+      return replyPrivate(interaction, 'O canal de logs configurado não existe mais. Escolha outro canal em /configurar.');
     }
     await secureLogsChannel(targetLogsChannel, interaction.guild, effectiveStaffRoleId, config.staffRoleId);
   }
 
-  if (buyersChannel) {
-    changes.buyersChannelId = buyersChannel.id;
-    updated.push('compradores: ' + buyersChannel.toString());
-  }
-
   updateGuildConfig(interaction.guildId, changes);
+
+  const effectiveRegistrationId = changes.registrationChannelId ?? config.registrationChannelId;
+  if (effectiveRegistrationId) {
+    const targetRegistration = registrationChannel
+      ?? await fetchTextChannel(interaction.guild, effectiveRegistrationId);
+    if (targetRegistration) {
+      await configureRegistrationChannel(targetRegistration, interaction.guild);
+      await refreshRegistrationPanel(interaction.guild).catch(error => {
+        console.warn('[Asthen Registro] Não foi possível atualizar o painel:', error.message);
+      });
+    }
+  }
 
   return replyPrivate(
     interaction,
-    'Configuração atualizada.\n' + updated.map(item => '• ' + item).join('\n') +
-    '\n\nOs tickets serão criados na categoria de atendimento ou de kits, conforme o tipo de solicitação.'
+    'Configuração salva. ' + updated.join(' · ') +
+    '. A política de acesso completa é aplicada em /outros seguranca aplicar.'
   );
 }
 
@@ -385,39 +404,17 @@ function makeKitEditModal(kit, field) {
 
 async function handleKitCommand(interaction) {
   if (!isAdministrator(interaction)) {
-    return replyPrivate(interaction, 'Somente membros com a permissão Administrador podem usar os comandos /kit.');
+    return replyPrivate(interaction, 'Somente administradores podem configurar os kits.');
   }
-
-  const subcommand = interaction.options.getSubcommand();
+  if (interaction.options.getSubcommand() !== 'configurar') {
+    return replyPrivate(interaction, 'Use /kit configurar.');
+  }
   const pluginKits = getGuildConfig(interaction.guildId).kits.filter(kit => kit.pluginManaged === true);
-
-  if (subcommand === 'listar') {
-    if (!pluginKits.length) {
-      return replyPrivate(interaction, 'Nenhum kit real foi sincronizado do Minecraft ainda. Crie o kit no Plugin-ASTHEN e confira /bridge status.');
-    }
-    const lines = pluginKits.slice(0, 22).map((kit, index) => {
-      const minecraftState = kit.missingFromPlugin
-        ? 'removido do Minecraft'
-        : kit.pluginEnabled === false ? 'desativado no Minecraft' : 'ativo';
-      const saleState = kit.manuallyUnavailable
-        ? 'bloqueado pela equipe'
-        : kit.pluginForSale !== true
-          ? (kit.priceCents ? 'fora de venda no plugin' : 'sem preço no Minecraft')
-          : kit.forSale === true ? 'à venda' : 'indisponível';
-      return (index + 1) + '. **' + String(kit.displayName || makeKitDisplayName(kit.name)) + '** — ' +
-        String(kit.price || 'sem preço') + '\nMinecraft: ' + minecraftState +
-        ' · Loja: ' + saleState + '\nID: `' + kit.name + '`';
-    });
-    const remaining = pluginKits.length > 22 ? '\n... e mais ' + (pluginKits.length - 22) + ' kit(s).' : '';
-    return replyPrivate(interaction, lines.join('\n\n').slice(0, 1850) + remaining);
-  }
-
   if (!pluginKits.length) {
-    return replyPrivate(interaction, 'Nenhum kit real foi sincronizado. Crie-o no Minecraft pelo Plugin-ASTHEN e aguarde a próxima sincronização.');
+    return replyPrivate(interaction, 'Nenhum kit foi sincronizado ainda. Crie os kits no Minecraft e confira /outros minecraft status.');
   }
-
   return interaction.reply({
-    content: 'Os kits são importados automaticamente do Minecraft. Selecione um para editar nome exibido, descrição ou imagem.',
+    content: 'Configuração de kits · selecione um kit para editar nome, descrição ou imagem.',
     components: makeKitAdminComponents(pluginKits, 0),
     flags: MessageFlags.Ephemeral
   });
@@ -428,12 +425,12 @@ async function handleKitAdminPage(interaction, requestedPage) {
     return replyPrivate(interaction, 'Somente administradores podem editar kits.');
   }
   if (!Number.isInteger(requestedPage) || requestedPage < 0) {
-    return replyPrivate(interaction, 'Página inválida. Abra /kit editar novamente.');
+    return replyPrivate(interaction, 'Página inválida. Abra /kit configurar novamente.');
   }
   const kits = getGuildConfig(interaction.guildId).kits.filter(kit => kit.pluginManaged === true);
   const totalPages = Math.max(1, Math.ceil(kits.length / 25));
   if (!kits.length || requestedPage >= totalPages) {
-    return replyPrivate(interaction, 'Esta página não existe mais. Atualize a lista em /kit editar.');
+    return replyPrivate(interaction, 'Esta página não existe mais. Abra /kit configurar novamente.');
   }
   return interaction.update({
     content: 'Selecione um kit sincronizado do Minecraft para editar.',
@@ -446,7 +443,7 @@ async function handleKitAdminSelection(interaction) {
   if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem editar kits.');
   const kitId = interaction.values[0];
   const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId && item.pluginManaged === true);
-  if (!kit) return replyPrivate(interaction, 'Este kit não está mais sincronizado. Confira /bridge status.');
+  if (!kit) return replyPrivate(interaction, 'Este kit não está mais sincronizado. Confira /outros minecraft status.');
   return interaction.update({
     content: 'Kit selecionado: **' + String(kit.displayName || makeKitDisplayName(kit.name)) + '**. Escolha o que deseja editar.',
     embeds: [makeKitPreviewEmbed(kit)],
@@ -807,13 +804,6 @@ async function sendOrderTicketMessage(channel, user, kit, minecraftNick, platfor
   });
 }
 
-async function handleNickSubmit(interaction) {
-  return replyPrivate(
-    interaction,
-    'O nick agora é gerenciado pelo cadastro da conta. Use /conta atualizar-nick; a loja utiliza o nick registrado automaticamente.'
-  );
-}
-
 async function forcePurchaseBedrock(interaction, requestedRevision) {
   const draft = getPurchaseDraft(interaction.guildId, interaction.user.id);
   if (!draft || (requestedRevision && draft.revision !== requestedRevision)) {
@@ -828,13 +818,6 @@ async function forcePurchaseBedrock(interaction, requestedRevision) {
     embeds: [makePurchaseReviewEmbed(draft)],
     components: [makePurchaseReviewControls(draft)]
   });
-}
-
-async function editMinecraftNick(interaction) {
-  return replyPrivate(
-    interaction,
-    'A atualização do nick fica em gerenciamento de conta. Use /conta atualizar-nick; sua compra não precisa ser reiniciada.'
-  );
 }
 
 async function cancelPurchase(interaction, requestedRevision) {
@@ -1240,17 +1223,6 @@ async function handleBridgeCommand(interaction) {
     'API: ' + (status.running ? 'online' : 'offline'),
     'Endereço local: ' + (status.running ? 'http://' + status.host + ':' + status.port : 'não iniciada'),
     'Pedidos aguardando: ' + status.pending,
-    'Plugin Minecraft: ' + (!status.lastPluginContactAt
-      ? 'aguardando primeiro contato autenticado'
-      : status.pluginOnline
-        ? 'conectado'
-        : 'sem comunicação há ' + Math.floor((Date.now() - status.lastPluginContactAt) / 1000) + 's'),
-    'Último contato do plugin: ' + (status.lastPluginContactAt
-      ? new Date(status.lastPluginContactAt).toLocaleString('pt-BR')
-      : 'nenhum contato nesta execução'),
-    'Pedido mais antigo na fila: ' + (status.oldestPendingAgeMs === null || status.oldestPendingAgeMs === undefined
-      ? 'nenhum'
-      : Math.floor(status.oldestPendingAgeMs / 1000) + 's'),
     'Plugin Minecraft: ' + (!status.lastPluginContactAt
       ? 'aguardando primeiro contato autenticado'
       : status.pluginOnline
@@ -1844,104 +1816,23 @@ async function handleRegistrationSubmit(interaction) {
   if (!interaction.guild) return replyPrivate(interaction, 'Use o registro dentro do servidor ASTHEN.');
   const minecraftNick = interaction.fields.getTextInputValue('minecraft-nick');
   if (!validateMinecraftNick(minecraftNick)) {
-    return replyPrivate(interaction, 'Informe um nick Minecraft válido, sem espaços no começo ou no fim e com até 32 caracteres.');
+    return replyPrivate(interaction, 'Informe um nick Minecraft válido, sem espaços no começo/fim e com até 32 caracteres.');
   }
 
   const member = await interaction.guild.members.fetch(interaction.user.id);
   try {
     const result = await registerPlayerForMember(member, minecraftNick, 'autoatendimento');
     const status = result.sync.errors.length
-      ? '\nO cadastro foi salvo, mas houve uma pendência ao sincronizar ' + result.sync.errors.join('; ') + '. Avise a equipe.'
-      : '\nSeu cargo de membro e seu apelido do Discord foram sincronizados.';
+      ? '\nO cadastro foi salvo; a equipe recebeu um aviso sobre uma pendência de acesso.'
+      : '\nCargo Membro e canais liberados.';
     return replyPrivate(
       interaction,
-      (result.previous ? 'Nick Minecraft atualizado para **' : 'Registro concluído para **') +
+      (result.previous ? 'Nick Minecraft atualizado: **' : 'Registro concluído: **') +
       result.record.minecraft_nick + '**.' + status
     );
   } catch (error) {
     return replyPrivate(interaction, error.message || 'Não foi possível salvar seu registro Minecraft.');
   }
-}
-
-async function handleRegistrationCommand(interaction) {
-  if (!canManage(interaction)) {
-    return replyPrivate(interaction, 'Você precisa de Gerenciar servidor para administrar os cadastros Minecraft.');
-  }
-
-  const subcommand = interaction.options.getSubcommand();
-  if (subcommand === 'reiniciar') {
-    if (!isAdministrator(interaction)) {
-      return replyPrivate(interaction, 'Somente o proprietário ou um administrador pode reiniciar todos os registros Minecraft.');
-    }
-    if (interaction.options.getBoolean('confirmar', true) !== true) {
-      return replyPrivate(interaction, 'Nenhuma alteração foi feita. Para executar o reset, use /registro reiniciar confirmar:true.');
-    }
-
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    try {
-      const result = await resetGuildRegistrations(interaction.guild);
-      return interaction.editReply(
-        '**Reset do registro concluído.**\n' +
-        'Cargo Membro removido de: **' + result.rolesRemoved + '** pessoa(s).\n' +
-        'Cadastros apagados deste servidor: **' + result.recordsCleared + '**.\n' +
-        'Total de membros verificados: **' + result.total + '**.' +
-        (result.skippedProtected ? '\nContas protegidas pelo Discord: **' + result.skippedProtected + '**.' : '') +
-        (result.visibilityPending ? '\nPermissões que precisam de revisão: **' + result.visibilityPending + '**.' : '') +
-        '\nTodos deverão registrar o nick novamente em #registro.'
-      );
-    } catch (error) {
-      console.error('[Asthen Registro] Falha no reset geral:', error);
-      return interaction.editReply('**Reset não concluído.** ' + (error.message || 'Verifique as permissões e tente novamente.'));
-    }
-  }
-
-  if (subcommand === 'atualizar') {
-    const targetUser = interaction.options.getUser('jogador', true);
-    const nick = interaction.options.getString('nick', true);
-    if (!validateMinecraftNick(nick)) {
-      return replyPrivate(interaction, 'Informe um nick Minecraft válido, sem espaços no começo/fim e com até 32 caracteres.');
-    }
-
-    const targetMember = await interaction.guild.members.fetch(targetUser.id);
-    try {
-      const result = await registerPlayerForMember(
-        targetMember,
-        nick,
-        'administração por <@' + interaction.user.id + '>'
-      );
-      const warning = result.sync.errors.length
-        ? '\nPendência de sincronização: ' + result.sync.errors.join('; ') + '. Confira a hierarquia e as permissões do bot.'
-        : '\nCargo e apelido sincronizados.';
-      return replyPrivate(
-        interaction,
-        'Cadastro de <@' + targetUser.id + '> atualizado para **' + result.record.minecraft_nick + '**.' + warning
-      );
-    } catch (error) {
-      return replyPrivate(interaction, error.message || 'Não foi possível atualizar o cadastro do jogador.');
-    }
-  }
-
-  const config = getGuildConfig(interaction.guildId);
-  const role = interaction.options.getRole('cargo', true);
-  const roles = new Set(config.registrationBypassRoleIds || []);
-  if (subcommand === 'autorizar') roles.add(role.id);
-  else if (subcommand === 'revogar') roles.delete(role.id);
-  else return replyPrivate(interaction, 'Ação de registro desconhecida.');
-
-  updateGuildConfig(interaction.guildId, { registrationBypassRoleIds: [...roles] });
-  await refreshRegistrationPanel(interaction.guild).catch(error => {
-    console.warn('[Asthen Registro] Não foi possível atualizar permissões de #registro:', error.message);
-  });
-  await reconcileGuildMembers(interaction.guild).catch(error => {
-    console.warn('[Asthen Registro] A autorização foi salva, mas a reconciliação dos membros falhou:', error.message);
-  });
-
-  return replyPrivate(
-    interaction,
-    subcommand === 'autorizar'
-      ? 'O cargo ' + role.toString() + ' agora pode visualizar #registro mesmo após o cadastro.'
-      : 'O cargo ' + role.toString() + ' não tem mais autorização especial para #registro.'
-  );
 }
 
 async function handleTikTokCommand(interaction) {
@@ -1972,7 +1863,7 @@ async function handleTikTokCommand(interaction) {
 }
 async function handlePermissionsCommand(interaction) {
   if (!isAdministrator(interaction)) {
-    return replyPrivate(interaction, 'Somente administradores podem alterar a configuração geral de permissões do servidor.');
+    return replyPrivate(interaction, 'Somente administradores podem alterar a segurança dos canais.');
   }
 
   const action = interaction.options.getSubcommand();
@@ -1980,118 +1871,91 @@ async function handlePermissionsCommand(interaction) {
     try {
       const result = await analyzeGuildPermissionSetup(interaction.guild);
       const lines = [
-        '**Análise de permissões do ASTHEN**',
-        'Cargos personalizados encontrados: **' + result.roleCount + '**',
-        'Categorias: **' + result.categoryCount + '** · canais classificados: **' +
-          (result.registrationChannels + result.memberChannels + result.staffChannels + result.adminChannels + result.protectedTickets + result.protectedPersonalChannels + result.protectedCustomChannels) + '**',
-        '@everyone: somente **#' + result.registrationChannelName + '**',
-        'Canais comuns liberados para Membro: **' + result.memberChannels + '**',
-        'Canal de vídeos em leitura para Membro: **' + result.videoFeedChannels + '**',
-        'Comandos de bots: cargos comuns bloqueados; Staff e gerência em #comandos-adm.',
-        'Canais administrativos: **' + result.adminChannels + '**',
-        'Tickets e canais pessoais preservados: **' + (result.protectedTickets + result.protectedPersonalChannels) + '**',
-        'Canais com regras próprias preservadas: **' + result.protectedCustomChannels + '**',
-        'Cargos de plataforma: ' + (result.platformRoles.join(', ') || 'nenhum detectado'),
-        'Equipe: ' + (result.staffRoles.join(', ') || 'nenhum cargo reconhecido'),
-        'Gerência: ' + (result.managerRoles.join(', ') || 'nenhum cargo reconhecido'),
-        'Integrações/bots preservados: ' + (result.serviceRoles.join(', ') || 'nenhum detectado'),
-        'Cargos de ping: ' + (result.pingRoles.join(', ') || 'nenhum detectado')
+        '**Prévia de segurança do ASTHEN**',
+        'Cargos: **' + result.roleCount + '** · categorias: **' + result.categoryCount + '**',
+        '@everyone: somente #registro.',
+        'Canais de Membro: **' + result.memberChannels + '** · vídeos: **' + result.videoFeedChannels + '**',
+        'Administrativos: **' + result.adminChannels + '** · tickets: **' + result.protectedTickets + '**',
+        'PC, Mobile e Console: cosméticos, sem acesso próprio.',
+        'Equipe: ' + (result.staffRoles.join(', ') || 'nenhuma detectada'),
+        'Gerência: ' + (result.managerRoles.join(', ') || 'nenhuma detectada'),
+        'Bots de serviço: ' + (result.serviceRoles.join(', ') || 'nenhum detectado')
       ];
-
-      if (result.dangerousMemberFlags.length) {
-        lines.push('**Bloqueio:** Membro possui permissões administrativas: ' + result.dangerousMemberFlags.join(', ') + '.');
-      }
-      if (result.dangerousPlatformRoles.length) {
-        lines.push('**Bloqueio:** cargos de plataforma com privilégios: ' +
-          result.dangerousPlatformRoles.map(item => item.name + ' (' + item.flags.join(', ') + ')').join('; ') + '.');
-      }
-      if (result.dangerousOtherRoles.length) {
-        lines.push('**Revisar antes de aplicar:** ' +
-          result.dangerousOtherRoles.map(item => item.name + ' (' + item.flags.join(', ') + ')').join('; ') + '.');
+      if (result.dangerousRoles.length) {
+        lines.push('**Bloqueio:** Administrador detectado em ' + result.dangerousRoles.join(', ') + '. Remova essa permissão desses cargos antes de aplicar.');
       }
       if (result.unknownRoles.length) {
-        lines.push('Outros cargos mantidos sem alteração: ' + result.unknownRoles.join(', ') + '.');
+        lines.push('Outros cargos: ' + result.unknownRoles.join(', ') + '. Sem liberação de canais.');
       }
-
-      lines.push('Para aplicar: /permissoes configurar membro:@Membro confirmar:true.');
+      lines.push('Aplique em /outros seguranca aplicar.');
       return replyPrivate(interaction, lines.join('\n').slice(0, 1950));
     } catch (error) {
-      return replyPrivate(interaction, 'Não consegui analisar as permissões: ' + (error.message || 'erro desconhecido'));
+      return replyPrivate(interaction, 'Não consegui analisar: ' + (error.message || 'erro desconhecido'));
     }
   }
 
-  if (action === 'configurar') {
+  if (action === 'aplicar') {
     const memberRole = interaction.options.getRole('membro', true);
     if (interaction.options.getBoolean('confirmar', true) !== true) {
-      return replyPrivate(interaction, 'Nenhuma alteração foi feita. Execute /permissoes configurar membro:@Membro confirmar:true para confirmar.');
+      return replyPrivate(interaction, 'Nenhuma alteração foi feita. Para redefinir os cadastros e aplicar a política, confirme com TRUE.');
     }
-
+    const resetRegistrations = true;
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
-      const result = await configureGuildPermissions(interaction.guild, memberRole);
+      const result = await configureGuildPermissions(interaction.guild, memberRole, { resetRegistrations: true });
       const lines = [
-        '**Permissões do servidor configuradas.**',
-        '@everyone só consegue visualizar **#' + result.registrationChannelName + '**.',
-        'Cargo de acesso: **' + result.memberRoleName + '**.',
-        ...(result.registrationChannelCreated ? ['Canal #📝・registro criado em 👋 Entrada.'] : []),
-        'Canais comuns liberados para Membro: **' + result.memberChannels + '**.',
-        'Canais administrativos separados por equipe: **' + result.adminChannels + '**.',
-        'Tickets e canais pessoais preservados: **' + (result.protectedTickets + result.protectedPersonalChannels) + '**.',
-        'Sobrescritas atualizadas: **' + result.updatedOverwrites + '**.',
-        'Comandos de bots: bloqueados para cargos comuns; Staff e gerência usam #comandos-adm.',
-        'Canais comuns: conversa, reações e figurinhas; sem tópicos, enquetes ou anexos; slowmode de 5s.',
-        'Canal #vídeos-novos: leitura e reações para Membro; publicação pelo bot.'
+        '**Política de acesso aplicada.**',
+        '@everyone só vê #registro antes do cadastro.',
+        'Membro libera canais comuns; PC/Mobile/Console continuam cosméticos.',
+        'Comandos de bots bloqueados para cargos comuns.',
+        '#vídeos-novos: leitura e reações; só o bot publica.',
+        'Canais atualizados: **' + result.updatedOverwrites + '**.'
       ];
-      if (result.skipped) lines.push('Canais preservados por terem regras próprias: **' + result.skipped + '**.');
+      if (result.registrationChannelCreated) lines.push('#📝・registro criado em 👋 Entrada.');
+      if (result.reset) {
+        lines.push('Membro removido de **' + result.reset.rolesRemoved + '** pessoas; cadastros limpos: **' + result.reset.recordsCleared + '**.');
+        if (result.reset.skippedProtected) lines.push('Contas protegidas pelo Discord: **' + result.reset.skippedProtected + '**.');
+        if (result.reset.failed.length) lines.push('Falhas na remoção de cargo: **' + result.reset.failed.length + '**.');
+        if (result.reset.visibilityPending || result.reset.ticketPending) {
+          lines.push('Permissões pendentes: **' + (result.reset.visibilityPending + result.reset.ticketPending) + '**.');
+        }
+      }
       if (result.failed.length) {
-        lines.push('**Atenção:** ' + result.failed.length + ' alteração(ões) falharam. Corrija as permissões do bot e execute novamente.');
-        lines.push(result.failed.slice(0, 3).join('\n'));
+        lines.push('**Alterações pendentes:** ' + result.failed.length + '. Confira hierarquia e permissões do bot.');
+        lines.push(result.failed.slice(0, 2).join('\n'));
       }
       if (result.panelWarning) lines.push('Painel de registro: ' + result.panelWarning);
-      lines.push('PC, Mobile e Console continuam como cargos de identificação; não liberam canais sem Membro.');
+      if (result.resetSkipped) {
+        lines.push('**Reset cancelado:** houve falha ao configurar pelo menos um canal. Nenhum cargo Membro ou cadastro foi removido.');
+      } else if (result.reset?.complete === false || result.failed.length) {
+        lines.push('A configuração ficou parcialmente aplicada; corrija os itens pendentes e execute novamente.');
+      } else {
+        lines.push('Todos precisam concluir o registro Minecraft novamente.');
+      }
       return interaction.editReply(lines.join('\n').slice(0, 1950));
     } catch (error) {
-      console.error('[Asthen Permissões] Falha ao configurar o servidor:', error);
-      return interaction.editReply('**Configuração não concluída.** ' + (error.message || 'Verifique a hierarquia e as permissões do bot.'));
+      console.error('[Asthen Segurança] Falha ao aplicar política:', error);
+      return interaction.editReply('**Configuração cancelada sem alterar os canais.** ' + (error.message || 'Confira a hierarquia e permissões do bot.'));
     }
   }
 
-  return replyPrivate(interaction, 'Ação de permissões desconhecida.');
+  return replyPrivate(interaction, 'Ação de segurança desconhecida.');
 }
-async function handleAccountCommand(interaction) {
-  const player = getPlayerRegistration(interaction.user.id);
-  const subcommand = interaction.options.getSubcommand();
 
-  if (subcommand === 'perfil') {
-    if (!player?.minecraft_nick) {
-      return replyPrivate(interaction, 'Você ainda não possui um nick Minecraft cadastrado. Conclua o registro em #registro.');
-    }
-    const updated = Date.parse(player.updated_at);
-    const timestamp = Number.isFinite(updated) ? Math.floor(updated / 1000) : null;
-    return replyPrivate(
-      interaction,
-      'Sua conta está vinculada ao Minecraft **' + player.minecraft_nick + '**.' +
-      (timestamp ? '\nÚltima atualização: <t:' + timestamp + ':R>.' : '')
-    );
-  }
-
-  if (subcommand === 'atualizar-nick') {
-    return interaction.showModal(makeMinecraftNickModal('registration:submit', player?.minecraft_nick || ''));
-  }
-  return replyPrivate(interaction, 'Opção de conta desconhecida.');
+async function handleOtherCommand(interaction) {
+  const group = interaction.options.getSubcommandGroup();
+  if (group === 'seguranca') return handlePermissionsCommand(interaction);
+  if (group === 'tiktok') return handleTikTokCommand(interaction);
+  if (group === 'backup') return handleBackupCommand(interaction);
+  if (group === 'minecraft') return handleBridgeCommand(interaction);
+  return replyPrivate(interaction, 'Grupo administrativo desconhecido.');
 }
 
 async function handleCommand(interaction) {
-  if (!interaction.guild) return replyPrivate(interaction, 'Use este comando dentro de um servidor.');
-
+  if (!interaction.guild) return replyPrivate(interaction, 'Use este comando dentro do servidor.');
   if (interaction.commandName === 'configurar') return configureChannels(interaction);
-  if (interaction.commandName === 'registro') return handleRegistrationCommand(interaction);
-  if (interaction.commandName === 'permissoes') return handlePermissionsCommand(interaction);
-  if (interaction.commandName === 'tiktok') return handleTikTokCommand(interaction);
-  if (interaction.commandName === 'conta') return handleAccountCommand(interaction);
   if (interaction.commandName === 'kit') return handleKitCommand(interaction);
-  if (interaction.commandName === 'backup') return handleBackupCommand(interaction);
-  if (interaction.commandName === 'bridge') return handleBridgeCommand(interaction);
+  if (interaction.commandName === 'outros') return handleOtherCommand(interaction);
 }
 
 export async function handleInteraction(interaction) {
@@ -2126,7 +1990,8 @@ export async function handleInteraction(interaction) {
       return confirmSelectedKit(interaction, interaction.customId.split(':')[2]);
     }
     if (interaction.customId.startsWith('shop:edit-nick:')) {
-      return editMinecraftNick(interaction);
+      const player = getPlayerRegistration(interaction.user.id);
+      return interaction.showModal(makeMinecraftNickModal('registration:submit', player?.minecraft_nick || ''));
     }
     if (interaction.customId.startsWith('shop:edit-platform:')) {
       return forcePurchaseBedrock(interaction, interaction.customId.split(':').at(-1));
@@ -2169,7 +2034,6 @@ export async function handleInteraction(interaction) {
 
   if (interaction.isModalSubmit()) {
     if (interaction.customId === 'registration:submit') return handleRegistrationSubmit(interaction);
-    if (interaction.customId.startsWith('shop:nick:')) return handleNickSubmit(interaction);
     if (interaction.customId === 'order:release-stock:submit') return submitStockRelease(interaction);
     if (interaction.customId.startsWith('kit:edit-modal:')) return handleKitEditModal(interaction);
   }}

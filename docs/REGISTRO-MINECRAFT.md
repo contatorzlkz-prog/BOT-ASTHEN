@@ -1,73 +1,37 @@
-# Registro Minecraft — ASTHEN BOT 2.24.0
+# Registro Minecraft — ASTHEN BOT 2.25.0
 
 ## Modelo de acesso
 
-O cargo `Membro` significa que a pessoa já concluiu o registro Minecraft. Não atribua esse cargo pelo Onboarding nem manualmente.
+- `@everyone`: vê somente `#📝・registro`.
+- `Membro`: recebe acesso aos canais comuns depois de concluir o cadastro.
+- `PC`, `Mobile`, `Console`: cargos cosméticos do Onboarding; não liberam canais.
+- `Staff` e gerência: recebem acesso somente às áreas de trabalho que correspondem à função.
+- Tickets: o dono só tem acesso enquanto estiver registrado.
 
-- `@everyone`: pode visualizar somente o canal de registro na área de entrada.
-- `Membro`: pode visualizar os canais exclusivos de jogadores registrados, mas não pode visualizar o canal de registro.
-- Equipe e administradores: mantenha os acessos administrativos necessários; eles podem continuar vendo o canal de registro como exceção.
+O nick Minecraft é salvo como identidade da conta, mas **não é copiado para o apelido do Discord**. O bot não altera apelidos.
 
-## Configuração no Discord
+## Configuração
 
-1. Crie ou selecione o cargo `Membro`.
-2. Em Developer Portal → Bot → Privileged Gateway Intents, ative **Server Members Intent**.
-3. Dê ao bot **Manage Roles**, **Manage Nicknames**, **Manage Channels**, **View Channels**, **Send Messages** e **Read Message History**.
-4. Posicione o cargo do bot acima de `Membro` e dos cargos comuns que ele precisa administrar; mantenha-o abaixo dos cargos administrativos.
-5. Execute `/permissoes configurar membro:@Membro confirmar:true`. Se necessário, o bot cria a categoria `👋 Entrada` e o canal `📝・registro` automaticamente.
+1. Em `/configurar`, selecione o canal `📝・registro` e o cargo `Membro`. Se o canal não existir, o bot pode criá-lo em `👋 Entrada`.
+2. Ative **Server Members Intent** em Developer Portal → Bot → Privileged Gateway Intents.
+3. Dê ao bot **Manage Roles**, **Manage Channels**, **View Channels**, **Send Messages** e **Read Message History**.
+4. Posicione o cargo do bot acima de `Membro` e dos cargos que ele precisa administrar.
+5. Execute `/outros seguranca analisar` para conferir a prévia.
+6. Execute `/outros seguranca aplicar membro:@Membro confirmar:true` para aplicar a política e exigir que todos façam novo registro.
 
-### Permissões do canal de registro
+## Fluxo
 
-O comando de configuração automática cria ou atualiza o canal, deixa `@everyone` ver o canal, bloqueia o envio de mensagens e impede que `Membro` veja o canal. O bot publica ou atualiza o painel com o botão **Registrar Minecraft**. Não conceda permissão para enviar mensagens a `@everyone`; o cadastro é enviado por formulário.
+1. O membro entra e pode ter `PC`, `Mobile` ou `Console` selecionado no Onboarding.
+2. Nenhum desses cargos libera canais; ele continua vendo apenas `#📝・registro`.
+3. Envia o nick Minecraft no formulário.
+4. O bot salva o vínculo, concede `Membro`, libera os canais e oculta `#📝・registro`.
+5. A loja e os tickets usam o nick salvo automaticamente.
 
-### Permissões dos canais de membros
+O log de cada cadastro é enviado como um único embed consolidado. O bot não gera mensagens separadas para falha de apelido, porque não tenta alterar o apelido do Discord.
 
-Em cada categoria/canal que só deve aparecer depois do registro:
+## Reinício geral
 
-- `@everyone`: **View Channel** = Deny.
-- `Membro`: **View Channel** = Allow.
-
-Use a permissão na categoria quando todos os canais dentro dela seguirem a mesma regra. Não aplique a regra aos canais públicos, à equipe, aos logs, ao suporte ou a outros canais que devam continuar acessíveis antes do registro.
-
-## Fluxo do jogador
-
-1. O novo membro entra e permanece apenas com `@everyone` e os demais cargos automáticos que não liberem canais privados.
-2. Ele abre `#📝・registro` e envia o nick Bedrock no formulário.
-3. O bot salva o vínculo pelo ID do Discord, sincroniza o apelido e atribui `Membro`.
-4. O Discord libera os canais configurados para `Membro` e oculta o canal de registro para esse jogador.
-5. Se não conseguir atribuir o cargo ou atualizar o apelido, o bot registra a pendência no canal de logs; o cadastro não é descartado.
-
-## Reset geral — exigir novo cadastro de todos
-
-Use `/registro reiniciar confirmar:true` como administrador.
-
-O reset:
-- remove `Membro` de todos os membros que o bot consegue gerenciar;
-- limpa os vínculos Minecraft deste servidor no snapshot existente do Supabase/local, incluindo registros antigos sem `guild_id` apenas para usuários que estão entre os membros atuais do servidor;
-- remove as sobrescritas individuais antigas do canal de registro;
-- não remove outros cargos, não altera apelidos e não cria nem apaga canais.
-
-A confirmação é obrigatória. O bot precisa estar acima de `Membro` na hierarquia e ter **Manage Roles**. A conta proprietária do servidor é protegida pelo Discord e pode exigir remoção manual do cargo. Se o Discord bloquear a remoção de algum outro membro, os cadastros são preservados para não serem parcialmente perdidos; corrija a hierarquia e execute novamente.
-
-## Comandos
-
-- `/conta perfil`: consulta o nick Minecraft vinculado.
-- `/conta atualizar-nick`: abre o formulário para atualizar o nick.
-- `/registro atualizar jogador:@Jogador nick:NickNovo`: atualização administrativa.
-- `/registro autorizar cargo:@Equipe` e `/registro revogar cargo:@Equipe`: controlam exceções para visualizar o canal de registro.
-
-## Configuração automática das permissões
-
-Use `/permissoes analisar` para conferir os cargos e canais detectados. Para aplicar, escolha o cargo pelo seletor do Discord: `/permissoes configurar membro:@Membro confirmar:true`.
-
-- `@everyone` é implícito e continua atribuído a todos os usuários. Ele só consegue ver o canal de registro.
-- `Membro` recebe acesso aos canais comuns e pode escrever; nos canais de voz, pode conectar e falar.
-- `PC`, `Mobile` e `Console` são apenas rótulos de plataforma do Onboarding. Não dão acesso aos canais.
-- `Staff` e os cargos de gerência recebem acesso aos canais de trabalho conforme seu nível. Logs fica restrito à gerência superior.
-- Tickets do ASTHEN, canais com acesso individual e canais com regras específicas de outros cargos são preservados.
-- O configurador não altera permissões globais dos cargos e bloqueia a aplicação quando encontra privilégios administrativos em cargos cosméticos ou no cargo Membro.
-
-O bot precisa de **Manage Channels** e **Manage Roles**, e seu cargo deve ficar acima de `Membro`. Revise o resultado de `/permissoes analisar` antes da aplicação.
+O reinício é parte de `/outros seguranca aplicar` e exige confirmação. O bot faz a verificação da hierarquia antes de aplicar a política; remove `Membro` de todos que consegue gerenciar e limpa os vínculos Minecraft daquele servidor. O proprietário do servidor é uma exceção porque o Discord não permite que o bot remova cargos dele. Outros cargos não são apagados.
 
 ## Supabase
 

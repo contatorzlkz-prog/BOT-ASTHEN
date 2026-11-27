@@ -19,7 +19,7 @@ Atendimento privado, loja de kits Bedrock e entrega integrada ao Plugin-ASTHEN.
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/ASTHEN-2.24.0-555B63?style=flat-square" alt="Versão 2.24.0">
+  <img src="https://img.shields.io/badge/ASTHEN-2.25.0-555B63?style=flat-square" alt="Versão 2.25.0">
   <img src="https://img.shields.io/badge/Node.js-22%2B-555B63?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 22 ou superior">
   <img src="https://img.shields.io/badge/discord.js-14.27.0-555B63?style=flat-square&logo=discord&logoColor=white" alt="discord.js 14.27.0">
   <img src="https://img.shields.io/badge/npm-lockfile-ativo-555B63?style=flat-square&logo=npm&logoColor=white" alt="Lockfile npm">
@@ -125,33 +125,36 @@ Configure os canais e o cargo da equipe:
 
 O cargo informado em `equipe` pode revisar pagamentos e fechar tickets. **Ele não recebe acesso ao canal `#logs`**.
 
-### Publicação de vídeos do TikTok
+### Comandos do Discord
 
-No canal `#comandos-adm`, um administrador pode usar `/tiktok publicar link:<URL>`. O bot localiza `#vídeos-novos`, verifica se o ID do vídeo já foi publicado e envia um card sem a capa padrão do TikTok.
+O bot tem somente três comandos principais:
 
-O parâmetro opcional `frame` aceita uma imagem PNG, JPG, WEBP ou GIF de até 8 MB, anexada diretamente pelo Discord. Essa imagem é usada como um quadro personalizado. Sem anexo, o card fica sem imagem.
+| Comando | Uso |
+|---|---|
+| `/configurar` | Salva canais principais e os cargos `Membro` e `equipe`. |
+| `/kit configurar` | Abre o painel para configurar os kits recebidos do Minecraft. |
+| `/outros seguranca analisar` | Mostra uma prévia da política de acesso. |
+| `/outros seguranca aplicar` | Aplica a política, remove `Membro` de todos que o bot pode gerenciar e exige novo cadastro. |
+| `/outros tiktok publicar` | Publica um vídeo no canal `#vídeos-novos`. |
+| `/outros backup status` e `/outros backup criar` | Consulta ou cria backups. |
+| `/outros minecraft status` | Verifica API, plugin, fila e sincronização. |
 
-### Configuração automática de permissões
+### Registro Minecraft e permissões
 
-O comando `/permissoes analisar` mostra como o bot classificou os cargos e canais. Depois, aplique com `/permissoes configurar membro:@Membro confirmar:true`.
+Configure `registro:#📝・registro` e `membro:@Membro` em `/configurar`. Se o canal ainda não existir, o bot cria `👋 Entrada` e `📝・registro`.
 
-- `@everyone` é o cargo base que todo membro sempre possui. Com a configuração aplicada, somente `#📝・registro` fica visível antes do cadastro.
-- `Membro` libera canais comuns, com mensagens, reações e figurinhas; sem anexos, tópicos, enquetes, menções gerais ou comandos de aplicativos. O chat comum recebe slowmode de 5 segundos.
-- `PC`, `Mobile` e `Console` são apenas identificadores escolhidos no Onboarding. Não liberam canais.
-- `Staff`, `Ger. Host`, `Ger. Discord`, `Ger. Server` e `Proprietario` recebem acesso conforme o nível do canal. `#logs` fica limitado à gerência superior.
-- `PC`, `Mobile` e `Console` não liberam comandos. `#vídeos-novos` é leitura para Membro, com reações; só o bot publica. `#comandos-adm` é o canal de comandos para Staff e gerência; administradores mantêm o bypass.
-- Tickets ASTHEN e canais com permissões individuais ou cargos especiais são preservados; o configurador não apaga cargos nem altera permissões globais.
+A configuração completa fica em `/outros seguranca analisar` e `/outros seguranca aplicar membro:@Membro confirmar:true`. A aplicação exige confirmação, verifica a hierarquia antes de alterar permissões e reinicia os cadastros: remove `Membro` de todos os membros que o bot consegue gerenciar e limpa os vínculos antigos do servidor.
 
-### Registro Minecraft e acesso aos canais
+- `@everyone` só consegue ver o canal de registro.
+- `Membro` permite ver e conversar nos canais comuns.
+- `PC`, `Mobile` e `Console` são cosméticos do Onboarding e não liberam canais.
+- `Staff` e cargos de gerência recebem acesso conforme a finalidade do canal.
+- Tickets existentes só ficam acessíveis ao dono depois de concluir o cadastro; os canais de equipe e logs continuam restritos.
+- Membros comuns podem ler, conversar, reagir e usar figurinhas. Não podem criar tópicos, enquetes, anexar arquivos, mencionar todos ou usar comandos de aplicativo.
+- O bot não sincroniza o nick Minecraft com o apelido do Discord. O apelido é administrado diretamente no Discord.
+- `#vídeos-novos` é somente leitura para membros. Apenas o ASTHEN BOT publica.
 
-Crie o cargo `Membro`. O comando `/permissoes configurar` cria `#📝・registro` dentro da categoria `👋 Entrada` se o canal ainda não existir. Configure:
-
-- Em `#📝・registro`: `@everyone` pode ver o canal, mas não enviar mensagens; o cargo `Membro` não pode ver o canal.
-- Nos canais e categorias exclusivos: negue **Ver canal** para `@everyone` e permita para `Membro`.
-- Não conceda `Membro` pelo Onboarding. O bot só atribui o cargo depois que o jogador envia o nick no formulário.
-- Escolha o cargo no seletor e execute `/permissoes configurar membro:@Membro confirmar:true`.
-
-Depois do registro, o jogador recebe `Membro`, vê os canais privados e deixa de ver `#📝・registro`. Para obrigar todos a registrar novamente, use `/registro reiniciar confirmar:true` como administrador. O comando remove o cargo e limpa os cadastros Minecraft deste servidor; não remove outros cargos nem altera apelidos.
+`/outros seguranca aplicar` não altera as permissões globais dos cargos. Cargos com `Administrator` ignoram as restrições de canais e impedem a aplicação se não forem cargos de gerência confiáveis. O dono do servidor não pode ter o próprio cargo removido pelo bot, por limitação do Discord.
 
 <a id="minecraft-e-loja"></a>
 
@@ -165,8 +168,7 @@ Comandos disponíveis no Discord:
 
 | Comando | Ação |
 |---|---|
-| `/kit listar` | Consulta os kits e o estado de venda recebido do Minecraft. |
-| `/kit editar` | Ajusta nome exibido, descrição e imagem HTTPS. |
+| `/kit configurar` | Abre o painel visual de configuração dos kits. |
 
 O Discord não cria kits nem altera seus itens, preços ou disponibilidade oficial.
 
@@ -252,7 +254,7 @@ No Linux/macOS, o bot restringe as permissões de `data/` e dos arquivos de esta
 
 <div align="center">
 
-**ASTHEN BOT · 2.24.0**
+**ASTHEN BOT · 2.25.0**
 
 <sub>Atendimento, loja e entregas em uma única integração.</sub>
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadStore, getPlayerRegistration, findPlayerRegistrationByNick, savePlayerRegistration, clearPlayerRegistrationsForGuild } from '../src/store.js';
-import { validateMinecraftNick } from '../src/registration.js';
+import { memberCanBypassRegistration, validateMinecraftNick } from '../src/registration.js';
 
 loadStore();
 
@@ -57,4 +57,23 @@ test('reset limpa os cadastros do servidor e entradas antigas sem guild_id, pres
   assert.equal(getPlayerRegistration(playerB).minecraft_nick, 'Guild_B');
   assert.equal(findPlayerRegistrationByNick('guild_a'), null);
   assert.equal(findPlayerRegistrationByNick('guild_b').discord_id, playerB);
+});
+
+test('somente equipe e gerência autorizadas bypassam o registro; cargos de plataforma não', () => {
+  const guild = { id: '200000000000000099' };
+  const makeMember = roleName => ({
+    guild,
+    permissions: { has: () => false },
+    roles: {
+      cache: new Map(roleName ? [['role-id', { id: 'role-id', name: roleName }]] : [])
+    }
+  });
+  const config = { staffRoleId: null, registrationBypassRoleIds: [] };
+
+  assert.equal(memberCanBypassRegistration(makeMember('Ger. Host'), config), true);
+  assert.equal(memberCanBypassRegistration(makeMember('Staff'), config), true);
+  assert.equal(memberCanBypassRegistration(makeMember('PC'), config), false);
+  assert.equal(memberCanBypassRegistration(makeMember('Mobile'), config), false);
+  assert.equal(memberCanBypassRegistration(makeMember('Console'), config), false);
+  assert.equal(memberCanBypassRegistration(makeMember('Ping Eventos'), config), false);
 });

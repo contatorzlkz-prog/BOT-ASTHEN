@@ -1,4 +1,4 @@
-import { PermissionsBitField } from 'discord.js';
+import { EmbedBuilder, PermissionsBitField } from 'discord.js';
 import {
   findPlayerRegistrationByNick,
   getGuildConfig,
@@ -16,45 +16,75 @@ export function validateMinecraftNick(value) {
   return nick === nick.trim() && /^[A-Za-z0-9_. ]{1,32}$/.test(nick);
 }
 
-export function memberCanBypassRegistration(member, config = getGuildConfig(member.guild.id)) {
-  if (member.permissions?.has?.(FLAGS.Administrator)
-      || member.permissions?.has?.(FLAGS.ManageGuild)
-      || member.permissions?.has?.(FLAGS.ManageNicknames)) return true;
-  if (config.staffRoleId && member.roles?.cache?.has?.(config.staffRoleId)) return true;
-  return (config.registrationBypassRoleIds || []).some(roleId => member.roles?.cache?.has?.(roleId));
+const REGISTRATION_STAFF_NAMES = new Set([
+  'proprietario', 'gerhost', 'gerdiscord', 'gerserver', 'staff'
+]);
+
+function normalizeRegistrationRoleName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
 }
 
-async function sendRegistrationLog(guild, description) {
+export function memberCanBypassRegistration(member, config = getGuildConfig(member.guild.id)) {
+  if (member.permissions?.has?.(FLAGS.Administrator)
+      || member.permissions?.has?.(FLAGS.ManageGuild)) return true;
+  if (config.staffRoleId && member.roles?.cache?.has?.(config.staffRoleId)) return true;
+  if ((config.registrationBypassRoleIds || []).some(roleId => member.roles?.cache?.has?.(roleId))) return true;
+  return [...(member.roles?.cache?.values?.() || [])]
+    .some(role => REGISTRATION_STAFF_NAMES.has(normalizeRegistrationRoleName(role.name)));
+}
+
+async function sendRegistrationLog(guild, { title, description, color = 0x7652c7 }) {
   const config = getGuildConfig(guild.id);
   const channel = config.logsChannelId
     ? (guild.channels.cache.get(config.logsChannelId) || await guild.channels.fetch(config.logsChannelId).catch(() => null))
     : null;
-  const content = '🧾 **Registro Minecraft**\n' + description;
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setTitle(title || 'Registro Minecraft')
+    .setDescription(String(description || ''))
+    .setTimestamp(new Date());
   if (channel?.isTextBased?.() && channel.send) {
     try {
-      await channel.send({ content, allowedMentions: { parse: [] } });
-      return;
+      await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+      return true;
     } catch (error) {
-      console.warn('[Asthen Registro] Não foi possível publicar no canal de logs:', error.message);
+      console.warn('[Asthen Registro] Não foi possível publicar o registro consolidado no canal de logs:', error.message);
     }
   }
-  console.info('[Asthen Registro] ' + description.replace(/\n/g, ' | '));
+  console.info('[Asthen Registro] ' + String(description || '').replace(/\n/g, ' | '));
+  return false;
 }
 
-async function updateRegisteredNickname(member, nick) {
-  if (member.nickname === nick) return null;
-  const botMember = member.guild.members.me;
-  if (!botMember?.permissions?.has?.(FLAGS.ManageNicknames)) {
-    throw new Error('O bot precisa da permissão Gerenciar apelidos.');
+function ticketOwnerId(channel) {
+  const match = String(channel?.topic || '').match(/(?:^|\|)owner:(\d{17,20})(?:\||$)/);
+  return match ? match[1] : null;
+}
+
+async function updateMemberTicketVisibility(member, registered, config = getGuildConfig(member.guild.id)) {
+  const canView = Boolean(registered || memberCanBypassRegistration(member, config));
+  let updated = 0;
+  const failed = [];
+  for (const channel of member.guild.channels.cache.values()) {
+    if (!String(channel.topic || '').startsWith('ASTHEN|type:')) continue;
+    if (ticketOwnerId(channel) !== member.id || !channel.permissionOverwrites?.edit) continue;
+    try {
+      await channel.permissionOverwrites.edit(member.id, {
+        ViewChannel: canView,
+        ReadMessageHistory: canView,
+        SendMessages: canView,
+        AttachFiles: canView,
+        EmbedLinks: canView
+      }, 'ASTHEN: acesso ao ticket condicionado ao registro Minecraft');
+      updated += 1;
+    } catch (error) {
+      failed.push('#' + channel.name + ': ' + error.message);
+    }
   }
-  if (member.id === member.guild.ownerId) {
-    throw new Error('O Discord não permite que o bot altere o apelido do proprietário do servidor.');
-  }
-  if (!botMember.roles.highest || botMember.roles.highest.comparePositionTo(member.roles.highest) <= 0) {
-    throw new Error('O cargo do bot precisa ficar acima do cargo do jogador para atualizar o apelido.');
-  }
-  await member.setNickname(nick, 'ASTHEN: sincronização do nick Minecraft cadastrado');
-  return nick;
+  return { updated, failed };
 }
 
 async function updateMemberRole(member, shouldHaveRole, config) {
@@ -90,8 +120,6 @@ async function updateRegistrationChannelVisibility(member, registered, config) {
     return true;
   } catch (error) {
     console.warn('[Asthen Registro] Não foi possível sincronizar a visibilidade de #' + channel.name + ' para ' + member.user.tag + ':', error.message);
-    await sendRegistrationLog(member.guild,
-      'Falha ao atualizar a visibilidade de #registro para <@' + member.id + '>: ' + error.message);
     return false;
   }
 }
@@ -118,7 +146,14 @@ export async function configureRegistrationChannel(channel, guild) {
     }
   }
 
-  const bypassRoles = new Set([config.staffRoleId, ...(config.registrationBypassRoleIds || [])].filter(Boolean));
+  const namedStaffRoles = [...guild.roles.cache.values()]
+    .filter(role => REGISTRATION_STAFF_NAMES.has(normalizeRegistrationRoleName(role.name)))
+    .map(role => role.id);
+  const bypassRoles = new Set([
+    config.staffRoleId,
+    ...(config.registrationBypassRoleIds || []),
+    ...namedStaffRoles
+  ].filter(Boolean));
   for (const roleId of bypassRoles) {
     if (!guild.roles.cache.has(roleId)) continue;
     await channel.permissionOverwrites.edit(roleId, {
@@ -189,48 +224,42 @@ export async function refreshRegistrationPanel(guild) {
 export async function applyRegisteredIdentity(member, record = getPlayerRegistration(member.id)) {
   const config = getGuildConfig(member.guild.id);
   const errors = [];
+
   if (!record?.minecraft_nick) {
     if (!memberCanBypassRegistration(member, config)) {
       try {
-        const changedRole = await updateMemberRole(member, false, config);
-        if (changedRole) await sendRegistrationLog(member.guild,
-          'Cargo **' + changedRole.name + '** removido de <@' + member.id + '> porque o jogador ainda não possui registro Minecraft.');
+        await updateMemberRole(member, false, config);
       } catch (error) {
-        errors.push('cargo: ' + error.message);
-        await sendRegistrationLog(member.guild,
-          'Não foi possível remover o cargo de membro de <@' + member.id + '>: ' + error.message);
+        errors.push('cargo Membro: ' + error.message);
       }
     }
     if (!await updateRegistrationChannelVisibility(member, false, config)) {
-      errors.push('visibilidade: falha ao atualizar o acesso a #registro');
+      errors.push('visibilidade do canal de registro');
     }
-    return { registered: false, errors };
+    const tickets = await updateMemberTicketVisibility(member, false, config);
+    errors.push(...tickets.failed.map(item => 'ticket ' + item));
+    return { registered: false, errors, ticketsUpdated: tickets.updated };
   }
 
-  try {
-    const changedRole = await updateMemberRole(member, true, config);
-    if (changedRole) await sendRegistrationLog(member.guild,
-      'Cargo **' + changedRole.name + '** atribuído a <@' + member.id + '> após o registro Minecraft.');
-  } catch (error) {
-    errors.push('cargo: ' + error.message);
-    await sendRegistrationLog(member.guild,
-      'Falha ao atribuir o cargo de membro a <@' + member.id + '> (' + record.minecraft_nick + '): ' + error.message);
+  if (!memberCanBypassRegistration(member, config)) {
+    try {
+      await updateMemberRole(member, true, config);
+    } catch (error) {
+      errors.push('cargo Membro: ' + error.message);
+    }
   }
-  try {
-    await updateRegisteredNickname(member, record.minecraft_nick);
-  } catch (error) {
-    errors.push('apelido: ' + error.message);
-    await sendRegistrationLog(member.guild,
-      'Falha ao atualizar o apelido de <@' + member.id + '> para ' + record.minecraft_nick + ': ' + error.message);
-  }
+
+  const tickets = await updateMemberTicketVisibility(member, true, config);
+  errors.push(...tickets.failed.map(item => 'ticket ' + item));
 
   if (!await updateRegistrationChannelVisibility(member, true, config)) {
-    errors.push('visibilidade: falha ao ocultar #registro');
+    errors.push('visibilidade do canal de registro');
   }
-  return { registered: true, errors };
+
+  return { registered: true, errors, ticketsUpdated: tickets.updated };
 }
 
-export async function registerPlayerForMember(member, minecraftNick, source = 'self-service') {
+export async function registerPlayerForMember(member, minecraftNick, source = 'autoatendimento') {
   const nick = String(minecraftNick ?? '');
   if (!validateMinecraftNick(nick)) {
     throw new Error('Informe um nick Minecraft válido, sem espaços no começo/fim e com até 32 caracteres.');
@@ -243,10 +272,17 @@ export async function registerPlayerForMember(member, minecraftNick, source = 's
   const previous = getPlayerRegistration(member.id);
   const record = savePlayerRegistration(member.id, nick, member.guild.id);
   const sync = await applyRegisteredIdentity(member, record);
-  const action = previous ? 'Nick atualizado' : 'Novo registro';
-  await sendRegistrationLog(member.guild,
-    action + ' por ' + source + ': <@' + member.id + '> → **' + nick + '**.' +
-    (sync.errors.length ? '\nSincronização pendente: ' + sync.errors.join('; ') : ''));
+  const status = sync.errors.length
+    ? '\n**Pendências:** ' + sync.errors.join('; ')
+    : '\nCargo e acessos de membro sincronizados.';
+  await sendRegistrationLog(member.guild, {
+    title: previous ? 'Nick Minecraft atualizado' : 'Novo registro Minecraft',
+    description:
+      '**Jogador:** <@' + member.id + '>\n' +
+      '**Minecraft:** ' + nick + '\n' +
+      '**Origem:** ' + String(source).slice(0, 80) + status,
+    color: sync.errors.length ? 0xd99a32 : 0x2eaa72
+  });
   return { record, previous, sync };
 }
 
@@ -273,39 +309,56 @@ export async function reconcileGuildMembers(guild) {
   return { registered, pending, total: members.size };
 }
 
-export async function resetGuildRegistrations(guild) {
+export async function prepareGuildRegistrationReset(guild, memberRole = null) {
   const config = getGuildConfig(guild.id);
-  if (!config.registrationChannelId) {
-    throw new Error('Configure primeiro o canal #registro com /configurar registro:#registro membro:@Membro.');
-  }
-  if (!config.memberRoleId) {
-    throw new Error('Configure primeiro o cargo Membro com /configurar membro:@Membro.');
-  }
-
-  const role = guild.roles.cache.get(config.memberRoleId)
-    || await guild.roles.fetch(config.memberRoleId).catch(() => null);
+  const role = memberRole
+    || (config.memberRoleId && (guild.roles.cache.get(config.memberRoleId)
+      || await guild.roles.fetch(config.memberRoleId).catch(() => null)));
   if (!role || role.id === guild.roles.everyone.id || role.managed) {
     throw new Error('O cargo Membro configurado não existe ou não pode ser gerenciado.');
   }
 
-  const botMember = guild.members.me;
+  const botMember = guild.members.me || await guild.members.fetchMe();
   if (!botMember?.permissions?.has?.(FLAGS.ManageRoles)) {
     throw new Error('O bot precisa da permissão Gerenciar cargos.');
   }
   if (!botMember.roles.highest || botMember.roles.highest.comparePositionTo(role) <= 0) {
-    throw new Error('Coloque o cargo do bot acima de Membro na hierarquia do servidor.');
+    throw new Error('Coloque o cargo do bot acima de Membro na hierarquia.');
   }
 
+  const members = await guild.members.fetch();
+  const blocked = [...members.values()].filter(member =>
+    member.roles.cache.has(role.id)
+    && member.id !== guild.client.user?.id
+    && member.id !== guild.ownerId
+    && member.roles.highest.comparePositionTo(botMember.roles.highest) >= 0
+  );
+  if (blocked.length) {
+    throw new Error(
+      'Não iniciei a alteração: o bot não consegue remover Membro de ' +
+      blocked.length + ' conta(s) por causa da hierarquia (' +
+      blocked.slice(0, 4).map(member => member.user.tag || member.id).join(', ') +
+      '). Coloque o cargo do bot acima dos cargos dessas pessoas e tente novamente.'
+    );
+  }
+
+  return { role, members, botMember };
+}
+
+export async function resetGuildRegistrations(guild, { prepared = null, log = true } = {}) {
+  const config = getGuildConfig(guild.id);
+  if (!config.registrationChannelId) {
+    throw new Error('Configure primeiro o canal #registro com /configurar.');
+  }
+  const plan = prepared || await prepareGuildRegistrationReset(guild);
+  const { role, members, botMember } = plan;
   const channel = guild.channels.cache.get(config.registrationChannelId)
     || await guild.channels.fetch(config.registrationChannelId).catch(() => null);
   if (!channel?.permissionOverwrites?.edit) {
     throw new Error('O canal de registro configurado não existe ou não permite editar permissões.');
   }
 
-  // Ensure @everyone can enter the registration channel and Membro cannot see it.
   await configureRegistrationChannel(channel, guild);
-
-  const members = await guild.members.fetch();
   let rolesRemoved = 0;
   let skippedProtected = 0;
   const failed = [];
@@ -316,64 +369,60 @@ export async function resetGuildRegistrations(guild) {
       continue;
     }
     try {
-      await member.roles.remove(role, 'ASTHEN: reset geral do registro Minecraft');
+      await member.roles.remove(role, 'ASTHEN: novo ciclo de registro obrigatório');
       rolesRemoved += 1;
     } catch (error) {
-      failed.push('<@' + member.id + '>: ' + error.message);
+      failed.push((member.user.tag || member.id) + ': ' + error.message);
     }
   }
 
-  // Keep stored identities if Discord did not allow every role removal.
-  // Startup reconciliation would otherwise re-assign a role that was only partly reset.
-  if (failed.length) {
-    throw new Error(
-      'Não foi possível remover Membro de ' + failed.length + ' pessoa(s). Os cadastros foram preservados. ' +
-      failed.slice(0, 3).join(' | ') + (failed.length > 3 ? ' | ...' : '') +
-      ' Corrija a hierarquia/permissões e execute novamente.'
-    );
-  }
-
+  // Clear saved registrations even after an unexpected Discord API failure.
+  // The next reconciliation sees no record and retries removing Membro.
   const recordsCleared = clearPlayerRegistrationsForGuild(guild.id, members.keys());
   let visibilityPending = 0;
+  let ticketPending = 0;
   for (const member of members.values()) {
     if (member.id === guild.client.user?.id) continue;
-    const updated = await updateRegistrationChannelVisibility(member, false, config);
-    if (!updated) visibilityPending += 1;
+    if (!await updateRegistrationChannelVisibility(member, false, config)) visibilityPending += 1;
+    const tickets = await updateMemberTicketVisibility(member, false, config);
+    ticketPending += tickets.failed.length;
   }
 
-  await sendRegistrationLog(guild,
-    'Reset geral concluído: removido **Membro** de ' + rolesRemoved +
-    ' pessoa(s), limpos **' + recordsCleared + '** cadastro(s) Minecraft.' +
-    (skippedProtected ? '\nNão foi possível alterar ' + skippedProtected + ' conta(s) protegida(s) pelo Discord.' : '') +
-    (visibilityPending ? '\nFalha ao limpar a visibilidade individual de ' + visibilityPending + ' pessoa(s).' : ''));
+  if (log) {
+    await sendRegistrationLog(guild, {
+      title: 'Reinício dos registros Minecraft',
+      description:
+        '**Cargo removido de:** ' + rolesRemoved + ' membro(s)\n' +
+        '**Cadastros antigos limpos:** ' + recordsCleared + '\n' +
+        (skippedProtected ? '**Contas protegidas pelo Discord:** ' + skippedProtected + '\n' : '') +
+        (failed.length ? '**Remoções pendentes:** ' + failed.slice(0, 4).join('; ') + '\n' : '') +
+        (visibilityPending || ticketPending ? '**Permissões pendentes:** ' + (visibilityPending + ticketPending) : 'Todos deverão se registrar novamente.'),
+      color: failed.length || visibilityPending || ticketPending ? 0xd99a32 : 0x2eaa72
+    });
+  }
 
-  return { total: members.size, rolesRemoved, recordsCleared, skippedProtected, visibilityPending };
+  return {
+    total: members.size,
+    rolesRemoved,
+    recordsCleared,
+    skippedProtected,
+    failed,
+    visibilityPending,
+    ticketPending,
+    complete: failed.length === 0 && visibilityPending === 0 && ticketPending === 0
+  };
 }
 
 export async function handleRegisteredNicknameUpdate(oldMember, newMember) {
   if (!oldMember || !newMember) return;
-  const nicknameChanged = oldMember.nickname !== newMember.nickname;
   const oldRoleIds = [...(oldMember.roles?.cache?.keys?.() || [])].sort();
   const newRoleIds = [...(newMember.roles?.cache?.keys?.() || [])].sort();
   const rolesChanged = oldRoleIds.length !== newRoleIds.length
     || oldRoleIds.some((roleId, index) => roleId !== newRoleIds[index]);
-  if (!nicknameChanged && !rolesChanged) return;
+  if (!rolesChanged) return;
 
   const record = getPlayerRegistration(newMember.id);
-  if (nicknameChanged && record?.minecraft_nick && newMember.nickname !== record.minecraft_nick) {
-    try {
-      await updateRegisteredNickname(newMember, record.minecraft_nick);
-      await sendRegistrationLog(newMember.guild,
-        'Alteração manual de apelido revertida para <@' + newMember.id + '>. O nick oficial continua **' + record.minecraft_nick + '**. Para alteração administrativa, use /registro atualizar.');
-    } catch (error) {
-      await sendRegistrationLog(newMember.guild,
-        'Não foi possível restaurar o apelido oficial de <@' + newMember.id + '>: ' + error.message);
-    }
-  }
-
-  // Refresh only the registration-channel visibility on role changes. Avoid
-  // replaying role/nickname mutations while Discord is dispatching role events.
-  if (rolesChanged) {
-    await updateRegistrationChannelVisibility(newMember, Boolean(record?.minecraft_nick), getGuildConfig(newMember.guild.id));
-  }
+  const config = getGuildConfig(newMember.guild.id);
+  await updateRegistrationChannelVisibility(newMember, Boolean(record?.minecraft_nick), config);
+  await updateMemberTicketVisibility(newMember, Boolean(record?.minecraft_nick), config);
 }

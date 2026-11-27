@@ -9,126 +9,85 @@ const textChannel = option => option
 export const commandDefinitions = [
   adminOnly(new SlashCommandBuilder()
     .setName('configurar')
-    .setDescription('Configura os canais e os cargos do ASTHEN.')
+    .setDescription('Configura canais, painéis e cargos principais do ASTHEN.')
     .addChannelOption(option => textChannel(option
       .setName('atendimento')
-      .setDescription('Canal com o painel de atendimento.')))
+      .setDescription('Canal do painel de suporte.')))
     .addChannelOption(option => textChannel(option
       .setName('kits')
-      .setDescription('Canal com o painel da loja de kits.')))
+      .setDescription('Canal do painel da loja.')))
     .addChannelOption(option => textChannel(option
       .setName('logs')
-      .setDescription('Canal privado de registros administrativos.')))
+      .setDescription('Canal privado de registros.')))
     .addChannelOption(option => textChannel(option
       .setName('compradores')
-      .setDescription('Canal de avisos de compras confirmadas.')))
+      .setDescription('Canal de avisos de compras.')))
     .addChannelOption(option => textChannel(option
       .setName('registro')
-      .setDescription('Canal público para o registro Minecraft.')))
+      .setDescription('Canal para o registro Minecraft.')))
     .addRoleOption(option => option
       .setName('membro')
-      .setDescription('Cargo concedido após o registro Minecraft.')
-      .setRequired(false))
+      .setDescription('Cargo concedido após o registro Minecraft.'))
     .addRoleOption(option => option
       .setName('equipe')
-      .setDescription('Cargo autorizado a revisar pagamentos e fechar tickets.')
-      .setRequired(false))),
-
-  adminOnly(new SlashCommandBuilder()
-    .setName('registro')
-    .setDescription('Gerencia cargos autorizados e cadastros Minecraft.')
-    .addSubcommand(subcommand => subcommand
-      .setName('autorizar')
-      .setDescription('Permite que um cargo veja #registro mesmo após registrar.')
-      .addRoleOption(option => option.setName('cargo').setDescription('Cargo autorizado.').setRequired(true)))
-    .addSubcommand(subcommand => subcommand
-      .setName('revogar')
-      .setDescription('Remove a autorização de um cargo.')
-      .addRoleOption(option => option.setName('cargo').setDescription('Cargo que perderá a autorização.').setRequired(true)))
-    .addSubcommand(subcommand => subcommand
-      .setName('atualizar')
-      .setDescription('Atualiza o nick Minecraft de um jogador.')
-      .addUserOption(option => option.setName('jogador').setDescription('Jogador que será atualizado.').setRequired(true))
-      .addStringOption(option => option.setName('nick').setDescription('Novo nick Minecraft.').setMinLength(1).setMaxLength(32).setRequired(true)))
-    .addSubcommand(subcommand => subcommand
-      .setName('reiniciar')
-      .setDescription('Remove Membro e exige novo registro de todos.')
-      .addBooleanOption(option => option
-        .setName('confirmar')
-        .setDescription('Confirma a remoção do cargo e limpeza dos cadastros deste servidor.')
-        .setRequired(true)))),
-
-  new SlashCommandBuilder()
-    .setName('conta')
-    .setDescription('Gerencia sua identificação Minecraft.')
-    .addSubcommand(subcommand => subcommand
-      .setName('perfil')
-      .setDescription('Consulta o nick Minecraft vinculado à sua conta.'))
-    .addSubcommand(subcommand => subcommand
-      .setName('atualizar-nick')
-      .setDescription('Atualiza seu nick Minecraft cadastrado.')),
-
-  administratorOnly(new SlashCommandBuilder()
-    .setName('tiktok')
-    .setDescription('Publica um vídeo do TikTok no canal de novidades.')
-    .addSubcommand(subcommand => subcommand
-      .setName('publicar')
-      .setDescription('Envia um novo vídeo para #vídeos-novos.')
-      .addStringOption(option => option
-        .setName('link')
-        .setDescription('Link completo do vídeo no TikTok.')
-        .setMaxLength(2048)
-        .setRequired(true))
-      .addAttachmentOption(option => option
-        .setName('frame')
-        .setDescription('Imagem opcional de um frame do vídeo (não usa a capa do TikTok).')
-        .setRequired(false)))),
-
-  administratorOnly(new SlashCommandBuilder()
-    .setName('permissoes')
-    .setDescription('Analisa e organiza as permissões dos canais do servidor.')
-    .addSubcommand(subcommand => subcommand
-      .setName('analisar')
-      .setDescription('Mostra a configuração de acesso que será aplicada.'))
-    .addSubcommand(subcommand => subcommand
-      .setName('configurar')
-      .setDescription('Aplica o acesso por Membro, equipe e canal de registro.')
-      .addRoleOption(option => option
-        .setName('membro')
-        .setDescription('Selecione o cargo Membro usado como acesso aos canais.')
-        .setRequired(true))
-      .addBooleanOption(option => option
-        .setName('confirmar')
-        .setDescription('Confirma a alteração das permissões dos canais.')
-        .setRequired(true)))),
+      .setDescription('Cargo principal de atendimento e moderação.'))),
 
   administratorOnly(new SlashCommandBuilder()
     .setName('kit')
-    .setDescription('Lista e edita os kits sincronizados do Minecraft.')
+    .setDescription('Configura o catálogo de kits sincronizado com o Minecraft.')
     .addSubcommand(subcommand => subcommand
-      .setName('listar')
-      .setDescription('Lista os kits recebidos automaticamente do Minecraft.'))
-    .addSubcommand(subcommand => subcommand
-      .setName('editar')
-      .setDescription('Altera nome exibido, descrição ou imagem de um kit.'))),
+      .setName('configurar')
+      .setDescription('Abre o painel para editar nome, descrição e imagem dos kits.'))),
 
   administratorOnly(new SlashCommandBuilder()
-    .setName('backup')
-    .setDescription('Cria e consulta backups protegidos do ASTHEN.')
-    .addSubcommand(subcommand => subcommand
-      .setName('status')
-      .setDescription('Mostra os backups disponíveis e o último backup.'))
-    .addSubcommand(subcommand => subcommand
-      .setName('criar')
-      .setDescription('Cria um backup manual agora.'))
-    .addSubcommand(subcommand => subcommand
-      .setName('listar')
-      .setDescription('Lista os últimos backups disponíveis.'))),
-
-  adminOnly(new SlashCommandBuilder()
-    .setName('bridge')
-    .setDescription('Verifica a API de integração Minecraft.')
-    .addSubcommand(subcommand => subcommand
-      .setName('status')
-      .setDescription('Mostra o estado da API e a última sincronização.')))
+    .setName('outros')
+    .setDescription('Ferramentas administrativas do ASTHEN.')
+    .addSubcommandGroup(group => group
+      .setName('seguranca')
+      .setDescription('Analisa e aplica a política de cargos e canais.')
+      .addSubcommand(subcommand => subcommand
+        .setName('analisar')
+        .setDescription('Mostra os cargos e canais que serão protegidos.'))
+      .addSubcommand(subcommand => subcommand
+        .setName('aplicar')
+        .setDescription('Aplica a política e inicia novo registro para todos.')
+        .addRoleOption(option => option
+          .setName('membro')
+          .setDescription('Selecione o cargo Membro usado no servidor.')
+          .setRequired(true))
+        .addBooleanOption(option => option
+          .setName('confirmar')
+          .setDescription('Confirma remover Membro de todos e exigir novo registro.')
+          .setRequired(true))))
+    .addSubcommandGroup(group => group
+      .setName('tiktok')
+      .setDescription('Publicações do canal de vídeos.')
+      .addSubcommand(subcommand => subcommand
+        .setName('publicar')
+        .setDescription('Publica um vídeo no canal de novidades.')
+        .addStringOption(option => option
+          .setName('link')
+          .setDescription('Link completo do vídeo no TikTok.')
+          .setMaxLength(2048)
+          .setRequired(true))
+        .addAttachmentOption(option => option
+          .setName('frame')
+          .setDescription('Imagem opcional de um frame; não usa a capa original.')
+          .setRequired(false))))
+    .addSubcommandGroup(group => group
+      .setName('backup')
+      .setDescription('Backups e recuperação do bot.')
+      .addSubcommand(subcommand => subcommand
+        .setName('status')
+        .setDescription('Lista os backups e mostra a situação atual.'))
+      .addSubcommand(subcommand => subcommand
+        .setName('criar')
+        .setDescription('Cria e verifica um backup manual.')))
+    .addSubcommandGroup(group => group
+      .setName('minecraft')
+      .setDescription('Estado da integração com o servidor Minecraft.')
+      .addSubcommand(subcommand => subcommand
+        .setName('status')
+        .setDescription('Mostra API, plugin, fila e sincronização.')))
+  )
 ];
