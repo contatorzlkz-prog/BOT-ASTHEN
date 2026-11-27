@@ -23,7 +23,7 @@ const REGISTRATION_STAFF_NAMES = new Set([
 function normalizeRegistrationRoleName(value) {
   return String(value || '')
     .normalize('NFD')
-    .replace(/[\\u0300-\\u036f]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 }
