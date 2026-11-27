@@ -1,4 +1,4 @@
-import { AttachmentBuilder, ChannelType, EmbedBuilder } from 'discord.js';
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder } from 'discord.js';
 import { normalizeChannelName } from './channel-discovery.js';
 
 const TIKTOK_HOSTS = new Set(['tiktok.com', 'www.tiktok.com']);
@@ -125,17 +125,27 @@ export async function publishTikTokVideo(guild, rawUrl, frame = null) {
   const frameFile = await buildFrameAttachment(frame);
   const embed = new EmbedBuilder()
     .setColor(0x7652c7)
-    .setAuthor({ name: 'ASTHEN MC', url: video.url })
-    .setTitle(metadata?.title || 'Vídeo novo')
+    .setAuthor({ name: 'ASTHEN MC  ·  VÍDEO NOVO', url: video.url })
+    .setTitle(metadata?.title || 'Confira o novo vídeo')
     .setURL(video.url)
-    .setDescription('[▶ Assistir no TikTok](' + video.url + ')')
-    .setFooter({ text: '@' + video.username })
+    .setDescription(
+      'Tem conteúdo novo no TikTok do ASTHEN MC.\\n\\n' +
+      'Assista à publicação e acompanhe as novidades do servidor.'
+    )
+    .setFooter({ text: 'TikTok  ·  @' + video.username })
     .setTimestamp(new Date());
 
   if (frameFile) embed.setImage('attachment://' + frameFile.filename);
 
   const message = await channel.send({
+    content: '**ASTHEN MC | NOVO VÍDEO**\\nConfira a publicação mais recente:',
     embeds: [embed],
+    components: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setStyle(ButtonStyle.Link)
+        .setLabel('Assistir no TikTok')
+        .setURL(video.url)
+    )],
     files: frameFile ? [frameFile.file] : [],
     allowedMentions: { parse: [] }
   });
