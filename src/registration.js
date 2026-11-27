@@ -109,79 +109,6 @@ async function updateMemberRole(member, shouldHaveRole, config) {
   return role;
 }
 
-async function updateRegistrationChannelVisibility(member, registered, config) {
-  if (!config.registrationChannelId) return true;
-  const channel = member.guild.channels.cache.get(config.registrationChannelId)
-    || await member.guild.channels.fetch(config.registrationChannelId).catch(() => null);
-  if (!channel?.permissionOverwrites?.edit) return false;
-
-  // O cargo Membro é quem esconde o canal. Remova apenas a permissão individual
-  // de visualização para que a negação do cargo tenha efeito automaticamente.
-  // Assim, não criamos um deny individual que possa sobrepor a regra do servidor.
-  const access = memberCanBypassRegistration(member, config) ? true : null;
-  const reason = registered
-    ? 'ASTHEN: após o cadastro, o cargo Membro controla a visibilidade do registro'
-    : 'ASTHEN: acesso ao registro herdado das permissões dos cargos';
-  try {
-    await channel.permissionOverwrites.edit(member.id, { ViewChannel: access }, reason);
-    return true;
-  } catch (error) {
-    console.warn('[Asthen Registro] Não foi possível sincronizar a visibilidade de #' + channel.name + ' para ' + member.user.tag + ':', error.message);
-    return false;
-  }
-}
-
-export async function configureRegistrationChannel(channel, guild) {
-  if (!channel?.permissionOverwrites?.edit) return false;
-  const config = getGuildConfig(guild.id);
-
-  // Edit only the permissions controlled by registration; preserve unrelated overwrites.
-  await channel.permissionOverwrites.edit(guild.roles.everyone.id, {
-    ViewChannel: true,
-    ReadMessageHistory: true,
-    SendMessages: false
-  }, 'ASTHEN: canal de registro acessível a quem ainda precisa se registrar');
-
-  if (config.memberRoleId) {
-    const memberRole = guild.roles.cache.get(config.memberRoleId);
-    if (memberRole) {
-      await channel.permissionOverwrites.edit(memberRole.id, {
-        ViewChannel: false,
-        ReadMessageHistory: false,
-        SendMessages: false
-      }, 'ASTHEN: ocultar canal de registro dos membros registrados');
-    }
-  }
-
-  const namedStaffRoles = [...guild.roles.cache.values()]
-    .filter(role => REGISTRATION_STAFF_NAMES.has(normalizeRegistrationRoleName(role.name)))
-    .map(role => role.id);
-  const bypassRoles = new Set([
-    config.staffRoleId,
-    ...(config.registrationBypassRoleIds || []),
-    ...namedStaffRoles
-  ].filter(Boolean));
-  for (const roleId of bypassRoles) {
-    if (!guild.roles.cache.has(roleId)) continue;
-    await channel.permissionOverwrites.edit(roleId, {
-      ViewChannel: true,
-      ReadMessageHistory: true,
-      SendMessages: false
-    }, 'ASTHEN: acesso da equipe ao canal de registro');
-  }
-
-  const botMember = guild.members.me;
-  if (botMember) {
-    await channel.permissionOverwrites.edit(botMember.id, {
-      ViewChannel: true,
-      ReadMessageHistory: true,
-      SendMessages: true,
-      ManageMessages: true
-    }, 'ASTHEN: permissões do bot no canal de registro');
-  }
-  return true;
-}
-
 export async function refreshRegistrationPanel(guild) {
   const config = getGuildConfig(guild.id);
   if (!config.registrationChannelId) return false;
@@ -192,7 +119,6 @@ export async function refreshRegistrationPanel(guild) {
     return false;
   }
 
-  await configureRegistrationChannel(channel, guild);
   let message = null;
   if (config.registrationPanelMessageId) {
     message = await channel.messages.fetch(config.registrationPanelMessageId).catch(() => null);
@@ -230,41 +156,21 @@ export async function refreshRegistrationPanel(guild) {
   return true;
 }
 
-export async function applyRegisteredIdentity(member, record = getPlayerRegistration(member.id)) {
+export async function applyRegisteredIdentity(member, record = getPlayerRegistration(member.id, member.guild.id)) {
   const config = getGuildConfig(member.guild.id);
   const errors = [];
 
-  if (!record?.minecraft_nick) {
-    if (!memberCanBypassRegistration(member, config)) {
-      try {
-        await updateMemberRole(member, false, config);
-      } catch (error) {
-        errors.push('cargo Membro: ' + error.message);
-      }
-    }
-    if (!await updateRegistrationChannelVisibility(member, false, config)) {
-      errors.push('visibilidade do canal de registro');
-    }
-    const tickets = await updateMemberTicketVisibility(member, false, config);
-    errors.push(...tickets.failed.map(item => 'ticket ' + item));
-    return { registered: false, errors, ticketsUpdated: tickets.updated };
+  // A ausência de registro não comprova que o usuário se desregistrou. Um snapshot
+  // incompleto ou indisponível nunca deve remover o cargo Membro automaticamente.
+  if (!record?.minecraft_nick || String(record.guild_id || '') !== String(member.guild.id)) {
+    return { registered: false, errors, ticketsUpdated: 0, unchanged: true };
   }
-
   if (!memberCanBypassRegistration(member, config)) {
-    try {
-      await updateMemberRole(member, true, config);
-    } catch (error) {
-      errors.push('cargo Membro: ' + error.message);
-    }
+    try { await updateMemberRole(member, true, config); }
+    catch (error) { errors.push('cargo Membro: ' + error.message); }
   }
-
   const tickets = await updateMemberTicketVisibility(member, true, config);
   errors.push(...tickets.failed.map(item => 'ticket ' + item));
-
-  if (!await updateRegistrationChannelVisibility(member, true, config)) {
-    errors.push('visibilidade do canal de registro');
-  }
-
   return { registered: true, errors, ticketsUpdated: tickets.updated };
 }
 
@@ -277,11 +183,11 @@ export function validateRegistrationForMember(member, minecraftNick) {
   if (!validateMinecraftNick(nick)) {
     throw new Error('Informe um nick Minecraft válido, sem espaços no começo/fim e com até 32 caracteres.');
   }
-  const existing = findPlayerRegistrationByNick(nick);
+  const existing = findPlayerRegistrationByNick(nick, member.guild.id);
   if (existing && existing.discord_id !== member.id) {
-    throw new Error('Este nick Minecraft já está vinculado a outra conta Discord.');
+    throw new Error('Este nick Minecraft já está vinculado a outra conta Discord neste servidor.');
   }
-  return { nick, previous: getPlayerRegistration(member.id) };
+  return { nick, previous: getPlayerRegistration(member.id, member.guild.id) };
 }
 
 export async function registerPlayerForMember(member, minecraftNick, source = 'autoatendimento') {
@@ -303,7 +209,7 @@ export async function registerPlayerForMember(member, minecraftNick, source = 'a
 }
 
 export async function reconcileGuildMember(member) {
-  const record = getPlayerRegistration(member.id);
+  const record = getPlayerRegistration(member.id, member.guild.id);
   return applyRegisteredIdentity(member, record);
 }
 
@@ -362,19 +268,8 @@ export async function prepareGuildRegistrationReset(guild, memberRole = null) {
 }
 
 export async function resetGuildRegistrations(guild, { prepared = null, log = true } = {}) {
-  const config = getGuildConfig(guild.id);
-  if (!config.registrationChannelId) {
-    throw new Error('Configure primeiro o canal #registro com /configurar.');
-  }
   const plan = prepared || await prepareGuildRegistrationReset(guild);
   const { role, members, botMember } = plan;
-  const channel = guild.channels.cache.get(config.registrationChannelId)
-    || await guild.channels.fetch(config.registrationChannelId).catch(() => null);
-  if (!channel?.permissionOverwrites?.edit) {
-    throw new Error('O canal de registro configurado não existe ou não permite editar permissões.');
-  }
-
-  await configureRegistrationChannel(channel, guild);
   let rolesRemoved = 0;
   let skippedProtected = 0;
   const failed = [];
@@ -395,12 +290,10 @@ export async function resetGuildRegistrations(guild, { prepared = null, log = tr
   // Clear saved registrations even after an unexpected Discord API failure.
   // The next reconciliation sees no record and retries removing Membro.
   const recordsCleared = clearPlayerRegistrationsForGuild(guild.id, members.keys());
-  let visibilityPending = 0;
   let ticketPending = 0;
   for (const member of members.values()) {
     if (member.id === guild.client.user?.id) continue;
-    if (!await updateRegistrationChannelVisibility(member, false, config)) visibilityPending += 1;
-    const tickets = await updateMemberTicketVisibility(member, false, config);
+    const tickets = await updateMemberTicketVisibility(member, false);
     ticketPending += tickets.failed.length;
   }
 
@@ -412,8 +305,8 @@ export async function resetGuildRegistrations(guild, { prepared = null, log = tr
         '**Cadastros antigos limpos:** ' + recordsCleared + '\n' +
         (skippedProtected ? '**Contas protegidas pelo Discord:** ' + skippedProtected + '\n' : '') +
         (failed.length ? '**Remoções pendentes:** ' + failed.slice(0, 4).join('; ') + '\n' : '') +
-        (visibilityPending || ticketPending ? '**Permissões pendentes:** ' + (visibilityPending + ticketPending) : 'Todos deverão se registrar novamente.'),
-      color: failed.length || visibilityPending || ticketPending ? 0xd99a32 : 0x2eaa72
+        (ticketPending ? '**Tickets pendentes:** ' + ticketPending : 'Todos deverão se registrar novamente.'),
+      color: failed.length || ticketPending ? 0xd99a32 : 0x2eaa72
     });
   }
 
@@ -423,9 +316,8 @@ export async function resetGuildRegistrations(guild, { prepared = null, log = tr
     recordsCleared,
     skippedProtected,
     failed,
-    visibilityPending,
     ticketPending,
-    complete: failed.length === 0 && visibilityPending === 0 && ticketPending === 0
+    complete: failed.length === 0 && ticketPending === 0
   };
 }
 
@@ -437,8 +329,7 @@ export async function handleRegisteredNicknameUpdate(oldMember, newMember) {
     || oldRoleIds.some((roleId, index) => roleId !== newRoleIds[index]);
   if (!rolesChanged) return;
 
-  const record = getPlayerRegistration(newMember.id);
-  const config = getGuildConfig(newMember.guild.id);
-  await updateRegistrationChannelVisibility(newMember, Boolean(record?.minecraft_nick), config);
-  await updateMemberTicketVisibility(newMember, Boolean(record?.minecraft_nick), config);
+  const record = getPlayerRegistration(newMember.id, newMember.guild.id);
+  if (!record?.minecraft_nick) return;
+  await updateMemberTicketVisibility(newMember, true);
 }

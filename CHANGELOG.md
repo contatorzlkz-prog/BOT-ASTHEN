@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.25.1 — 27/11/2026 · Correções de segurança e persistência
+
+- O bot não altera permissões de #logs ou #registro na inicialização; o acesso ao registro continua controlado pelo cargo Membro configurado manualmente.
+- A reconciliação não remove Membro quando não encontra registro, evitando remoções em massa por snapshot incompleto.
+- Registros Minecraft são isolados por servidor Discord, com unicidade do nick por servidor e limpeza correta por guild.
+- O Supabase reconcilia os blocos de dados, mantém marcadores de exclusão e pausa gravações até a primeira leitura remota bem-sucedida.
+- Tráfego não autenticado não consome a cota do plugin e as mensagens de erro não apontam mais para /configurar.
+- O painel #kits é localizado pelo botão estático correto, evitando cópias quando o ID salvo não existe.
+- O ZIP de release só é publicado depois que os checks e os testes passam.
+
 ## 2.25.0 — 26/11/2026 · Comandos unificados e segurança de registro
 
 - Reduz os comandos principais para /configurar, /kit configurar e /outros com grupos de segurança, TikTok, backup e Minecraft.

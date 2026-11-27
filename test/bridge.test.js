@@ -41,6 +41,12 @@ test('a API recusa chamadas sem a chave correta', async () => {
   assert.equal(response.status, 401);
 });
 
+test('requisições sem autenticação não consomem a cota do plugin legítimo', async () => {
+  for (let index = 0; index < 30; index += 1) await fetch(baseUrl + '/plugin/v1/pull');
+  const response = await fetch(baseUrl + '/plugin/v1/pull', { headers: authHeaders() });
+  assert.equal(response.status, 204);
+});
+
 test('a fila vazia responde HTTP 204 sem ativar Long Polling', async () => {
   const response = await fetch(baseUrl + '/plugin/v1/pull', {
     headers: authHeaders()

@@ -10,6 +10,9 @@ let lastSyncedAt = null;
 let lastStockCheckAt = null;
 let lastStockCheckError = null;
 let snapshotProvider = null;
+let remoteReadReady = false;
+let bootstrapRetryTimer = null;
+let bootstrapContext = null;
 
 export function normalizeSupabaseUrl(value) {
   const input = String(value || '').trim().replace(/\/+$/, '');
@@ -68,45 +71,120 @@ async function supabaseRequest(config, path, options = {}, table = config.table)
 
 
 function snapshotHasData(snapshot) {
-  return Boolean(
-    snapshot
-    && (
-      Object.keys(snapshot.guilds || {}).length
-      || Object.keys(snapshot.tickets || {}).length
-      || Object.keys(snapshot.purchaseDrafts || {}).length
-      || Object.keys(snapshot.players || {}).length
-    )
-  );
-}
-
-function mergePlayerRecords(localPlayers = {}, remotePlayers = {}) {
-  const merged = {};
-  const ids = new Set([...Object.keys(remotePlayers || {}), ...Object.keys(localPlayers || {})]);
-  for (const id of ids) {
-    const local = localPlayers?.[id];
-    const remote = remotePlayers?.[id];
-    if (!local) merged[id] = remote;
-    else if (!remote) merged[id] = local;
-    else {
-      const localUpdated = Date.parse(local.updated_at || local.created_at || '') || 0;
-      const remoteUpdated = Date.parse(remote.updated_at || remote.created_at || '') || 0;
-      merged[id] = localUpdated >= remoteUpdated ? local : remote;
-    }
-  }
-  return merged;
+  return Boolean(snapshot && (
+    Object.keys(snapshot.guilds || {}).length || Object.keys(snapshot.tickets || {}).length
+    || Object.keys(snapshot.purchaseDrafts || {}).length || Object.keys(snapshot.players || {}).length
+    || Object.values(snapshot.tombstones || {}).some(bucket => Object.keys(bucket || {}).length)
+  ));
 }
 
 function normalizeSnapshot(value) {
   return {
-    guilds: value?.guilds && typeof value.guilds === 'object' ? value.guilds : {},
-    tickets: value?.tickets && typeof value.tickets === 'object' ? value.tickets : {},
-    purchaseDrafts: value?.purchaseDrafts && typeof value.purchaseDrafts === 'object'
-      ? value.purchaseDrafts
-      : {},
-    players: value?.players && typeof value.players === 'object' && !Array.isArray(value.players)
-      ? value.players
-      : {}
+    guilds: value?.guilds && typeof value.guilds === 'object' && !Array.isArray(value.guilds) ? value.guilds : {},
+    tickets: value?.tickets && typeof value.tickets === 'object' && !Array.isArray(value.tickets) ? value.tickets : {},
+    purchaseDrafts: value?.purchaseDrafts && typeof value.purchaseDrafts === 'object' && !Array.isArray(value.purchaseDrafts) ? value.purchaseDrafts : {},
+    players: value?.players && typeof value.players === 'object' && !Array.isArray(value.players) ? value.players : {},
+    tombstones: {
+      tickets: value?.tombstones?.tickets && typeof value.tombstones.tickets === 'object' && !Array.isArray(value.tombstones.tickets) ? value.tombstones.tickets : {},
+      purchaseDrafts: value?.tombstones?.purchaseDrafts && typeof value.tombstones.purchaseDrafts === 'object' && !Array.isArray(value.tombstones.purchaseDrafts) ? value.tombstones.purchaseDrafts : {},
+      players: value?.tombstones?.players && typeof value.tombstones.players === 'object' && !Array.isArray(value.tombstones.players) ? value.tombstones.players : {}
+    }
   };
+}
+function recordTimestamp(value) {
+  if (!value || typeof value !== 'object') return 0;
+  for (const key of ['updated_at', 'updatedAt', 'closedAt', 'created_at', 'createdAt', 'at']) {
+    const timestamp = Date.parse(value[key] || '');
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  return 0;
+}
+function mergeHistory(localHistory = [], remoteHistory = []) {
+  const entries = new Map();
+  for (const item of [...remoteHistory, ...localHistory]) {
+    if (!item || typeof item !== 'object') continue;
+    const key = item.eventId || [item.type || '', item.requestId || '', item.status || '', item.at || '', item.message || ''].join('|');
+    entries.set(key, item);
+  }
+  return [...entries.values()].sort((a, b) =>
+    (Date.parse(a.at || '') || 0) - (Date.parse(b.at || '') || 0)
+  ).slice(-500);
+}
+function mergeRecord(local, remote, { history = false } = {}) {
+  if (!local) return remote;
+  if (!remote) return local;
+  if (typeof local !== 'object' || Array.isArray(local) || typeof remote !== 'object' || Array.isArray(remote)) return local;
+  const localTime = recordTimestamp(local), remoteTime = recordTimestamp(remote);
+  const older = localTime >= remoteTime ? remote : local;
+  const newer = localTime >= remoteTime ? local : remote;
+  const merged = { ...older, ...newer };
+  if (history) merged.history = mergeHistory(local.history || [], remote.history || []);
+  return merged;
+}
+function mergeGuildConfig(local, remote) {
+  const merged = mergeRecord(local, remote);
+  const localTime = recordTimestamp(local), remoteTime = recordTimestamp(remote);
+  const ordered = localTime >= remoteTime ? [remote?.kits || [], local?.kits || []] : [local?.kits || [], remote?.kits || []];
+  const kits = new Map();
+  for (const list of ordered) for (const kit of list) {
+    if (!kit || typeof kit !== 'object') continue;
+    const key = String(kit.name || kit.id || '').toLowerCase();
+    if (key) kits.set(key, kit);
+  }
+  if (local?.kits || remote?.kits) merged.kits = [...kits.values()];
+  return merged;
+}
+function mergeMap(local = {}, remote = {}, mergeEntry = mergeRecord) {
+  const result = {};
+  for (const key of new Set([...Object.keys(remote || {}), ...Object.keys(local || {})])) {
+    result[key] = local?.[key] && remote?.[key]
+      ? mergeEntry(local[key], remote[key])
+      : (local?.[key] ?? remote?.[key]);
+  }
+  return result;
+}
+function mergeTombstones(local = {}, remote = {}) {
+  const result = {};
+  for (const bucket of ['tickets', 'purchaseDrafts', 'players']) {
+    result[bucket] = {};
+    const keys = new Set([...Object.keys(local?.[bucket] || {}), ...Object.keys(remote?.[bucket] || {})]);
+    for (const key of keys) {
+      const timestamp = Math.max(Date.parse(local?.[bucket]?.[key] || '') || 0, Date.parse(remote?.[bucket]?.[key] || '') || 0);
+      if (timestamp) result[bucket][key] = new Date(timestamp).toISOString();
+    }
+  }
+  return result;
+}
+function removeDeletedRecords(records, tombstones = {}) {
+  const result = { ...records };
+  for (const [key, deletedAt] of Object.entries(tombstones || {})) {
+    const deletedTime = Date.parse(deletedAt || '') || 0;
+    if (deletedTime && key in result && recordTimestamp(result[key]) <= deletedTime) delete result[key];
+  }
+  return result;
+}
+export function mergeSnapshots(localValue, remoteValue) {
+  const local = normalizeSnapshot(localValue), remote = normalizeSnapshot(remoteValue);
+  const tombstones = mergeTombstones(local.tombstones, remote.tombstones);
+  const guilds = mergeMap(local.guilds, remote.guilds, mergeGuildConfig);
+  const tickets = mergeMap(local.tickets, remote.tickets, (a, b) => mergeRecord(a, b, { history: true }));
+  const purchaseDrafts = mergeMap(local.purchaseDrafts, remote.purchaseDrafts);
+  const players = mergeMap(local.players, remote.players);
+  return {
+    guilds,
+    tickets: removeDeletedRecords(tickets, tombstones.tickets),
+    purchaseDrafts: removeDeletedRecords(purchaseDrafts, tombstones.purchaseDrafts),
+    players: removeDeletedRecords(players, tombstones.players),
+    tombstones
+  };
+}
+function scheduleBootstrapRetry() {
+  if (bootstrapRetryTimer || !bootstrapContext) return;
+  bootstrapRetryTimer = setTimeout(() => {
+    bootstrapRetryTimer = null;
+    void initializeSupabaseSync(bootstrapContext);
+  }, 30_000);
+  bootstrapRetryTimer.unref?.();
 }
 
 function scheduleRetry() {
@@ -204,6 +282,7 @@ async function pushSnapshot(snapshot) {
 export function scheduleSupabaseSync(snapshot) {
   if (!getSupabaseConfig()) return;
   snapshotProvider = () => snapshot;
+  if (!remoteReadReady) return;
   if (syncInFlight) {
     syncQueued = true;
     return;
@@ -221,7 +300,7 @@ export async function flushSupabaseSync() {
     clearTimeout(syncTimer);
     syncTimer = null;
   }
-  if (!snapshotProvider) return false;
+  if (!snapshotProvider || !remoteReadReady) return false;
   if (syncInFlight) {
     syncQueued = true;
     return syncPromise || false;
@@ -229,70 +308,50 @@ export async function flushSupabaseSync() {
   return pushSnapshot(snapshotProvider());
 }
 
-export async function initializeSupabaseSync({
-  getSnapshot,
-  applySnapshot,
-  saveLocal
-}) {
+export async function initializeSupabaseSync(context) {
   const config = getSupabaseConfig();
-  if (!config) return { enabled: false, restored: false };
-
+  if (!config) return { enabled: false, restored: false, syncReady: false };
+  bootstrapContext = context;
+  const { getSnapshot, applySnapshot, saveLocal } = context;
   snapshotProvider = getSnapshot;
   try {
-    const response = await supabaseRequest(
-      config,
-      '?id=eq.main&select=payload&limit=1',
-      { method: 'GET' }
-    );
+    const response = await supabaseRequest(config, '?id=eq.main&select=payload,updated_at&limit=1', { method: 'GET' });
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      lastSyncError = 'Supabase respondeu HTTP ' + response.status + ' durante a leitura.' +
-        (detail ? ' ' + detail.slice(0, 700) : '');
+      lastSyncError = 'Supabase respondeu HTTP ' + response.status + ' durante a leitura.' + (detail ? ' ' + detail.slice(0, 700) : '');
       if (lastLoggedSyncError !== lastSyncError) {
         console.warn('[Asthen Supabase] ' + lastSyncError + ' O bot continuará usando o arquivo local.');
         lastLoggedSyncError = lastSyncError;
       }
-      if (response.status >= 500 || response.status === 429) scheduleSupabaseSync(getSnapshot());
-      return { enabled: true, restored: false };
+      if (response.status >= 500 || response.status === 429) scheduleBootstrapRetry();
+      return { enabled: true, restored: false, syncReady: false };
     }
 
     const rows = await response.json();
-    const remoteSnapshot = Array.isArray(rows) && rows[0]?.payload
-      ? normalizeSnapshot(rows[0].payload)
-      : null;
-    const localSnapshot = getSnapshot();
-
-    if (!snapshotHasData(localSnapshot) && snapshotHasData(remoteSnapshot)) {
-      applySnapshot(remoteSnapshot);
+    const remoteSnapshot = Array.isArray(rows) && rows[0]?.payload ? normalizeSnapshot(rows[0].payload) : normalizeSnapshot(null);
+    const localSnapshot = normalizeSnapshot(getSnapshot());
+    const mergedSnapshot = mergeSnapshots(localSnapshot, remoteSnapshot);
+    const restored = !snapshotHasData(localSnapshot) && snapshotHasData(mergedSnapshot);
+    if (JSON.stringify(mergedSnapshot) !== JSON.stringify(localSnapshot)) {
+      applySnapshot(mergedSnapshot);
       saveLocal();
-      lastSyncedAt = new Date().toISOString();
-      lastSyncError = null;
-      return { enabled: true, restored: true };
     }
 
-    // The existing snapshot remains the single persistence model. Merge the
-    // player index separately so an older local guild/ticket snapshot cannot
-    // erase remote registrations when local state.json already has data.
-    if (remoteSnapshot && Object.keys(remoteSnapshot.players || {}).length) {
-      const mergedPlayers = mergePlayerRecords(localSnapshot.players, remoteSnapshot.players);
-      if (JSON.stringify(mergedPlayers) !== JSON.stringify(localSnapshot.players || {})) {
-        applySnapshot({ ...localSnapshot, players: mergedPlayers });
-        saveLocal();
-      }
-    }
-
+    remoteReadReady = true;
+    if (bootstrapRetryTimer) clearTimeout(bootstrapRetryTimer);
+    bootstrapRetryTimer = null;
+    lastSyncedAt = rows?.[0]?.updated_at || new Date().toISOString();
+    lastSyncError = null;
+    lastLoggedSyncError = null;
     scheduleSupabaseSync(getSnapshot());
-    return { enabled: true, restored: false };
+    return { enabled: true, restored, syncReady: true };
   } catch (error) {
-    lastSyncError = error.name === 'AbortError'
-      ? 'Tempo limite ao conectar ao Supabase.'
-      : 'Não foi possível ler o snapshot remoto do Supabase.';
+    lastSyncError = error.name === 'AbortError' ? 'Tempo limite ao conectar ao Supabase.' : 'Não foi possível ler o snapshot remoto do Supabase.';
     console.warn('[Asthen Supabase] ' + lastSyncError + ' O bot continuará usando o arquivo local.');
-    scheduleSupabaseSync(getSnapshot());
-    return { enabled: true, restored: false };
+    scheduleBootstrapRetry();
+    return { enabled: true, restored: false, syncReady: false };
   }
 }
-
 
 /**
  * Returns the Sunday that starts the current sales week in Brasilia.
@@ -536,6 +595,7 @@ export function getSupabaseStatus() {
     lastStockCheckAt,
     lastStockCheckError,
     lastSyncedAt,
-    lastError: lastSyncError
+    lastError: lastSyncError,
+    snapshotReadReady: remoteReadReady
   };
 }

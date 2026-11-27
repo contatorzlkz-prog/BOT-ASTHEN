@@ -65,6 +65,11 @@ const stockReleaseAttemptsInFlight = new Set();
 const pendingRegistrations = new Map();
 const PENDING_REGISTRATION_TTL_MS = 5 * 60 * 1000;
 
+function getInteractionPlayerRegistration(interaction) {
+  const guildId = interaction.guildId || interaction.guild?.id;
+  return guildId ? getPlayerRegistration(interaction.user.id, guildId) : null;
+}
+
 function normalizeImageUrl(value) {
   if (!value) return '';
   try {
@@ -187,40 +192,6 @@ function shopPanelRefreshNotice(refreshed) {
     : '';
 }
 
-export async function secureLogsChannel(channel, guild) {
-  const everyoneId = guild.roles.everyone.id;
-  const overwrites = [{
-    id: everyoneId,
-    deny: [PermissionsBitField.Flags.ViewChannel]
-  }];
-  for (const role of guild.roles.cache.values()) {
-    if (role.id === everyoneId || !role.permissions.has(PermissionsBitField.Flags.Administrator)) continue;
-    overwrites.push({
-      id: role.id,
-      allow: [
-        PermissionsBitField.Flags.ViewChannel,
-        PermissionsBitField.Flags.SendMessages,
-        PermissionsBitField.Flags.ReadMessageHistory,
-        PermissionsBitField.Flags.EmbedLinks,
-        PermissionsBitField.Flags.AttachFiles
-      ]
-    });
-  }
-  if (guild.members.me) {
-    overwrites.push({
-      id: guild.members.me.id,
-      allow: [
-        PermissionsBitField.Flags.ViewChannel,
-        PermissionsBitField.Flags.SendMessages,
-        PermissionsBitField.Flags.ReadMessageHistory,
-        PermissionsBitField.Flags.EmbedLinks,
-        PermissionsBitField.Flags.AttachFiles,
-        PermissionsBitField.Flags.ManageMessages
-      ]
-    });
-  }
-  await channel.permissionOverwrites.set(overwrites, 'ASTHEN: restringir #logs a administradores');
-}
 
 
 
@@ -415,7 +386,7 @@ function makeMinecraftNickModal(customId, currentNick = '') {
 
 
 async function openCatalog(interaction) {
-  const player = getPlayerRegistration(interaction.user.id);
+  const player = getInteractionPlayerRegistration(interaction);
   if (!player?.minecraft_nick) {
     return replyPrivate(interaction, 'Antes de usar a loja, conclua seu registro Minecraft em #registro.');
   }
@@ -471,7 +442,7 @@ async function continuePurchase(interaction) {
   if (!draft) return replyPrivate(interaction, 'Não encontrei uma compra em preparação. Abra a loja novamente.');
   if (draft.stage === 'creating') return replyPrivate(interaction, 'Seu pedido já está sendo criado. Aguarde alguns instantes.');
 
-  const player = getPlayerRegistration(interaction.user.id);
+  const player = getInteractionPlayerRegistration(interaction);
   if (!player?.minecraft_nick) {
     return replyPrivate(interaction, 'Seu registro Minecraft não foi encontrado. Conclua o cadastro em #registro para continuar.');
   }
@@ -506,7 +477,7 @@ async function beginPurchaseWithKit(interaction, kitId, updateExistingMessage = 
       : interaction.reply({ ...preview, flags: MessageFlags.Ephemeral });
   }
 
-  const player = getPlayerRegistration(interaction.user.id);
+  const player = getInteractionPlayerRegistration(interaction);
   if (!player?.minecraft_nick) {
     return replyPrivate(interaction, 'Antes de comprar, conclua seu registro Minecraft em #registro.');
   }
@@ -599,7 +570,7 @@ async function confirmSelectedKit(interaction, requestedRevision) {
     return replyPrivate(interaction, 'Esta prévia ficou desatualizada. Abra o catálogo novamente.');
   }
 
-  const player = getPlayerRegistration(interaction.user.id);
+  const player = getInteractionPlayerRegistration(interaction);
   if (!player?.minecraft_nick) {
     return replyPrivate(interaction, 'Seu registro Minecraft não foi encontrado. Conclua o cadastro em #registro.');
   }
@@ -688,7 +659,7 @@ async function confirmPurchase(interaction, requestedRevision) {
     return replyPrivate(interaction, 'Esta revisão do pedido ficou desatualizada. Confira a mensagem mais recente.');
   }
 
-  const player = getPlayerRegistration(interaction.user.id);
+  const player = getInteractionPlayerRegistration(interaction);
   if (!player?.minecraft_nick) {
     return replyPrivate(interaction, 'Seu registro Minecraft não foi encontrado. Conclua o cadastro em #registro antes de confirmar.');
   }
@@ -1633,7 +1604,7 @@ async function retryApprovedDelivery(interaction, mode) {
 
 async function openSupportTicket(interaction, kind) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const player = getPlayerRegistration(interaction.user.id);
+  const player = getInteractionPlayerRegistration(interaction);
   const result = await createPrivateTicket({
     guild: interaction.guild,
     user: interaction.user,
@@ -1685,7 +1656,7 @@ async function handleRegistrationSubmit(interaction) {
       processing: false
     });
 
-    const previous = getPlayerRegistration(interaction.user.id);
+    const previous = getInteractionPlayerRegistration(interaction);
     return interaction.reply({
       content:
         '**Confira seu registro Minecraft**\n' +
@@ -1849,7 +1820,7 @@ export async function handleInteraction(interaction) {
       return handleRegistrationCancellation(interaction, interaction.customId.split(':').at(-1));
     }
     if (interaction.customId === 'registration:open') {
-      const player = getPlayerRegistration(interaction.user.id);
+      const player = getInteractionPlayerRegistration(interaction);
       return interaction.showModal(makeMinecraftNickModal('registration:submit', player?.minecraft_nick || ''));
     }
     if (interaction.customId.startsWith('support:open:')) {
@@ -1876,7 +1847,7 @@ export async function handleInteraction(interaction) {
       return confirmSelectedKit(interaction, interaction.customId.split(':')[2]);
     }
     if (interaction.customId.startsWith('shop:edit-nick:')) {
-      const player = getPlayerRegistration(interaction.user.id);
+      const player = getInteractionPlayerRegistration(interaction);
       return interaction.showModal(makeMinecraftNickModal('registration:submit', player?.minecraft_nick || ''));
     }
     if (interaction.customId.startsWith('shop:edit-platform:')) {

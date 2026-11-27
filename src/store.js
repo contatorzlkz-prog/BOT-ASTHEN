@@ -22,9 +22,20 @@ function ensureSecureDataDir() {
   secureLocalPath(dataDir, 0o700);
 }
 
-const emptyState = () => ({ guilds: {}, tickets: {}, purchaseDrafts: {}, players: {} });
+const emptyState = () => ({
+  guilds: {}, tickets: {}, purchaseDrafts: {}, players: {},
+  tombstones: { tickets: {}, purchaseDrafts: {}, players: {} }
+});
 let state = emptyState();
 const pluginSyncedGuildsThisSession = new Set();
+
+function tombstoneBucket(name) {
+  if (!state.tombstones || typeof state.tombstones !== 'object') state.tombstones = {};
+  if (!state.tombstones[name] || typeof state.tombstones[name] !== 'object') state.tombstones[name] = {};
+  return state.tombstones[name];
+}
+function markDeleted(name, key) { tombstoneBucket(name)[String(key)] = new Date().toISOString(); }
+function clearDeleted(name, key) { delete tombstoneBucket(name)[String(key)]; }
 
 function normalizeKitName(name) {
   return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -186,7 +197,8 @@ export function loadStore() {
       || (parsed.guilds !== undefined && !isPlainRecord(parsed.guilds))
       || (parsed.tickets !== undefined && !isPlainRecord(parsed.tickets))
       || (parsed.purchaseDrafts !== undefined && !isPlainRecord(parsed.purchaseDrafts))
-      || (parsed.players !== undefined && !isPlainRecord(parsed.players))) {
+      || (parsed.players !== undefined && !isPlainRecord(parsed.players))
+      || (parsed.tombstones !== undefined && !isPlainRecord(parsed.tombstones))) {
     preserveCorruptStore('estrutura de dados incompatível');
   }
 
@@ -194,7 +206,12 @@ export function loadStore() {
     guilds: parsed.guilds || {},
     tickets: parsed.tickets || {},
     purchaseDrafts: parsed.purchaseDrafts || {},
-    players: parsed.players || {}
+    players: parsed.players || {},
+    tombstones: {
+      tickets: isPlainRecord(parsed.tombstones?.tickets) ? parsed.tombstones.tickets : {},
+      purchaseDrafts: isPlainRecord(parsed.tombstones?.purchaseDrafts) ? parsed.tombstones.purchaseDrafts : {},
+      players: isPlainRecord(parsed.tombstones?.players) ? parsed.tombstones.players : {}
+    }
   };
   for (const guildId of Object.keys(state.guilds)) ensureGuildConfig(guildId);
 }
@@ -231,7 +248,8 @@ export async function initializeStoreSync() {
         guilds: remote.guilds || {},
         tickets: remote.tickets || {},
         purchaseDrafts: remote.purchaseDrafts || {},
-        players: remote.players || {}
+        players: remote.players || {},
+        tombstones: remote.tombstones || { tickets: {}, purchaseDrafts: {}, players: {} }
       };
       for (const guildId of Object.keys(state.guilds)) ensureGuildConfig(guildId);
     },
@@ -240,18 +258,28 @@ export async function initializeStoreSync() {
   return result;
 }
 
-export function getPlayerRegistration(discordId) {
+export function getPlayerRegistration(discordId, guildId = null) {
   const id = String(discordId || '').trim();
-  const record = id ? state.players[id] : null;
-  return record ? { ...record } : null;
+  if (!id) return null;
+  const records = Object.entries(state.players).filter(([key, item]) =>
+    String(item?.discord_id || (key === id ? id : '')) === id
+  );
+  if (guildId) {
+    const record = records.find(([, item]) => String(item?.guild_id || '') === String(guildId));
+    return record ? { ...record[1] } : null;
+  }
+  // Backward compatibility: unscoped lookups only work for a single registration.
+  return records.length === 1 ? { ...records[0][1] } : null;
 }
 
-export function findPlayerRegistrationByNick(minecraftNick) {
+export function findPlayerRegistrationByNick(minecraftNick, guildId = null) {
   const normalized = String(minecraftNick || '').trim().toLocaleLowerCase('en-US');
   if (!normalized) return null;
-  const record = Object.values(state.players).find(item =>
-    String(item?.minecraft_nick || '').trim().toLocaleLowerCase('en-US') === normalized
-  );
+  const guild = guildId ? String(guildId) : null;
+  const record = Object.values(state.players).find(item => {
+    if (String(item?.minecraft_nick || '').trim().toLocaleLowerCase('en-US') !== normalized) return false;
+    return !guild || !item?.guild_id || String(item.guild_id) === guild;
+  });
   return record ? { ...record } : null;
 }
 
@@ -263,22 +291,30 @@ export function savePlayerRegistration(discordId, minecraftNick, guildId = null)
   if (rawNick !== nick || !/^[A-Za-z0-9_. ]{1,32}$/.test(nick)) {
     throw new Error('Nick Minecraft inválido. Use de 1 a 32 caracteres válidos.');
   }
+  const guild = guildId ? String(guildId) : null;
+  const key = guild ? guild + ':' + id : id;
   const normalized = nick.toLocaleLowerCase('en-US');
   const conflict = Object.values(state.players).find(item =>
     item?.discord_id !== id
+    && (!guild || !item?.guild_id || String(item.guild_id) === guild)
     && String(item?.minecraft_nick || '').trim().toLocaleLowerCase('en-US') === normalized
   );
-  if (conflict) throw new Error('Este nick Minecraft já está vinculado a outra conta Discord.');
-  const previous = state.players[id];
+  if (conflict) throw new Error('Este nick Minecraft já está vinculado a outra conta Discord neste servidor.');
+  const previous = getPlayerRegistration(id, guild);
   const now = new Date().toISOString();
   const record = {
-    discord_id: id,
-    minecraft_nick: nick,
-    created_at: previous?.created_at || now,
-    updated_at: now,
-    ...(guildId ? { guild_id: String(guildId) } : previous?.guild_id ? { guild_id: previous.guild_id } : {})
+    discord_id: id, minecraft_nick: nick,
+    created_at: previous?.created_at || now, updated_at: now,
+    ...(guild ? { guild_id: guild } : {})
   };
-  state.players[id] = record;
+  // Migrate an old single-key record into the guild-scoped key without leaving
+  // a stale copy that could be restored by Supabase later.
+  if (guild && state.players[id]?.guild_id === guild) {
+    markDeleted('players', id);
+    delete state.players[id];
+  }
+  state.players[key] = record;
+  clearDeleted('players', key);
   saveStore();
   return { ...record };
 }
@@ -291,13 +327,13 @@ export function clearPlayerRegistrationsForGuild(guildId, memberIds = []) {
   const guildMemberIds = new Set([...memberIds].map(id => String(id)));
 
   const idsToRemove = Object.entries(state.players)
-    .filter(([discordId, record]) =>
-      String(record?.guild_id || '') === targetGuildId
-      || (!record?.guild_id && guildMemberIds.has(discordId))
-    )
-    .map(([discordId]) => discordId);
-
-  for (const discordId of idsToRemove) delete state.players[discordId];
+    .filter(([key, record]) => String(record?.guild_id || '') === targetGuildId
+      || (!record?.guild_id && guildMemberIds.has(String(record?.discord_id || key))))
+    .map(([key]) => key);
+  for (const key of idsToRemove) {
+    markDeleted('players', key);
+    delete state.players[key];
+  }
   if (idsToRemove.length) saveStore();
   return idsToRemove.length;
 }
@@ -342,7 +378,7 @@ export function getShopKits(guildId) {
 
 export function updateGuildConfig(guildId, changes) {
   const config = ensureGuildConfig(guildId);
-  Object.assign(config, changes);
+  Object.assign(config, changes, { updatedAt: new Date().toISOString() });
   saveStore();
   return config;
 }
@@ -356,6 +392,7 @@ export function updateKit(guildId, kitId, changes) {
   const index = config.kits.findIndex(kit => kit.id === kitId);
   if (index < 0) return null;
   config.kits[index] = { ...config.kits[index], ...changes };
+  config.updatedAt = new Date().toISOString();
   saveStore();
   return config.kits[index];
 }
@@ -446,6 +483,7 @@ export function syncPluginKits(guildId, pluginKits) {
   if (beforeJson === afterJson) return { changed: firstSyncThisGuild, kits: config.kits };
 
   config.kits = next;
+  config.updatedAt = new Date().toISOString();
   saveStore();
   return { changed: true, kits: config.kits };
 }
@@ -476,14 +514,16 @@ export function findOpenTicket(guildId, userId, type = null) {
 }
 
 export function saveTicket(ticket) {
-  state.tickets[ticket.channelId] = ticket;
+  state.tickets[ticket.channelId] = { ...ticket, updatedAt: new Date().toISOString() };
+  clearDeleted('tickets', ticket.channelId);
   saveStore();
 }
 
 export function updateTicket(channelId, changes) {
   const ticket = state.tickets[channelId];
   if (!ticket) return null;
-  Object.assign(ticket, changes);
+  Object.assign(ticket, changes, { updatedAt: new Date().toISOString() });
+  clearDeleted('tickets', channelId);
   saveStore();
   return ticket;
 }
@@ -500,6 +540,8 @@ export function appendTicketHistory(channelId, event) {
     at: event.at || new Date().toISOString()
   };
   ticket.history.push(entry);
+  ticket.updatedAt = new Date().toISOString();
+  clearDeleted('tickets', channelId);
   // Keep the structured audit trail bounded while retaining recent operational events.
   if (ticket.history.length > 500) ticket.history.splice(0, ticket.history.length - 500);
   saveStore();
@@ -517,6 +559,7 @@ export function pruneOldStoreData(options = {}) {
     if (!draft) continue;
     const updatedAt = Date.parse(draft.updatedAt || draft.createdAt || '');
     if (Number.isFinite(updatedAt) && now - updatedAt > draftRetentionMs) {
+      markDeleted('purchaseDrafts', key);
       delete state.purchaseDrafts[key];
       drafts += 1;
     }
@@ -526,6 +569,7 @@ export function pruneOldStoreData(options = {}) {
     if (!ticket || ticket.status !== 'closed' || !ticket.transcriptExportedAt) continue;
     const closedAt = Date.parse(ticket.closedAt || ticket.transcriptExportedAt || '');
     if (Number.isFinite(closedAt) && now - closedAt > ticketRetentionMs) {
+      markDeleted('tickets', channelId);
       delete state.tickets[channelId];
       tickets += 1;
     }
@@ -544,12 +588,9 @@ export function getPurchaseDraft(guildId, userId) {
 }
 
 export function savePurchaseDraft(guildId, userId, draft) {
-  state.purchaseDrafts[purchaseDraftKey(guildId, userId)] = {
-    ...draft,
-    guildId,
-    userId,
-    updatedAt: new Date().toISOString()
-  };
+  const key = purchaseDraftKey(guildId, userId);
+  state.purchaseDrafts[key] = { ...draft, guildId, userId, updatedAt: new Date().toISOString() };
+  clearDeleted('purchaseDrafts', key);
   saveStore();
   return state.purchaseDrafts[purchaseDraftKey(guildId, userId)];
 }
@@ -557,6 +598,7 @@ export function savePurchaseDraft(guildId, userId, draft) {
 export function deletePurchaseDraft(guildId, userId) {
   const key = purchaseDraftKey(guildId, userId);
   const existed = Boolean(state.purchaseDrafts[key]);
+  if (existed) markDeleted('purchaseDrafts', key);
   delete state.purchaseDrafts[key];
   if (existed) saveStore();
   return existed;

@@ -68,24 +68,27 @@ test('kit esgotado informa zero unidades e reposição no domingo', () => {
   assert.match(option.description, /volta domingo 00h/);
 });
 
-test('fixed shop panel contains the kit selector without an intermediate button', () => {
+test('fixed shop panel is static and opens the private catalog by button', () => {
   const panel = makeShopPanel(makeKits(3));
   assert.equal(panel.embeds[0].toJSON().title, 'Loja ASTHEN');
-  assert.equal(panel.components[0].toJSON().components[0].custom_id, 'shop:select:0');
-  assert.equal(panel.components[0].toJSON().components[0].options.length, 3);
   assert.equal(panel.components.length, 1);
+  assert.equal(panel.components[0].toJSON().components[0].custom_id, 'shop:catalog');
+  assert.equal(panel.components[0].toJSON().components[0].type, 2);
 });
 
-test('shop panel with no visible kits does not republish a demo product', () => {
+test('static shop panel never embeds stale or demo kit options', () => {
   const panel = makeShopPanel([]);
-  assert.match(panel.embeds[0].toJSON().description, /Nenhum kit está disponível/i);
-  assert.equal(panel.components.length, 0);
+  assert.equal(panel.components.length, 1);
+  assert.equal(panel.components[0].toJSON().components[0].custom_id, 'shop:catalog');
+  assert.equal(JSON.stringify(panel).includes('ASTHEN_DEMO_KIT'), false);
 });
 
-test('shop panel with more than 25 kits adds a path to the full private list', () => {
+test('private catalog pages 30 kits while the public panel stays static', () => {
   const panel = makeShopPanel(makeKits(30));
-  assert.equal(panel.components[0].toJSON().components[0].options.length, 25);
-  assert.equal(panel.components[1].toJSON().components[0].custom_id, 'shop:catalog');
+  const firstPage = makeCatalogMenu(makeKits(30), 0).toJSON();
+  assert.equal(panel.components[0].toJSON().components[0].custom_id, 'shop:catalog');
+  assert.equal(firstPage.components[0].options.length, 25);
+  assert.equal(makeCatalogPaginationRow(0, 2).toJSON().components[2].disabled, false);
 });
 
 test('ticket text converts a literal backslash-n into a real line break', () => {

@@ -64,6 +64,7 @@ function startBridge(opts) {
     maxLongPollConnections = 8,
     rateLimitWindowMs = 60_000,
     rateLimitMaxRequests = 180,
+    rateLimitUnauthenticatedMaxRequests = 24,
     rateLimitMaxEntries = 10_000,
     dataDir = process.env.ASTHEN_DATA_DIR || path.resolve(process.cwd(), 'data'),
     onKits = () => {},
@@ -205,7 +206,7 @@ function startBridge(opts) {
     if (changed) persistJobs();
   }
 
-  function checkRateLimit(req, res, pathname) {
+  function checkRateLimit(req, res, pathname, scope = 'authenticated') {
     const now = Date.now();
     const remote = String(req.socket?.remoteAddress || 'unknown').replace(/^::ffff:/, '');
     // X-Forwarded-For is intentionally ignored because it may be client-controlled.
@@ -213,7 +214,10 @@ function startBridge(opts) {
       : pathname === '/plugin/v1/result' ? 'result'
         : pathname === '/plugin/v1/events' || pathname === '/plugin/v1/delivery-update' ? 'event'
           : pathname === '/plugin/v1/kits' ? 'kits' : 'other';
-    const key = remote + ':' + route;
+    const key = scope + ':' + remote + ':' + route;
+    const maximum = scope === 'unauthenticated'
+      ? Math.max(4, rateLimitUnauthenticatedMaxRequests)
+      : Math.max(1, rateLimitMaxRequests);
     let bucket = rateBuckets.get(key);
 
     if (!bucket) {
@@ -235,7 +239,7 @@ function startBridge(opts) {
     }
 
     bucket.count += 1;
-    if (bucket.count > Math.max(1, rateLimitMaxRequests)) {
+    if (bucket.count > maximum) {
       const retryAfter = Math.max(1, Math.ceil((rateLimitWindowMs - (now - bucket.startedAt)) / 1000));
       res.setHeader('Retry-After', String(retryAfter));
       sendJson(res, 429, { success: false, status: 'RATE_LIMITED', retry_after: retryAfter });
@@ -552,9 +556,9 @@ function startBridge(opts) {
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');
-      if (!checkRateLimit(req, res, url.pathname)) return;
       const match = /^Bearer\s+(.+)$/i.exec(String(req.headers.authorization || '').trim());
       if (!match || !safeEqual(match[1].trim(), token)) {
+        if (!checkRateLimit(req, res, url.pathname, 'unauthenticated')) return;
         const now = Date.now();
         // A public tunnel may receive scanners or a plugin still using an old
         // secret. Keep the first warning but avoid flooding the Windows console.
@@ -564,6 +568,7 @@ function startBridge(opts) {
         }
         return sendJson(res, 401, { success: false, status: 'UNAUTHORIZED' });
       }
+      if (!checkRateLimit(req, res, url.pathname, 'authenticated')) return;
 
       lastPluginContactAt = Date.now();
       if (req.method === 'GET' && url.pathname === '/plugin/v1/pull') {

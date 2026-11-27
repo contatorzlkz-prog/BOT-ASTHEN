@@ -36,8 +36,8 @@ async function createPrivateTicketUnlocked({ guild, user, type, kit = null, mine
 
   if (!panelId) {
     throw new Error(isShop
-      ? 'A loja ainda não foi configurada. Use /configurar e informe o canal da loja.'
-      : 'O suporte ainda não foi configurado. Use /configurar e informe o canal de suporte.');
+      ? 'Não encontrei o canal #kits. Confira o nome e permita que o bot envie mensagens e leia o histórico.'
+      : 'Não encontrei o canal #atendimento. Confira o nome e permita que o bot envie mensagens e leia o histórico.');
   }
 
   const existing = findOpenTicket(guild.id, user.id, isShop ? 'shop' : 'support');
@@ -51,12 +51,12 @@ async function createPrivateTicketUnlocked({ guild, user, type, kit = null, mine
   const panelChannel = guild.channels.cache.get(panelId)
     ?? await guild.channels.fetch(panelId).catch(() => null);
   if (!panelChannel || panelChannel.type !== ChannelType.GuildText) {
-    throw new Error('O canal configurado não existe mais. Execute /configurar novamente.');
+    throw new Error('O canal do painel não existe mais. Verifique se #kits ou #atendimento continua existindo.');
   }
 
   const parent = panelChannel.parentId || null;
   if (parent && !guild.channels.cache.has(parent)) {
-    throw new Error('A categoria do canal configurado não existe mais. Execute /configurar novamente.');
+    throw new Error('A categoria do painel não existe mais. Confira a categoria do canal #kits ou #atendimento.');
   }
 
   const staffRole = config.staffRoleId ? guild.roles.cache.get(config.staffRoleId) : null;

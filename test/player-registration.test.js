@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadStore, getPlayerRegistration, findPlayerRegistrationByNick, savePlayerRegistration, clearPlayerRegistrationsForGuild } from '../src/store.js';
-import { memberCanBypassRegistration, validateMinecraftNick } from '../src/registration.js';
+import { applyRegisteredIdentity, memberCanBypassRegistration, validateMinecraftNick } from '../src/registration.js';
 
 loadStore();
 
@@ -26,9 +26,22 @@ test('registro é indexado pelo ID Discord e consultável pelo nick', () => {
   assert.equal(findPlayerRegistrationByNick('ruan_mc').discord_id, discordId);
 });
 
-test('nick duplicado não pode ser vinculado a outra conta Discord', () => {
-  savePlayerRegistration('100000000000000002', 'Player_One');
-  assert.throws(() => savePlayerRegistration('100000000000000003', 'player_one'), /já está vinculado/i);
+test('nick duplicado é bloqueado no mesmo servidor', () => {
+  const guildId = '200000000000000020';
+  savePlayerRegistration('100000000000000002', 'Player_One', guildId);
+  assert.throws(() => savePlayerRegistration('100000000000000003', 'player_one', guildId), /já está vinculado/i);
+});
+
+test('uma conta Discord pode ter registros separados em servidores diferentes', () => {
+  const discordId = '100000000000000021';
+  const guildA = '200000000000000021';
+  const guildB = '200000000000000022';
+  savePlayerRegistration(discordId, 'Player_A', guildA);
+  savePlayerRegistration(discordId, 'Player_B', guildB);
+  assert.equal(getPlayerRegistration(discordId, guildA).minecraft_nick, 'Player_A');
+  assert.equal(getPlayerRegistration(discordId, guildB).minecraft_nick, 'Player_B');
+  assert.equal(getPlayerRegistration(discordId), null);
+  assert.equal(findPlayerRegistrationByNick('player_a', guildB), null);
 });
 
 test('alterar nick preserva created_at e atualiza o dado canônico', () => {
@@ -54,9 +67,9 @@ test('reset limpa os cadastros do servidor e entradas antigas sem guild_id, pres
   assert.equal(clearPlayerRegistrationsForGuild(guildA, [playerA, legacyPlayer]), 2);
   assert.equal(getPlayerRegistration(playerA), null);
   assert.equal(getPlayerRegistration(legacyPlayer), null);
-  assert.equal(getPlayerRegistration(playerB).minecraft_nick, 'Guild_B');
+  assert.equal(getPlayerRegistration(playerB, guildB).minecraft_nick, 'Guild_B');
   assert.equal(findPlayerRegistrationByNick('guild_a'), null);
-  assert.equal(findPlayerRegistrationByNick('guild_b').discord_id, playerB);
+  assert.equal(findPlayerRegistrationByNick('guild_b', guildB).discord_id, playerB);
 });
 
 test('somente equipe e gerência autorizadas bypassam o registro; cargos de plataforma não', () => {
@@ -76,4 +89,22 @@ test('somente equipe e gerência autorizadas bypassam o registro; cargos de plat
   assert.equal(memberCanBypassRegistration(makeMember('Mobile'), config), false);
   assert.equal(memberCanBypassRegistration(makeMember('Console'), config), false);
   assert.equal(memberCanBypassRegistration(makeMember('Ping Eventos'), config), false);
+});
+
+
+test('registro ausente não remove cargo Membro nem altera permissões', async () => {
+  const calls = [];
+  const member = {
+    id: '100000000000000099',
+    guild: { id: '200000000000000099' },
+    roles: {
+      cache: new Map([['role-membro', { id: 'role-membro' }]]),
+      add: async () => calls.push('add'),
+      remove: async () => calls.push('remove')
+    }
+  };
+  const result = await applyRegisteredIdentity(member, null);
+  assert.equal(result.registered, false);
+  assert.equal(result.unchanged, true);
+  assert.deepEqual(calls, []);
 });

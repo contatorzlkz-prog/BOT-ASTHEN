@@ -24,7 +24,20 @@ permissions:
   contents: write
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
+      - run: npm run check:commands
+      - run: timeout 120s npm test
+
   build-release:
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

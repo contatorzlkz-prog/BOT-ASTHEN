@@ -43,53 +43,30 @@ test('support selector uses Minecraft server departments', () => {
   assert.equal(description.includes('\\n'), false);
 });
 
-test('admin commands are consolidated into configurar, kit configurar and outros', () => {
+test('admin commands match the current compact command surface', () => {
   const names = commandDefinitions.map(item => item.toJSON().name);
-  assert.deepEqual(names, ['configurar', 'kit', 'outros']);
-  assert.deepEqual(command('configurar').options.map(option => option.name),
-    ['atendimento', 'kits', 'logs', 'compradores', 'registro', 'membro', 'equipe']);
+  assert.deepEqual(names, ['kit', 'admin']);
   assert.deepEqual(command('kit').options.map(option => option.name), ['configurar']);
   assert.equal(command('kit').default_member_permissions, '8');
-
-  const others = command('outros');
-  assert.equal(others.default_member_permissions, '8');
-  assert.deepEqual(others.options.map(option => option.name), ['seguranca', 'tiktok', 'backup', 'minecraft']);
-
-  const security = others.options.find(option => option.name === 'seguranca');
-  assert.deepEqual(security.options.map(option => option.name), ['analisar', 'aplicar']);
-  const apply = security.options.find(option => option.name === 'aplicar');
-  assert.deepEqual(apply.options.map(option => option.name), ['membro', 'confirmar']);
-  assert.equal(apply.options[0].type, 8);
-  assert.equal(apply.options[1].type, 5);
-
-  const tiktok = others.options.find(option => option.name === 'tiktok');
-  assert.deepEqual(tiktok.options.map(option => option.name), ['publicar']);
-  assert.deepEqual(tiktok.options[0].options.map(option => option.name), ['link', 'frame']);
-  assert.equal(tiktok.options[0].options[0].type, 3);
-  assert.equal(tiktok.options[0].options[1].type, 11);
-
-  const backup = others.options.find(option => option.name === 'backup');
+  const admin = command('admin');
+  assert.equal(admin.default_member_permissions, '8');
+  assert.deepEqual(admin.options.map(option => option.name), ['videos', 'backup', 'minecraft']);
+  const videos = admin.options.find(option => option.name === 'videos');
+  assert.deepEqual(videos.options.map(option => option.name), ['publicar']);
+  assert.deepEqual(videos.options[0].options.map(option => option.name), ['link', 'frame']);
+  const backup = admin.options.find(option => option.name === 'backup');
   assert.deepEqual(backup.options.map(option => option.name), ['status', 'criar']);
-  const minecraft = others.options.find(option => option.name === 'minecraft');
+  const minecraft = admin.options.find(option => option.name === 'minecraft');
   assert.deepEqual(minecraft.options.map(option => option.name), ['status']);
 });
 
-test('painel fixo de kits abre a seleção direta mesmo sem catálogo real', () => {
+test('painel público de kits é fixo e direciona ao catálogo privado', () => {
   for (const panel of [makeShopPanel(), makeShopPanel()]) {
-    const menu = panel.components[0].components[0].toJSON();
-    assert.equal(menu.custom_id, 'shop:select:0');
-    assert.equal(menu.options.length, 1);
-    assert.equal(menu.options[0].value, 'asthen-demo-kit');
-    assert.match(menu.options[0].label, /^DEMO/);
+    const button = panel.components[0].components[0].toJSON();
+    assert.equal(button.custom_id, 'shop:catalog');
+    assert.equal(button.label, 'Ver kits disponíveis');
+    assert.equal(button.type, 2);
   }
-
-  const availablePanel = makeShopPanel([{
-    id: 'a', name: 'Kit_Teste', price: 'R$ 5,00', enabled: true,
-    pluginForSale: true, forSale: true
-  }]);
-  const availableMenu = availablePanel.components[0].components[0].toJSON();
-  assert.equal(availableMenu.custom_id, 'shop:select:0');
-  assert.equal(availableMenu.options[0].value, 'a');
 });
 
 test('shop catalog shows friendly names and marks inactive or unpriced kits unavailable', () => {

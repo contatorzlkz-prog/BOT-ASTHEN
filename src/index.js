@@ -4,7 +4,7 @@ import { commandDefinitions } from './commands.js';
 import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
 import { flushSupabaseSync, getNextBrasiliaSundayAt } from './supabase.js';
 import { makeDeliveryMessage, makeDeliveryRetryControls, makeShopPanel, makeSupportPanel, PANEL_LAYOUT_VERSION } from './ui.js';
-import { handleInteraction, recoverApprovedDeliveries, secureLogsChannel } from './interactions.js';
+import { handleInteraction, recoverApprovedDeliveries } from './interactions.js';
 import { discoverStandardChannels, messageHasPanel } from './channel-discovery.js';
 import { ensureBridgeSecret, getBridgeJob, startBridge } from './bridge.js';
 import { refreshRegistrationPanel, reconcileGuildMembers, reconcileGuildMember, handleRegisteredNicknameUpdate } from './registration.js';
@@ -119,7 +119,7 @@ async function refreshShopCatalogPanel(guild) {
     shopPayload,
     'kits',
     { channel: 'shopPanelChannelId', message: 'shopPanelMessageId', version: 'shopPanelVersion' },
-    'shop:select:0'
+    'shop:catalog'
   );
 }
 
@@ -181,15 +181,7 @@ async function discoverGuildChannels(guild) {
     if (names.length) console.log('[Asthen] Canais reconhecidos em ' + guild.name + ': ' + names.join(', ') + '.');
   }
 
-  // Aplica as permissões de #logs em cada boot, inclusive quando o ID já estava salvo.
-  const latestConfig = getGuildConfig(guild.id);
-  const logsId = latestConfig.logsChannelId;
-  const logsChannel = logsId ? guild.channels.cache.get(logsId) : null;
-  if (logsChannel?.type === ChannelType.GuildText) {
-    await secureLogsChannel(logsChannel, guild, latestConfig.staffRoleId || null).catch(error => {
-      console.warn('[Asthen] Não foi possível proteger automaticamente #logs:', error.message);
-    });
-  }
+
 }
 
 async function findTicketChannel(client, ticket) {
