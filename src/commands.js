@@ -56,8 +56,8 @@ export const commandDefinitions = [
           .setDescription('Selecione o cargo Membro usado no servidor.')
           .setRequired(true))
         .addBooleanOption(option => option
-          .setName('redefinir_registros')
-          .setDescription('TRUE remove Membro de todos e exige novo registro; FALSE preserva cadastros.')
+          .setName('confirmar')
+          .setDescription('Confirma remover Membro de todos e exigir novo registro.')
           .setRequired(true))))
     .addSubcommandGroup(group => group
       .setName('tiktok')
