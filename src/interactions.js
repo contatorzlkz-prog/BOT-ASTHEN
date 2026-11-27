@@ -334,8 +334,7 @@ async function configureChannels(interaction) {
     updated.push('registro: ' + registrationChannel.toString());
   }
   if (memberRole) {
-    if (memberRole.managed || memberRole.id === interaction.guild.roles.everyone.id
-        || normalizeChannelName(memberRole.name) === 'everyone') {
+    if (memberRole.managed || memberRole.id === interaction.guild.roles.everyone.id) {
       return replyPrivate(interaction, 'Selecione um cargo comum chamado Membro, não um cargo gerenciado.');
     }
     changes.memberRoleId = memberRole.id;
@@ -426,12 +425,12 @@ async function handleKitAdminPage(interaction, requestedPage) {
     return replyPrivate(interaction, 'Somente administradores podem editar kits.');
   }
   if (!Number.isInteger(requestedPage) || requestedPage < 0) {
-    return replyPrivate(interaction, 'Página inválida. Abra /kit editar novamente.');
+    return replyPrivate(interaction, 'Página inválida. Abra /kit configurar novamente.');
   }
   const kits = getGuildConfig(interaction.guildId).kits.filter(kit => kit.pluginManaged === true);
   const totalPages = Math.max(1, Math.ceil(kits.length / 25));
   if (!kits.length || requestedPage >= totalPages) {
-    return replyPrivate(interaction, 'Esta página não existe mais. Atualize a lista em /kit editar.');
+    return replyPrivate(interaction, 'Esta página não existe mais. Abra /kit configurar novamente.');
   }
   return interaction.update({
     content: 'Selecione um kit sincronizado do Minecraft para editar.',
@@ -444,7 +443,7 @@ async function handleKitAdminSelection(interaction) {
   if (!isAdministrator(interaction)) return replyPrivate(interaction, 'Somente administradores podem editar kits.');
   const kitId = interaction.values[0];
   const kit = getGuildConfig(interaction.guildId).kits.find(item => item.id === kitId && item.pluginManaged === true);
-  if (!kit) return replyPrivate(interaction, 'Este kit não está mais sincronizado. Confira /bridge status.');
+  if (!kit) return replyPrivate(interaction, 'Este kit não está mais sincronizado. Confira /outros minecraft status.');
   return interaction.update({
     content: 'Kit selecionado: **' + String(kit.displayName || makeKitDisplayName(kit.name)) + '**. Escolha o que deseja editar.',
     embeds: [makeKitPreviewEmbed(kit)],
@@ -1926,12 +1925,12 @@ async function handlePermissionsCommand(interaction) {
         lines.push(result.failed.slice(0, 2).join('\n'));
       }
       if (result.panelWarning) lines.push('Painel de registro: ' + result.panelWarning);
-      if (result.reset?.complete === false || result.failed.length) {
+      if (result.resetSkipped) {
+        lines.push('**Reset cancelado:** houve falha ao configurar pelo menos um canal. Nenhum cargo Membro ou cadastro foi removido.');
+      } else if (result.reset?.complete === false || result.failed.length) {
         lines.push('A configuração ficou parcialmente aplicada; corrija os itens pendentes e execute novamente.');
       } else {
-        lines.push(resetRegistrations
-          ? 'Todos precisam concluir o registro Minecraft novamente.'
-          : 'Os cadastros existentes foram preservados.');
+        lines.push('Todos precisam concluir o registro Minecraft novamente.');
       }
       return interaction.editReply(lines.join('\n').slice(0, 1950));
     } catch (error) {
