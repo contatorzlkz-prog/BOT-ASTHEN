@@ -66,20 +66,12 @@ async function refreshPanelMessage(guild, channelId, messageId, payload, label, 
     }
 
     if (message) {
-      const savedConfig = getGuildConfig(guild.id);
-      if (savedConfig[keys.version] !== PANEL_LAYOUT_VERSION) {
-        // Migra uma única vez o painel legado (ex.: corrigir a descrição com \\n literal).
-        await message.edit(payload);
-        updateGuildConfig(guild.id, {
-          [keys.message]: message.id,
-          [keys.version]: PANEL_LAYOUT_VERSION
-        });
-        console.log('[Asthen] Painel de ' + label + ' atualizado uma vez para o layout ' + PANEL_LAYOUT_VERSION + '.');
-      } else if (message.id !== messageId) {
-        updateGuildConfig(guild.id, { [keys.message]: message.id });
-      } else {
-        console.log('[Asthen] Painel de ' + label + ' encontrado em #' + channel.name + '; mensagem preservada.');
-      }
+      // Nunca edita uma mensagem já publicada. Só reconcilia o ID salvo no estado.
+      updateGuildConfig(guild.id, {
+        [keys.message]: message.id,
+        [keys.version]: PANEL_LAYOUT_VERSION
+      });
+      console.log('[Asthen] Painel de ' + label + ' encontrado em #' + channel.name + '; mensagem preservada sem edição.');
       return;
     }
 
@@ -101,7 +93,7 @@ async function refreshShopCatalogPanel(guild) {
   const channel = guild.channels.cache.get(config.shopPanelChannelId)
     ?? await guild.channels.fetch(config.shopPanelChannelId).catch(() => null);
   if (!channel || channel.type !== ChannelType.GuildText) return;
-  const shopPayload = makeShopPanel(await getShopKitsWithCurrentStock(guild.id));
+  const shopPayload = makeShopPanel();
 
   let message = null;
   if (config.shopPanelMessageId) {
@@ -111,7 +103,8 @@ async function refreshShopCatalogPanel(guild) {
     });
   }
   if (message) {
-    await message.edit(shopPayload);
+    // O painel é estático: o catálogo atualizado é aberto em resposta ao clique.
+    // A mensagem pública existente nunca é editada durante sincronizações ou boots.
     updateGuildConfig(guild.id, {
       shopPanelMessageId: message.id,
       shopPanelVersion: PANEL_LAYOUT_VERSION
