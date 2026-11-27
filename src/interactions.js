@@ -350,7 +350,7 @@ async function configureChannels(interaction) {
   if ((logsChannel || staffRole) && effectiveLogsId) {
     const targetLogsChannel = logsChannel ?? await fetchTextChannel(interaction.guild, effectiveLogsId);
     if (!targetLogsChannel) {
-      return replyPrivate(interaction, 'O canal de logs configurado não existe mais. Escolha outro canal em /configurar.');
+      return replyPrivate(interaction, 'O canal de logs configurado não existe mais. Verifique o canal #logs e as permissões do bot.');
     }
     await secureLogsChannel(targetLogsChannel, interaction.guild, effectiveStaffRoleId, config.staffRoleId);
   }
