@@ -184,8 +184,15 @@ function findMemberRole(guild, config, memberRoleId = null) {
 
 function elevatedBypassRoles(groups) {
   const trustedManagers = new Set(groups.managers.map(role => role.id));
+  const protectedFlags = [
+    FLAGS.Administrator,
+    FLAGS.ManageGuild,
+    FLAGS.ManageRoles,
+    FLAGS.ManageChannels
+  ].filter(Boolean);
   return groups.roles.filter(role =>
-    role.permissions?.has?.(FLAGS.Administrator) && !trustedManagers.has(role.id)
+    !trustedManagers.has(role.id)
+    && protectedFlags.some(flag => role.permissions?.has?.(flag))
   );
 }
 
@@ -592,21 +599,21 @@ export async function configureGuildPermissions(guild, memberRole, {
     }
   }
 
-  if (resetRegistrations && resetPlan) {
-    if (counters.failed.length) {
-      counters.resetSkipped = true;
-    } else {
-      const reset = await resetGuildRegistrations(guild, { prepared: resetPlan });
-      counters.reset = reset;
-    }
-  }
-
   let panelWarning = '';
   try {
     await configureRegistrationChannel(registrationChannel, guild);
     await refreshRegistrationPanel(guild);
   } catch (error) {
     panelWarning = error.message;
+  }
+
+  if (resetRegistrations && resetPlan) {
+    if (counters.failed.length || panelWarning) {
+      counters.resetSkipped = true;
+    } else {
+      const reset = await resetGuildRegistrations(guild, { prepared: resetPlan });
+      counters.reset = reset;
+    }
   }
 
   const failed = counters.failed;
