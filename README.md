@@ -117,33 +117,24 @@ Crie os canais abaixo. O bot também consegue reconhecer os nomes padrão automa
 | `#logs` | Registros administrativos; acesso restrito a administradores e ao bot. |
 | `#compradores` | Avisos de compras confirmadas. |
 
-Configure os canais e o cargo da equipe:
-
-```text
-/configurar atendimento:#atendimento kits:#kits logs:#logs compradores:#compradores equipe:@Equipe
-```
-
-O cargo informado em `equipe` pode revisar pagamentos e fechar tickets. **Ele não recebe acesso ao canal `#logs`**.
+O bot reconhece automaticamente os canais que usam os nomes padrão da tabela. Não há comando de barra para reconfigurar canais ou cargos; essas definições e permissões ficam sob controle da administração do servidor no Discord.
 
 ### Comandos do Discord
 
-O bot tem somente três comandos principais:
+O bot mantém somente dois comandos principais, agrupados por finalidade:
 
 | Comando | Uso |
 |---|---|
-| `/configurar` | Salva canais principais e os cargos `Membro` e `equipe`. |
-| `/kit configurar` | Abre o painel para configurar os kits recebidos do Minecraft. |
-| `/outros seguranca analisar` | Mostra uma prévia da política de acesso. |
-| `/outros seguranca aplicar` | Aplica a política, remove `Membro` de todos que o bot pode gerenciar e exige novo cadastro. |
-| `/outros tiktok publicar` | Publica um vídeo no canal `#vídeos-novos`. |
-| `/outros backup status` e `/outros backup criar` | Consulta ou cria backups. |
-| `/outros minecraft status` | Verifica API, plugin, fila e sincronização. |
+| `/kit configurar` | Abre o painel visual para editar nome, descrição e imagem dos kits sincronizados. |
+| `/admin videos publicar` | Publica um vídeo no canal `#vídeos-novos`. |
+| `/admin backup status` e `/admin backup criar` | Consulta a integridade ou cria um backup manual. |
+| `/admin minecraft status` | Verifica API, plugin, fila, kits e Supabase. |
 
 ### Registro Minecraft e permissões
 
-Configure `registro:#📝・registro` e `membro:@Membro` em `/configurar`. Se o canal ainda não existir, o bot cria `👋 Entrada` e `📝・registro`.
+O bot reconhece o canal padrão `#📝・registro` e o cargo `Membro`. Se o canal ainda não existir, o fluxo de registro pode criá-lo em `👋 Entrada`. As permissões e cargos do servidor devem ser mantidos diretamente nas configurações do Discord.
 
-A configuração completa fica em `/outros seguranca analisar` e `/outros seguranca aplicar membro:@Membro confirmar:true`. A aplicação exige confirmação, verifica a hierarquia antes de alterar permissões e reinicia os cadastros: remove `Membro` de todos os membros que o bot consegue gerenciar e limpa os vínculos antigos do servidor.
+Os comandos de segurança e redefinição em massa foram removidos da lista do bot. O fluxo normal de cadastro continua funcionando; ajustes de permissões e cargos devem ser feitos manualmente no Discord.
 
 - `@everyone` só consegue ver o canal de registro.
 - `Membro` permite ver e conversar nos canais comuns.
@@ -154,7 +145,7 @@ A configuração completa fica em `/outros seguranca analisar` e `/outros segura
 - O bot não sincroniza o nick Minecraft com o apelido do Discord. O apelido é administrado diretamente no Discord.
 - `#vídeos-novos` é somente leitura para membros. Apenas o ASTHEN BOT publica.
 
-`/outros seguranca aplicar` não altera as permissões globais dos cargos. Cargos com `Administrator` ignoram as restrições de canais e impedem a aplicação se não forem cargos de gerência confiáveis. O dono do servidor não pode ter o próprio cargo removido pelo bot, por limitação do Discord.
+Não há comando no bot para redefinir cadastros ou reaplicar permissões em massa.
 
 <a id="minecraft-e-loja"></a>
 
