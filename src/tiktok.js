@@ -1,4 +1,4 @@
-import { AttachmentBuilder, EmbedBuilder } from 'discord.js';
+import { AttachmentBuilder, ChannelType, EmbedBuilder } from 'discord.js';
 import { normalizeChannelName } from './channel-discovery.js';
 
 const TIKTOK_HOSTS = new Set(['tiktok.com', 'www.tiktok.com']);
@@ -95,7 +95,7 @@ async function buildFrameAttachment(frame) {
 async function findVideoChannel(guild) {
   await guild.channels.fetch();
   return [...guild.channels.cache.values()].find(channel =>
-    channel.type === 0 && normalizeChannelName(channel.name) === 'videosnovos'
+    channel.type === ChannelType.GuildText && normalizeChannelName(channel.name) === 'videosnovos'
   ) || null;
 }
 
