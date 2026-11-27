@@ -18,8 +18,7 @@ export function validateMinecraftNick(value) {
 
 export function memberCanBypassRegistration(member, config = getGuildConfig(member.guild.id)) {
   if (member.permissions?.has?.(FLAGS.Administrator)
-      || member.permissions?.has?.(FLAGS.ManageGuild)
- ) return true;
+      || member.permissions?.has?.(FLAGS.ManageGuild)) return true;
   if (config.staffRoleId && member.roles?.cache?.has?.(config.staffRoleId)) return true;
   return (config.registrationBypassRoleIds || []).some(roleId => member.roles?.cache?.has?.(roleId));
 }
