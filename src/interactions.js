@@ -58,6 +58,8 @@ import { exportTicketTranscript } from './transcripts.js';
 import { createBackup, listBackups } from './maintenance.js';
 import { registerPlayerForMember, validateMinecraftNick, refreshRegistrationPanel, reconcileGuildMembers, resetGuildRegistrations } from './registration.js';
 import { analyzeGuildPermissionSetup, configureGuildPermissions } from './permissions.js';
+import { publishTikTokVideo } from './tiktok.js';
+import { normalizeChannelName } from './channel-discovery.js';
 
 const closingTickets = new Set();
 const orderDecisionsInFlight = new Set();
@@ -1942,6 +1944,32 @@ async function handleRegistrationCommand(interaction) {
   );
 }
 
+async function handleTikTokCommand(interaction) {
+  if (!isAdministrator(interaction)) {
+    return replyPrivate(interaction, 'Somente administradores podem publicar vídeos no canal de novidades.');
+  }
+  if (normalizeChannelName(interaction.channel?.name) !== 'comandosadm') {
+    return replyPrivate(interaction, 'Use este comando no canal #comandos-adm. O vídeo será enviado automaticamente para #vídeos-novos.');
+  }
+
+  const link = interaction.options.getString('link', true);
+  const frame = interaction.options.getAttachment('frame', false);
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  try {
+    const result = await publishTikTokVideo(interaction.guild, link, frame);
+    const frameText = result.frameAttached
+      ? 'O frame enviado foi usado no card.'
+      : 'Card limpo publicado sem a capa automática do TikTok. Para exibir um frame, anexe uma imagem no campo frame.';
+    return interaction.editReply(
+      '**Vídeo publicado em #' + result.channel.name + '!**\\n' +
+      (result.title ? '**' + result.title.replace(/[*_~|]/g, '') + '**\\n' : '') +
+      frameText + '\\n[Ver publicação no Discord](' + result.message.url + ')'
+    );
+  } catch (error) {
+    console.error('[Asthen TikTok] Falha ao publicar vídeo:', error);
+    return interaction.editReply('**Não foi possível publicar.** ' + (error.message || 'Confira o link e tente novamente.'));
+  }
+}
 async function handlePermissionsCommand(interaction) {
   if (!isAdministrator(interaction)) {
     return replyPrivate(interaction, 'Somente administradores podem alterar a configuração geral de permissões do servidor.');
@@ -2054,6 +2082,7 @@ async function handleCommand(interaction) {
   if (interaction.commandName === 'configurar') return configureChannels(interaction);
   if (interaction.commandName === 'registro') return handleRegistrationCommand(interaction);
   if (interaction.commandName === 'permissoes') return handlePermissionsCommand(interaction);
+  if (interaction.commandName === 'tiktok') return handleTikTokCommand(interaction);
   if (interaction.commandName === 'conta') return handleAccountCommand(interaction);
   if (interaction.commandName === 'kit') return handleKitCommand(interaction);
   if (interaction.commandName === 'backup') return handleBackupCommand(interaction);
