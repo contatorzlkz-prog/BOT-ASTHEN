@@ -42,7 +42,7 @@ Os campos são opcionais quando o bot já reconhece os canais pelos nomes padrã
 ### Registro obrigatório por cargo
 
 1. Crie o cargo `Membro`.
-2. Execute `/permissoes configurar membro:@Membro confirmar:true`. Se não existir `#📝・registro`, o bot cria o canal dentro de `👋 Entrada` (e cria a categoria se necessário).
+2. Execute `/outros seguranca aplicar membro:@Membro confirmar:true`. Se não existir `#📝・registro`, o bot cria o canal dentro de `👋 Entrada` (e cria a categoria se necessário).
 3. No canal de registro, deixe `@everyone` com **Ver canal** permitido e **Enviar mensagens** negado. O bot também configura o bloqueio do cargo `Membro` nesse canal.
 4. Em cada categoria/canal exclusivo para jogadores registrados, negue **Ver canal** para `@everyone` e permita **Ver canal** para `Membro`. Deixe os canais públicos e administrativos fora dessa regra.
 5. Coloque o cargo do bot acima de `Membro` e conceda ao bot **Gerenciar cargos**, **Gerenciar canais**, **Gerenciar apelidos**, **Ver canais**, **Enviar mensagens** e **Ler histórico de mensagens**.
@@ -50,7 +50,7 @@ Os campos são opcionais quando o bot já reconhece os canais pelos nomes padrã
 
 O fluxo é automático: quem ainda não tem cadastro enxerga o canal de registro; depois de enviar o nick no botão **Registrar Minecraft**, recebe `Membro`, passa a enxergar os canais privados e deixa de enxergar o canal de registro. Não dê `Membro` pelo Onboarding nem manualmente, pois esse cargo é a confirmação de registro.
 
-Para obrigar todos a fazer o cadastro novamente, um administrador pode executar `/registro reiniciar confirmar:true`. O comando remove `Membro` dos membros que o bot consegue gerenciar, apaga os vínculos Minecraft associados a esse servidor; registros antigos sem `guild_id` só são limpos quando o ID do usuário está entre os membros encontrados no servidor e remove as permissões individuais antigas do canal de registro. Ele não apaga os outros cargos nem altera os apelidos. O comando exige que o cargo do bot esteja acima de `Membro`; a conta proprietária do servidor é protegida pelo próprio Discord e pode precisar ter o cargo removido manualmente.
+Para obrigar todos a fazer o cadastro novamente, um administrador pode executar `/outros seguranca aplicar membro:@Membro confirmar:true`. O comando remove `Membro` dos membros que o bot consegue gerenciar, apaga os vínculos Minecraft associados a esse servidor; registros antigos sem `guild_id` só são limpos quando o ID do usuário está entre os membros encontrados no servidor e remove as permissões individuais antigas do canal de registro. Ele não apaga os outros cargos nem altera os apelidos. O comando exige que o cargo do bot esteja acima de `Membro`; a conta proprietária do servidor é protegida pelo próprio Discord e pode precisar ter o cargo removido manualmente.
 
 ### Painéis
 
@@ -173,7 +173,7 @@ Comandos de administrador no Discord:
 
 - `/outros backup status`: consulta os últimos backups e sua integridade.
 - `/outros backup criar`: cria uma cópia manual.
-- `/backup listar`: lista os backups disponíveis.
+- `/outros backup status`: lista os backups disponíveis.
 
 Para restaurar no Windows, feche o bot e execute `RESTAURAR.bat`. No Linux, execute `bash linux/restore-backup.sh` depois de parar o serviço, ou use `node src/maintenance-cli.js restore ID_DO_BACKUP`. A ferramenta exige que o processo esteja parado, verifica os hashes e cria primeiro uma cópia de segurança do estado atual. Não edite manualmente os arquivos dentro de uma pasta de backup.
 
