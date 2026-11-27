@@ -4,7 +4,7 @@ import { commandDefinitions } from './commands.js';
 import { appendTicketHistory, findTicketByDeliveryRequestId, getGuildConfig, listTickets, loadStore, initializeStoreSync, updateGuildConfig, updateTicket, syncPluginKits } from './store.js';
 import { flushSupabaseSync, getNextBrasiliaSundayAt } from './supabase.js';
 import { makeDeliveryMessage, makeDeliveryRetryControls, makeShopPanel, makeSupportPanel, PANEL_LAYOUT_VERSION } from './ui.js';
-import { handleInteraction, getShopKitsWithCurrentStock, recoverApprovedDeliveries, secureLogsChannel } from './interactions.js';
+import { handleInteraction, recoverApprovedDeliveries, secureLogsChannel } from './interactions.js';
 import { discoverStandardChannels, messageHasPanel } from './channel-discovery.js';
 import { ensureBridgeSecret, getBridgeJob, startBridge } from './bridge.js';
 import { refreshRegistrationPanel, reconcileGuildMembers, reconcileGuildMember, handleRegisteredNicknameUpdate } from './registration.js';
