@@ -29,7 +29,7 @@ export const CONFIG = {
   shop: {
     maxKits: 25,
     closeDelaySeconds: 3,
-    panelDescription: 'Escolha um kit diretamente no menu abaixo. Ao selecionar, você verá os detalhes e poderá confirmar para abrir seu ticket privado de pagamento.',
+    panelDescription: 'Abra o catálogo para consultar os kits disponíveis. Os detalhes, preços e estoque são carregados no momento da consulta.',
     catalogPrompt: 'Escolha um kit para consultar os detalhes. A compra só começa depois que você confirmar a prévia.',
     previewPrompt: 'Confira o kit selecionado. Sua identificação Minecraft cadastrada será usada automaticamente.',
     reviewDescription: 'Confira o kit, o preço e o jogador identificado. Confirme para abrir o ticket privado de pagamento.'
