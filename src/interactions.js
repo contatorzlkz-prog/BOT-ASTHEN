@@ -1961,9 +1961,9 @@ async function handleTikTokCommand(interaction) {
       ? 'O frame enviado foi usado no card.'
       : 'Card limpo publicado sem a capa automática do TikTok. Para exibir um frame, anexe uma imagem no campo frame.';
     return interaction.editReply(
-      '**Vídeo publicado em #' + result.channel.name + '!**\\n' +
-      (result.title ? '**' + result.title.replace(/[*_~|]/g, '') + '**\\n' : '') +
-      frameText + '\\n[Ver publicação no Discord](' + result.message.url + ')'
+      '**Vídeo publicado em #' + result.channel.name + '!**\n' +
+      (result.title ? '**' + result.title.replace(/[*_~|]/g, '') + '**\n' : '') +
+      frameText + '\n[Ver publicação no Discord](' + result.message.url + ')'
     );
   } catch (error) {
     console.error('[Asthen TikTok] Falha ao publicar vídeo:', error);
@@ -2035,7 +2035,10 @@ async function handlePermissionsCommand(interaction) {
         'Canais comuns liberados para Membro: **' + result.memberChannels + '**.',
         'Canais administrativos separados por equipe: **' + result.adminChannels + '**.',
         'Tickets e canais pessoais preservados: **' + (result.protectedTickets + result.protectedPersonalChannels) + '**.',
-        'Sobrescritas atualizadas: **' + result.updatedOverwrites + '**.'
+        'Sobrescritas atualizadas: **' + result.updatedOverwrites + '**.',
+        'Comandos de bots: bloqueados para cargos comuns; Staff e gerência usam #comandos-adm.',
+        'Canais comuns: conversa, reações e figurinhas; sem tópicos, enquetes ou anexos; slowmode de 5s.',
+        'Canal #vídeos-novos: leitura e reações para Membro; publicação pelo bot.'
       ];
       if (result.skipped) lines.push('Canais preservados por terem regras próprias: **' + result.skipped + '**.');
       if (result.failed.length) {
