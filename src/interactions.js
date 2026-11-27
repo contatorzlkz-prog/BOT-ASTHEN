@@ -653,10 +653,11 @@ async function handleCatalogPage(interaction, requestedPage) {
 }
 
 async function handleCatalogSelection(interaction) {
-  // The permanent #kits panel is public: show the preview privately instead of
-  // replacing the shared shop panel. Only paginated private catalog menus update in place.
+  // Painéis públicos antigos podem conter opções desatualizadas. Sempre abre
+  // uma consulta privada do catálogo atual; menus privados continuam selecionando direto.
   const sourceIsEphemeral = interaction.message?.flags?.has?.(MessageFlags.Ephemeral) === true;
-  return beginPurchaseWithKit(interaction, interaction.values[0], sourceIsEphemeral);
+  if (!sourceIsEphemeral) return openCatalog(interaction);
+  return beginPurchaseWithKit(interaction, interaction.values[0], true);
 }
 
 async function confirmSelectedKit(interaction, requestedRevision) {
