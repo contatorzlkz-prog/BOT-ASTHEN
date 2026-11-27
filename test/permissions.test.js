@@ -43,6 +43,7 @@ test('somente registro é público e canais administrativos têm escopos separad
   assert.equal(classifyPermissionChannel({ name: 'punições' }), 'staff');
   assert.equal(classifyPermissionChannel({ name: 'comandos', parentName: 'Administração' }), 'admin');
   assert.equal(classifyPermissionChannel({ name: 'chat-geral' }), 'member');
+  assert.equal(classifyPermissionChannel({ name: '📱・vídeos-novos' }), 'video-feed');
 });
 
 test('tickets ASTHEN e canais com sobrescritas individuais permanecem protegidos', () => {
