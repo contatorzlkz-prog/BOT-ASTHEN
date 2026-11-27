@@ -461,13 +461,11 @@ export async function configureGuildPermissions(guild, memberRole) {
     if (scope === 'video-feed') {
       for (const overwrite of channel.permissionOverwrites.cache.values()) {
         if (overwrite.id === botMember.id) continue;
-        if (overwrite.allow.has(FLAGS.SendMessages)) {
-          await edit(channel, overwrite.id, {
-            SendMessages: false, SendMessagesInThreads: false,
-            CreatePublicThreads: false, CreatePrivateThreads: false,
-            UseApplicationCommands: false
-          });
-        }
+        await edit(channel, overwrite.id, {
+          SendMessages: false, SendMessagesInThreads: false,
+          CreatePublicThreads: false, CreatePrivateThreads: false,
+          UseApplicationCommands: false
+        });
       }
       await edit(channel, memberRole.id, {
         ViewChannel: true, ReadMessageHistory: true, SendMessages: false,
