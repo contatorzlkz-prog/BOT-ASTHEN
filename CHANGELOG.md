@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.25.2 — 27/11/2026 · Publicação de vídeos mais limpa
+
+- Remove cabeçalho duplicado e repetição da marca na mensagem de vídeo.
+- Mantém apenas o rótulo NOVO VÍDEO, o título, o criador e um botão direto para assistir.
+- Usa nome de arquivo neutro para o frame anexado.
+
 ## 2.25.1 — 27/11/2026 · Correções de segurança e persistência
 
 - O bot não altera permissões de #logs ou #registro na inicialização; o acesso ao registro continua controlado pelo cargo Membro configurado manualmente.
